@@ -112,7 +112,7 @@ fun ReonApp(
                         SearchScreen(playerViewModel = playerViewModel)
                     }
                     composable(ReonDestination.Library.route) {
-                        LibraryScreen()
+                        LibraryScreen(playerViewModel = playerViewModel)
                     }
                     composable(ReonDestination.Settings.route) {
                         SettingsScreen()

@@ -104,6 +104,14 @@ dependencies {
 
     // Coil
     implementation(libs.coil.compose)
+    
+    // DataStore
+    implementation(libs.datastore.preferences)
+    
+    // WorkManager (for downloads)
+    implementation(libs.workmanager)
+    implementation(libs.hilt.work)
+    ksp(libs.hilt.work.compiler)
 
     // Testing
     testImplementation(libs.junit)
@@ -114,3 +122,4 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
+

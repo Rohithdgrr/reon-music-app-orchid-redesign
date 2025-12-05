@@ -35,6 +35,10 @@ dependencies {
     ksp(libs.hilt.compiler)
     
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.serialization.json)
+    
+    // Ktor for sync client
+    implementation(libs.bundles.ktor)
     
     testImplementation(libs.junit)
 }

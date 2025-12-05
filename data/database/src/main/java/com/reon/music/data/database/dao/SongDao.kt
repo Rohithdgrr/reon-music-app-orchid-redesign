@@ -7,32 +7,15 @@
 package com.reon.music.data.database.dao
 
 import androidx.room.*
-import com.reon.music.data.database.entity.SongEntity
+import com.reon.music.data.database.entities.SongEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface SongDao {
     
-    @Query("SELECT * FROM songs ORDER BY lastPlayed DESC")
-    fun getAllSongs(): Flow<List<SongEntity>>
-    
-    @Query("SELECT * FROM songs WHERE isLiked = 1 ORDER BY addedToLibrary DESC")
-    fun getLikedSongs(): Flow<List<SongEntity>>
-    
-    @Query("SELECT * FROM songs WHERE isDownloaded = 1")
-    fun getDownloadedSongs(): Flow<List<SongEntity>>
-    
-    @Query("SELECT * FROM songs WHERE sourceId = :sourceId AND source = :source")
-    suspend fun getSongBySourceId(sourceId: String, source: String): SongEntity?
-    
-    @Query("SELECT * FROM songs ORDER BY playCount DESC LIMIT :limit")
-    fun getMostPlayed(limit: Int = 20): Flow<List<SongEntity>>
-    
-    @Query("SELECT * FROM songs ORDER BY lastPlayed DESC LIMIT :limit")
-    fun getRecentlyPlayed(limit: Int = 20): Flow<List<SongEntity>>
-    
+    // Insert/Update
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(song: SongEntity): Long
+    suspend fun insert(song: SongEntity)
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(songs: List<SongEntity>)
@@ -43,12 +26,69 @@ interface SongDao {
     @Delete
     suspend fun delete(song: SongEntity)
     
-    @Query("DELETE FROM songs WHERE id = :songId")
-    suspend fun deleteById(songId: Long)
+    // Query by ID
+    @Query("SELECT * FROM songs WHERE id = :id")
+    suspend fun getSongById(id: String): SongEntity?
     
-    @Query("UPDATE songs SET isLiked = :isLiked WHERE id = :songId")
-    suspend fun updateLikedStatus(songId: Long, isLiked: Boolean)
+    @Query("SELECT * FROM songs WHERE id = :id")
+    fun getSongByIdFlow(id: String): Flow<SongEntity?>
     
-    @Query("UPDATE songs SET playCount = playCount + 1, lastPlayed = :lastPlayed WHERE id = :songId")
-    suspend fun incrementPlayCount(songId: Long, lastPlayed: String)
+    // Liked songs
+    @Query("SELECT * FROM songs WHERE isLiked = 1 ORDER BY addedAt DESC")
+    fun getLikedSongs(): Flow<List<SongEntity>>
+    
+    @Query("SELECT * FROM songs WHERE isLiked = 1 ORDER BY addedAt DESC LIMIT :limit")
+    suspend fun getLikedSongsList(limit: Int = 100): List<SongEntity>
+    
+    @Query("UPDATE songs SET isLiked = :isLiked, needsSync = 1 WHERE id = :songId")
+    suspend fun setLiked(songId: String, isLiked: Boolean)
+    
+    @Query("SELECT COUNT(*) FROM songs WHERE isLiked = 1")
+    fun getLikedCount(): Flow<Int>
+    
+    // Library songs
+    @Query("SELECT * FROM songs WHERE inLibrary = 1 ORDER BY addedAt DESC")
+    fun getLibrarySongs(): Flow<List<SongEntity>>
+    
+    @Query("UPDATE songs SET inLibrary = :inLibrary, needsSync = 1 WHERE id = :songId")
+    suspend fun setInLibrary(songId: String, inLibrary: Boolean)
+    
+    // Downloaded songs
+    @Query("SELECT * FROM songs WHERE downloadState = 2 ORDER BY addedAt DESC")
+    fun getDownloadedSongs(): Flow<List<SongEntity>>
+    
+    @Query("UPDATE songs SET downloadState = :state, localPath = :path WHERE id = :songId")
+    suspend fun updateDownloadState(songId: String, state: Int, path: String? = null)
+    
+    @Query("SELECT COUNT(*) FROM songs WHERE downloadState = 2")
+    fun getDownloadedCount(): Flow<Int>
+    
+    // Most played
+    @Query("SELECT * FROM songs WHERE playCount > 0 ORDER BY playCount DESC LIMIT :limit")
+    fun getMostPlayed(limit: Int = 50): Flow<List<SongEntity>>
+    
+    @Query("UPDATE songs SET playCount = playCount + 1, lastPlayedAt = :timestamp WHERE id = :songId")
+    suspend fun incrementPlayCount(songId: String, timestamp: Long = System.currentTimeMillis())
+    
+    // Recently played
+    @Query("SELECT * FROM songs WHERE lastPlayedAt IS NOT NULL ORDER BY lastPlayedAt DESC LIMIT :limit")
+    fun getRecentlyPlayed(limit: Int = 50): Flow<List<SongEntity>>
+    
+    // Sync
+    @Query("SELECT * FROM songs WHERE needsSync = 1")
+    suspend fun getSongsNeedingSync(): List<SongEntity>
+    
+    @Query("UPDATE songs SET syncedAt = :timestamp, needsSync = 0 WHERE id = :songId")
+    suspend fun markSynced(songId: String, timestamp: Long = System.currentTimeMillis())
+    
+    // Search
+    @Query("SELECT * FROM songs WHERE title LIKE '%' || :query || '%' OR artist LIKE '%' || :query || '%' LIMIT :limit")
+    suspend fun searchSongs(query: String, limit: Int = 50): List<SongEntity>
+    
+    // Stats
+    @Query("SELECT SUM(playCount) FROM songs")
+    fun getTotalPlayCount(): Flow<Int?>
+    
+    @Query("SELECT COUNT(*) FROM songs WHERE isLiked = 1 OR inLibrary = 1")
+    fun getLibrarySize(): Flow<Int>
 }
