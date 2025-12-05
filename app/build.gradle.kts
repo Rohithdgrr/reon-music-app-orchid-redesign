@@ -112,6 +112,12 @@ dependencies {
     implementation(libs.workmanager)
     implementation(libs.hilt.work)
     ksp(libs.hilt.work.compiler)
+    
+    // Palette for dynamic theming
+    implementation(libs.palette)
+    
+    // Media for Android Auto
+    implementation(libs.media)
 
     // Testing
     testImplementation(libs.junit)
