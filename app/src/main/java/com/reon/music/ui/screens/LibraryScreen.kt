@@ -459,9 +459,9 @@ private fun PlaylistItem(
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
             ) {
-                if (playlist.thumbnail != null) {
+                if (playlist.thumbnailUrl != null) {
                     AsyncImage(
-                        model = playlist.thumbnail,
+                        model = playlist.thumbnailUrl,
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
@@ -486,7 +486,7 @@ private fun PlaylistItem(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${playlist.trackCount} songs",
+                    text = "${playlist.songCount} songs",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

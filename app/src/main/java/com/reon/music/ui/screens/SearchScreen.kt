@@ -50,7 +50,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,6 +67,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.reon.music.core.model.Song
 import com.reon.music.ui.viewmodels.PlayerViewModel
+import com.reon.music.ui.viewmodels.SearchFilter
 import com.reon.music.ui.viewmodels.SearchViewModel
 
 /**
@@ -82,7 +85,8 @@ fun SearchScreen(
     val focusManager = LocalFocusManager.current
     val snackbarHostState = remember { SnackbarHostState() }
     
-    val tabs = listOf("Songs", "Albums", "Artists", "Playlists")
+    val tabs = listOf("All", "Songs", "Albums", "Artists")
+    var selectedTab by remember { mutableIntStateOf(0) }
     
     // Show error in snackbar
     LaunchedEffect(uiState.error) {
@@ -125,7 +129,7 @@ fun SearchScreen(
                     Text("Search songs, artists, albums...")
                 },
                 leadingIcon = {
-                    if (uiState.isSearching) {
+                    if (uiState.isLoading) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
                             strokeWidth = 2.dp
@@ -140,7 +144,7 @@ fun SearchScreen(
                 },
                 trailingIcon = {
                     if (uiState.query.isNotEmpty()) {
-                        IconButton(onClick = { searchViewModel.updateQuery("") }) {
+                        IconButton(onClick = { searchViewModel.clearSearch() }) {
                             Icon(
                                 imageVector = Icons.Default.Clear,
                                 contentDescription = "Clear"
@@ -165,17 +169,26 @@ fun SearchScreen(
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            if (uiState.results.isNotEmpty() || uiState.isSearching) {
+            if (uiState.hasSearched || uiState.isLoading) {
                 // Filter Tabs
                 TabRow(
-                    selectedTabIndex = uiState.selectedTab,
+                    selectedTabIndex = selectedTab,
                     containerColor = MaterialTheme.colorScheme.background,
                     contentColor = MaterialTheme.colorScheme.primary
                 ) {
                     tabs.forEachIndexed { index, title ->
                         Tab(
-                            selected = uiState.selectedTab == index,
-                            onClick = { searchViewModel.selectTab(index) },
+                            selected = selectedTab == index,
+                            onClick = { 
+                                selectedTab = index
+                                val filter = when (index) {
+                                    1 -> SearchFilter.SONGS
+                                    2 -> SearchFilter.ALBUMS
+                                    3 -> SearchFilter.ARTISTS
+                                    else -> SearchFilter.ALL
+                                }
+                                searchViewModel.setFilter(filter)
+                            },
                             text = {
                                 Text(
                                     text = title,
@@ -192,7 +205,7 @@ fun SearchScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    itemsIndexed(uiState.results) { index, song ->
+                    itemsIndexed(uiState.songs) { index, song ->
                         SearchResultItem(
                             song = song,
                             isPlaying = playerState.currentSong?.id == song.id,
@@ -202,7 +215,7 @@ fun SearchScreen(
                         )
                     }
                     
-                    if (uiState.results.isEmpty() && !uiState.isSearching) {
+                    if (uiState.songs.isEmpty() && !uiState.isLoading) {
                         item {
                             Box(
                                 modifier = Modifier

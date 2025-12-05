@@ -38,8 +38,18 @@ interface PlaylistDao {
     @Query("SELECT * FROM playlists WHERE id = :id")
     fun getPlaylistByIdFlow(id: Long): Flow<PlaylistEntity?>
     
+    @Query("SELECT * FROM playlists WHERE youTubePlaylistId = :youtubeId")
+    suspend fun getPlaylistByYouTubeId(youtubeId: String): PlaylistEntity?
+    
     @Query("SELECT COUNT(*) FROM playlists")
     fun getPlaylistCount(): Flow<Int>
+    
+    // Get local playlists (not from YouTube)
+    @Query("SELECT * FROM playlists WHERE isFromYouTube = 0")
+    suspend fun getLocalPlaylistsOnce(): List<PlaylistEntity>
+    
+    @Query("SELECT * FROM playlists WHERE isFromYouTube = 1")
+    fun getYouTubePlaylists(): Flow<List<PlaylistEntity>>
     
     // Playlist songs
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -65,7 +75,7 @@ interface PlaylistDao {
         WHERE ps.playlistId = :playlistId
         ORDER BY ps.position ASC
     """)
-    suspend fun getPlaylistSongsList(playlistId: Long): List<SongEntity>
+    suspend fun getPlaylistSongsOnce(playlistId: Long): List<SongEntity>
     
     @Query("SELECT COUNT(*) FROM playlist_songs WHERE playlistId = :playlistId")
     suspend fun getPlaylistSongCount(playlistId: Long): Int
@@ -100,10 +110,9 @@ interface PlaylistDao {
     @Transaction
     suspend fun updatePlaylistStats(playlistId: Long) {
         val count = getPlaylistSongCount(playlistId)
-        // Also calculate total duration if needed
-        updateTrackCount(playlistId, count)
+        updateSongCount(playlistId, count)
     }
     
-    @Query("UPDATE playlists SET trackCount = :count, updatedAt = :timestamp WHERE id = :id")
-    suspend fun updateTrackCount(id: Long, count: Int, timestamp: Long = System.currentTimeMillis())
+    @Query("UPDATE playlists SET songCount = :count, updatedAt = :timestamp WHERE id = :id")
+    suspend fun updateSongCount(id: Long, count: Int, timestamp: Long = System.currentTimeMillis())
 }

@@ -40,6 +40,9 @@ interface SongDao {
     @Query("SELECT * FROM songs WHERE isLiked = 1 ORDER BY addedAt DESC LIMIT :limit")
     suspend fun getLikedSongsList(limit: Int = 100): List<SongEntity>
     
+    @Query("SELECT * FROM songs WHERE isLiked = 1 ORDER BY addedAt DESC")
+    suspend fun getLikedSongsOnce(): List<SongEntity>
+    
     @Query("UPDATE songs SET isLiked = :isLiked, needsSync = 1 WHERE id = :songId")
     suspend fun setLiked(songId: String, isLiked: Boolean)
     

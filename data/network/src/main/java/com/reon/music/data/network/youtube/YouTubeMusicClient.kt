@@ -361,4 +361,74 @@ class YouTubeMusicClient @Inject constructor(
             else -> 0
         }
     }
+    
+    // ===== Sync Methods (stubs - require authentication in production) =====
+    
+    /**
+     * Get user's liked songs
+     * Note: Requires authentication in production
+     */
+    suspend fun getLikedSongs(): Result<List<Song>> = safeApiCall {
+        // In production, would use authenticated request
+        emptyList()
+    }
+    
+    /**
+     * Get user's playlists
+     * Note: Requires authentication in production
+     */
+    suspend fun getUserPlaylists(): Result<List<com.reon.music.core.model.Playlist>> = safeApiCall {
+        // In production, would use authenticated request
+        emptyList()
+    }
+    
+    /**
+     * Get songs from a playlist
+     */
+    suspend fun getPlaylistSongs(playlistId: String): Result<List<Song>> = safeApiCall {
+        // In production, would parse playlist contents
+        emptyList()
+    }
+    
+    /**
+     * Like a song
+     * Note: Requires authentication in production
+     */
+    suspend fun likeSong(videoId: String): Result<Boolean> = safeApiCall {
+        // In production, would send like request
+        true
+    }
+    
+    /**
+     * Create a playlist
+     * Note: Requires authentication in production
+     */
+    suspend fun createPlaylist(title: String, description: String): Result<String?> = safeApiCall {
+        // In production, would create playlist and return ID
+        null
+    }
+    
+    /**
+     * Add song to playlist
+     * Note: Requires authentication in production
+     */
+    suspend fun addToPlaylist(playlistId: String, videoId: String): Result<Boolean> = safeApiCall {
+        // In production, would add to playlist
+        true
+    }
+    
+    /**
+     * General search returning mixed results
+     */
+    suspend fun search(query: String): Result<com.reon.music.core.model.SearchResult> = safeApiCall {
+        val songsResult = searchSongs(query)
+        val songs = if (songsResult is Result.Success) songsResult.data else emptyList()
+        com.reon.music.core.model.SearchResult(
+            songs = songs,
+            albums = emptyList(),
+            artists = emptyList(),
+            playlists = emptyList()
+        )
+    }
 }
+

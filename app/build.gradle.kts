@@ -32,6 +32,48 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+        
+        // BuildConfig fields available in all flavors
+        buildConfigField("String", "APP_NAME", "\"REON Music\"")
+        buildConfigField("String", "LRCLIB_BASE_URL", "\"https://lrclib.net/api\"")
+        buildConfigField("String", "SPONSORBLOCK_BASE_URL", "\"https://sponsor.ajay.app/api\"")
+        buildConfigField("String", "RYD_BASE_URL", "\"https://returnyoutubedislikeapi.com\"")
+    }
+    
+    signingConfigs {
+        create("release") {
+            // In production, these would come from gradle.properties or environment variables
+            // storeFile = file(System.getenv("KEYSTORE_PATH") ?: "keystore.jks")
+            // storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
+            // keyAlias = System.getenv("KEY_ALIAS") ?: ""
+            // keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+        }
+    }
+    
+    // Product Flavors: FOSS (no tracking) vs Full (with analytics)
+    flavorDimensions += "version"
+    productFlavors {
+        create("foss") {
+            dimension = "version"
+            applicationIdSuffix = ".foss"
+            versionNameSuffix = "-foss"
+            
+            // FOSS: No crash analytics, no tracking
+            buildConfigField("boolean", "ENABLE_CRASH_ANALYTICS", "false")
+            buildConfigField("boolean", "ENABLE_TRACKING", "false")
+            buildConfigField("String", "SENTRY_DSN", "\"\"")
+            buildConfigField("boolean", "IS_FOSS", "true")
+        }
+        create("full") {
+            dimension = "version"
+            isDefault = true
+            
+            // Full: With Sentry crash reporting (optional)
+            buildConfigField("boolean", "ENABLE_CRASH_ANALYTICS", "true")
+            buildConfigField("boolean", "ENABLE_TRACKING", "false") // Still no tracking!
+            buildConfigField("String", "SENTRY_DSN", "\"https://your-sentry-dsn\"")
+            buildConfigField("boolean", "IS_FOSS", "false")
+        }
     }
 
     buildTypes {
@@ -42,6 +84,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // signingConfig = signingConfigs.getByName("release")
         }
         debug {
             isMinifyEnabled = false
@@ -118,6 +161,12 @@ dependencies {
     
     // Media for Android Auto
     implementation(libs.media)
+    
+    // Serialization
+    implementation(libs.kotlinx.serialization.json)
+    
+    // Media3 ExoPlayer
+    implementation(libs.bundles.media3)
 
     // Testing
     testImplementation(libs.junit)
