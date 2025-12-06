@@ -10,6 +10,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reon.music.core.preferences.AppTheme
 import com.reon.music.core.preferences.AudioQuality
+import com.reon.music.core.preferences.MusicSource
 import com.reon.music.core.preferences.UserPreferences
 import com.reon.music.data.database.sync.NeonSyncClient
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -47,9 +48,13 @@ data class SettingsUiState(
     val incognitoMode: Boolean = false,
     
     // Sync
+    // Sync
     val cloudSyncEnabled: Boolean = true,
     val lastSyncTime: Long = 0,
-    val isSyncing: Boolean = false
+    val isSyncing: Boolean = false,
+    
+    // Content
+    val preferredSource: MusicSource = MusicSource.BOTH
 )
 
 @HiltViewModel
@@ -81,7 +86,8 @@ class SettingsViewModel @Inject constructor(
                 userPreferences.saveHistory,
                 userPreferences.incognitoMode,
                 userPreferences.cloudSyncEnabled,
-                userPreferences.lastSyncTime
+                userPreferences.lastSyncTime,
+                userPreferences.preferredSource
             ) { values ->
                 @Suppress("UNCHECKED_CAST")
                 SettingsUiState(
@@ -98,7 +104,8 @@ class SettingsViewModel @Inject constructor(
                     saveHistory = values[10] as Boolean,
                     incognitoMode = values[11] as Boolean,
                     cloudSyncEnabled = values[12] as Boolean,
-                    lastSyncTime = values[13] as Long
+                    lastSyncTime = values[13] as Long,
+                    preferredSource = values[14] as MusicSource
                 )
             }.collect { state ->
                 _uiState.value = state
@@ -143,6 +150,11 @@ class SettingsViewModel @Inject constructor(
     
     fun setDownloadWifiOnly(enabled: Boolean) {
         viewModelScope.launch { userPreferences.setDownloadWifiOnly(enabled) }
+    }
+    
+    // Content settings
+    fun setPreferredSource(source: com.reon.music.core.preferences.MusicSource) {
+        viewModelScope.launch { userPreferences.setPreferredSource(source) }
     }
     
     // Lyrics settings

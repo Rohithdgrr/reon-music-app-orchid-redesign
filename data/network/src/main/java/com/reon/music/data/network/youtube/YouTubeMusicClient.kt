@@ -92,25 +92,88 @@ class YouTubeMusicClient @Inject constructor(
      * Get stream URL for a video ID
      */
     suspend fun getStreamUrl(videoId: String): Result<String?> = safeApiCall {
-        // Try Android client first (better for audio)
-        val requestBody = buildJsonObject {
+        // Calculate current signature timestamp (days since epoch / 86400 approx)
+        val signatureTimestamp = (System.currentTimeMillis() / 1000 / 86400).toInt()
+        
+        // Try Android client first (better for audio streams)
+        val androidRequestBody = buildJsonObject {
             put("videoId", videoId)
-            put("context", ANDROID_CLIENT_CONTEXT)
-            put("playbackContext", buildJsonObject {
-                put("contentPlaybackContext", buildJsonObject {
-                    put("signatureTimestamp", 19950)
+            put("context", buildJsonObject {
+                put("client", buildJsonObject {
+                    put("clientName", "ANDROID_MUSIC")
+                    put("clientVersion", "6.48.52")
+                    put("androidSdkVersion", 33)
+                    put("hl", "en")
+                    put("gl", "US")
                 })
             })
+            put("playbackContext", buildJsonObject {
+                put("contentPlaybackContext", buildJsonObject {
+                    put("signatureTimestamp", signatureTimestamp)
+                })
+            })
+            put("racyCheckOk", true)
+            put("contentCheckOk", true)
         }
         
-        val response: HttpResponse = httpClient.post("$INNERTUBE_API_URL/player?key=$API_KEY") {
-            contentType(ContentType.Application.Json)
-            header("User-Agent", "com.google.android.youtube/17.36.4 (Linux; U; Android 12; GB) gzip")
-            setBody(requestBody.toString())
+        var audioUrl: String? = null
+        
+        // Try Android Music client
+        try {
+            val response: HttpResponse = httpClient.post("$INNERTUBE_API_URL/player?key=$API_KEY") {
+                contentType(ContentType.Application.Json)
+                header("User-Agent", "com.google.android.youtube/17.36.4 (Linux; U; Android 13; GB) gzip")
+                header("X-Youtube-Client-Name", "21")
+                header("X-Youtube-Client-Version", "6.48.52")
+                setBody(androidRequestBody.toString())
+            }
+            
+            val responseJson = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+            audioUrl = extractAudioUrl(responseJson)
+        } catch (e: Exception) {
+            // Continue to try iOS client
         }
         
-        val responseJson = Json.parseToJsonElement(response.bodyAsText()).jsonObject
-        extractAudioUrl(responseJson)
+        // If Android didn't work, try iOS client
+        if (audioUrl == null) {
+            val iosRequestBody = buildJsonObject {
+                put("videoId", videoId)
+                put("context", buildJsonObject {
+                    put("client", buildJsonObject {
+                        put("clientName", "IOS_MUSIC")
+                        put("clientVersion", "6.43.2")
+                        put("deviceModel", "iPhone14,3")
+                        put("osVersion", "17.0.0")
+                        put("hl", "en")
+                        put("gl", "US")
+                    })
+                })
+                put("playbackContext", buildJsonObject {
+                    put("contentPlaybackContext", buildJsonObject {
+                        put("signatureTimestamp", signatureTimestamp)
+                    })
+                })
+                put("racyCheckOk", true)
+                put("contentCheckOk", true)
+            }
+            
+            try {
+                val response: HttpResponse = httpClient.post("$INNERTUBE_API_URL/player?key=$API_KEY") {
+                    contentType(ContentType.Application.Json)
+                    header("User-Agent", "com.google.ios.youtube/17.36.4 (iPhone14,3; U; CPU iOS 17_0 like Mac OS X)")
+                    header("X-Youtube-Client-Name", "26")
+                    header("X-Youtube-Client-Version", "6.43.2")
+                    setBody(iosRequestBody.toString())
+                }
+                
+                val responseJson = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+                audioUrl = extractAudioUrl(responseJson)
+            } catch (e: Exception) {
+                // Both clients failed
+            }
+        }
+        
+        audioUrl
     }
     
     /**
@@ -271,19 +334,39 @@ class YouTubeMusicClient @Inject constructor(
     private fun extractAudioUrl(json: JsonObject): String? {
         return try {
             val streamingData = json["streamingData"]?.jsonObject
+            if (streamingData == null) return null
             
-            // Prefer adaptive formats (audio only)
-            val adaptiveFormats = streamingData?.get("adaptiveFormats")?.jsonArray
+            // Try adaptive formats first (audio only)
+            val adaptiveFormats = streamingData["adaptiveFormats"]?.jsonArray
             
-            // Find best audio format (251 = opus high, 140 = m4a, 250/249 = opus med/low)
-            val audioFormat = adaptiveFormats?.filter { format ->
+            // Find best audio format (prefer opus/m4a for quality)
+            var audioFormat = adaptiveFormats?.filter { format ->
                 val mimeType = format.jsonObject["mimeType"]?.jsonPrimitive?.content ?: ""
                 mimeType.contains("audio")
             }?.maxByOrNull { format ->
                 format.jsonObject["bitrate"]?.jsonPrimitive?.long ?: 0L
             }
             
-            audioFormat?.jsonObject?.get("url")?.jsonPrimitive?.content
+            var url = audioFormat?.jsonObject?.get("url")?.jsonPrimitive?.content
+            
+            // If no direct URL found in adaptive formats, try regular formats
+            if (url == null) {
+                val formats = streamingData["formats"]?.jsonArray
+                audioFormat = formats?.filter { format ->
+                    val mimeType = format.jsonObject["mimeType"]?.jsonPrimitive?.content ?: ""
+                    mimeType.contains("audio") || mimeType.contains("mp4")
+                }?.maxByOrNull { format ->
+                    format.jsonObject["bitrate"]?.jsonPrimitive?.long ?: 0L
+                }
+                url = audioFormat?.jsonObject?.get("url")?.jsonPrimitive?.content
+            }
+            
+            // Check for HLS or DASH if still no URL
+            if (url == null) {
+                url = streamingData["hlsManifestUrl"]?.jsonPrimitive?.content
+            }
+            
+            url
         } catch (e: Exception) {
             null
         }

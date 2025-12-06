@@ -1,69 +1,41 @@
 /*
  * REON Music App - Settings Screen
  * Copyright (c) 2024 REON
- * Clean-room implementation - No GPL code included
+ * Created by Rohith
  */
 
 package com.reon.music.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.Brightness4
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.ColorLens
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Lyrics
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.reon.music.core.preferences.AppTheme
+import com.reon.music.core.preferences.AudioQuality
 import com.reon.music.ui.viewmodels.SettingsViewModel
+
+// Light theme colors
+private val LightBackground = Color(0xFFFAFAFA)
+private val SurfaceColor = Color.White
+private val CardColor = Color(0xFFF0F0F0)
+private val AccentRed = Color(0xFFE53935)
+private val TextPrimary = Color(0xFF1A1A1A)
+private val TextSecondary = Color(0xFF666666)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,223 +44,423 @@ fun SettingsScreen(
 ) {
     val uiState by settingsViewModel.uiState.collectAsState()
     
+    var showAboutDialog by remember { mutableStateOf(false) }
+    var showQualityDialog by remember { mutableStateOf(false) }
+    var showCacheDialog by remember { mutableStateOf(false) }
+    
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
                         text = "Settings",
-                        style = MaterialTheme.typography.headlineSmall,
+                        style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
+                    containerColor = LightBackground
                 )
             )
-        }
+        },
+        containerColor = LightBackground
     ) { paddingValues ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Playback Section
+            // Audio & Playback Section
             item {
-                SettingsSection(title = "Playback") {
-                    // Audio Quality
-                    SettingsItem(
-                        icon = Icons.AutoMirrored.Filled.VolumeUp,
-                        title = "Audio Quality",
-                        subtitle = uiState.audioQuality.label,
-                        onClick = { /* Show quality picker */ }
-                    )
-                    
-                    // Crossfade
-                    SettingsSliderItem(
-                        icon = Icons.Default.Speed,
-                        title = "Crossfade",
-                        value = uiState.crossfadeDuration.toFloat(),
-                        valueRange = 0f..12f,
-                        steps = 11,
-                        valueLabel = if (uiState.crossfadeDuration == 0) "Off" 
-                                     else "${uiState.crossfadeDuration}s",
-                        onValueChange = { settingsViewModel.setCrossfade(it.toInt()) }
-                    )
-                    
-                    // Gapless Playback
-                    SettingsSwitchItem(
-                        icon = Icons.Default.MusicNote,
-                        title = "Gapless Playback",
-                        subtitle = "Removes silence between tracks",
-                        checked = uiState.gaplessPlayback,
-                        onCheckedChange = { settingsViewModel.setGaplessPlayback(it) }
-                    )
-                    
-                    // Normalize Audio
-                    SettingsSwitchItem(
-                        icon = Icons.Default.Tune,
-                        title = "Normalize Audio",
-                        subtitle = "Consistent volume across tracks",
-                        checked = uiState.normalizeAudio,
-                        onCheckedChange = { settingsViewModel.setNormalizeAudio(it) }
-                    )
-                }
-            }
-            
-            // Appearance Section
-            item {
-                SettingsSection(title = "Appearance") {
-                    // Theme
-                    SettingsItem(
-                        icon = Icons.Default.Brightness4,
-                        title = "Theme",
-                        subtitle = uiState.theme.label,
-                        onClick = { /* Show theme picker */ }
-                    )
-                    
-                    // Dynamic Colors
-                    SettingsSwitchItem(
-                        icon = Icons.Default.Palette,
-                        title = "Dynamic Colors",
-                        subtitle = "Adapt colors from album art",
-                        checked = uiState.dynamicColors,
-                        onCheckedChange = { settingsViewModel.setDynamicColors(it) }
-                    )
-                    
-                    // Pure Black
-                    if (uiState.theme == AppTheme.DARK || uiState.theme == AppTheme.AMOLED) {
+                SettingsSection(title = "Audio & Playback") {
+                    SettingsCard {
+                        SettingsItem(
+                            icon = Icons.Outlined.HighQuality,
+                            title = "Audio Quality",
+                            subtitle = when (uiState.audioQuality.name) {
+                                "LOW" -> "Low (96 kbps) - Save data"
+                                "MEDIUM" -> "Medium (160 kbps)"
+                                "HIGH" -> "High (320 kbps) - Best quality"
+                                else -> "High (320 kbps)"
+                            },
+                            onClick = { showQualityDialog = true }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
                         SettingsSwitchItem(
-                            icon = Icons.Default.ColorLens,
-                            title = "Pure Black Background",
-                            subtitle = "AMOLED-friendly dark mode",
-                            checked = uiState.pureBlack,
-                            onCheckedChange = { settingsViewModel.setPureBlack(it) }
+                            icon = Icons.Outlined.GraphicEq,
+                            title = "Equalizer",
+                            subtitle = "Customize sound with equalizer",
+                            checked = uiState.normalizeAudio,
+                            onCheckedChange = { settingsViewModel.setNormalizeAudio(it) }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsSwitchItem(
+                            icon = Icons.Outlined.SkipNext,
+                            title = "Gapless Playback",
+                            subtitle = "Seamless transition between tracks",
+                            checked = uiState.gaplessPlayback,
+                            onCheckedChange = { settingsViewModel.setGaplessPlayback(it) }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsSwitchItem(
+                            icon = Icons.Outlined.Headphones,
+                            title = "Crossfade",
+                            subtitle = "Smooth fade between songs",
+                            checked = uiState.crossfadeDuration > 0,
+                            onCheckedChange = { settingsViewModel.setCrossfade(if (it) 3 else 0) }
                         )
                     }
-                    
-                    // Language
-                    SettingsItem(
-                        icon = Icons.Default.Language,
-                        title = "Language",
-                        subtitle = "English",
-                        onClick = { /* Show language picker */ }
-                    )
                 }
             }
             
             // Downloads Section
             item {
                 SettingsSection(title = "Downloads") {
-                    SettingsItem(
-                        icon = Icons.Default.Download,
-                        title = "Download Quality",
-                        subtitle = uiState.downloadQuality.label,
-                        onClick = { /* Show quality picker */ }
-                    )
-                    
-                    SettingsSwitchItem(
-                        icon = Icons.Default.Cloud,
-                        title = "Download on Wi-Fi Only",
-                        subtitle = "Save mobile data",
-                        checked = uiState.downloadWifiOnly,
-                        onCheckedChange = { settingsViewModel.setDownloadWifiOnly(it) }
-                    )
-                }
-            }
-            
-            // Lyrics Section
-            item {
-                SettingsSection(title = "Lyrics") {
-                    SettingsSwitchItem(
-                        icon = Icons.Default.Lyrics,
-                        title = "Show Lyrics by Default",
-                        subtitle = "Display lyrics on Now Playing",
-                        checked = uiState.showLyricsDefault,
-                        onCheckedChange = { settingsViewModel.setShowLyricsDefault(it) }
-                    )
-                }
-            }
-            
-            // Privacy Section
-            item {
-                SettingsSection(title = "Privacy") {
-                    SettingsSwitchItem(
-                        icon = Icons.Default.History,
-                        title = "Save Listening History",
-                        subtitle = "Track your listening for recommendations",
-                        checked = uiState.saveHistory,
-                        onCheckedChange = { settingsViewModel.setSaveHistory(it) }
-                    )
-                    
-                    SettingsSwitchItem(
-                        icon = Icons.Default.VisibilityOff,
-                        title = "Incognito Mode",
-                        subtitle = "Disable history & sync temporarily",
-                        checked = uiState.incognitoMode,
-                        onCheckedChange = { settingsViewModel.setIncognitoMode(it) }
-                    )
-                }
-            }
-            
-            // Cloud Sync Section
-            item {
-                SettingsSection(title = "Cloud Sync") {
-                    SettingsSwitchItem(
-                        icon = Icons.Default.Cloud,
-                        title = "Enable Cloud Sync",
-                        subtitle = "Sync playlists & favorites across devices",
-                        checked = uiState.cloudSyncEnabled,
-                        onCheckedChange = { settingsViewModel.setCloudSyncEnabled(it) }
-                    )
-                    
-                    if (uiState.cloudSyncEnabled) {
+                    SettingsCard {
                         SettingsItem(
-                            icon = Icons.Default.Storage,
-                            title = "Last Synced",
-                            subtitle = if (uiState.lastSyncTime > 0) 
-                                formatTimestamp(uiState.lastSyncTime) 
-                            else "Never",
-                            onClick = { settingsViewModel.syncNow() }
+                            icon = Icons.Outlined.Download,
+                            title = "Download Quality",
+                            subtitle = "320 kbps - Best available",
+                            onClick = { showQualityDialog = true }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsSwitchItem(
+                            icon = Icons.Outlined.Wifi,
+                            title = "Download on Wi-Fi Only",
+                            subtitle = "Save mobile data",
+                            checked = uiState.downloadWifiOnly,
+                            onCheckedChange = { settingsViewModel.setDownloadWifiOnly(it) }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsItem(
+                            icon = Icons.Outlined.Storage,
+                            title = "Storage Used",
+                            subtitle = "0 MB used",
+                            onClick = { showCacheDialog = true }
                         )
                     }
                 }
             }
             
-            // Storage Section
+            // Appearance Section
             item {
-                SettingsSection(title = "Storage") {
-                    SettingsItem(
-                        icon = Icons.Default.Storage,
-                        title = "Clear Cache",
-                        subtitle = "Free up space",
-                        onClick = { settingsViewModel.clearCache() }
-                    )
+                SettingsSection(title = "Appearance") {
+                    SettingsCard {
+                        SettingsSwitchItem(
+                            icon = Icons.Outlined.Palette,
+                            title = "Dynamic Colors",
+                            subtitle = "Colors adapt to album art",
+                            checked = uiState.dynamicColors,
+                            onCheckedChange = { settingsViewModel.setDynamicColors(it) }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsSwitchItem(
+                            icon = Icons.Outlined.Lyrics,
+                            title = "Show Lyrics",
+                            subtitle = "Display lyrics when available",
+                            checked = uiState.showLyricsDefault,
+                            onCheckedChange = { settingsViewModel.setShowLyricsDefault(it) }
+                        )
+                    }
+                }
+            }
+            
+            // Content Section
+            item {
+                SettingsSection(title = "Content") {
+                    SettingsCard {
+                        SettingsItem(
+                            icon = Icons.Outlined.Language,
+                            title = "Content Language",
+                            subtitle = "English, Hindi, Telugu, Tamil",
+                            onClick = { /* Language picker */ }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsSwitchItem(
+                            icon = Icons.Outlined.Block,
+                            title = "Incognito Mode",
+                            subtitle = "Don't save listening history",
+                            checked = uiState.incognitoMode,
+                            onCheckedChange = { settingsViewModel.setIncognitoMode(it) }
+                        )
+                    }
+                }
+            }
+            
+            // Data & Privacy Section
+            item {
+                SettingsSection(title = "Data & Privacy") {
+                    SettingsCard {
+                        SettingsItem(
+                            icon = Icons.Outlined.History,
+                            title = "Save Listening History",
+                            subtitle = if (uiState.saveHistory) "History is saved" else "History is not saved",
+                            onClick = { settingsViewModel.setSaveHistory(!uiState.saveHistory) }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsItem(
+                            icon = Icons.Outlined.Delete,
+                            title = "Clear Cache",
+                            subtitle = "Free up storage space",
+                            onClick = { settingsViewModel.clearCache() }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsItem(
+                            icon = Icons.Outlined.Search,
+                            title = "Cloud Sync",
+                            subtitle = if (uiState.cloudSyncEnabled) "Sync enabled" else "Sync disabled",
+                            onClick = { settingsViewModel.setCloudSyncEnabled(!uiState.cloudSyncEnabled) }
+                        )
+                    }
                 }
             }
             
             // About Section
             item {
                 SettingsSection(title = "About") {
-                    SettingsItem(
-                        icon = Icons.Default.Info,
-                        title = "Version",
-                        subtitle = "1.0.0 (Build 1)",
-                        onClick = { }
-                    )
-                    
-                    SettingsItem(
-                        icon = Icons.Default.Code,
-                        title = "GitHub",
-                        subtitle = "github.com/Rohithdgrr/REON-Music-app",
-                        onClick = { /* Open GitHub */ }
-                    )
+                    SettingsCard {
+                        SettingsItem(
+                            icon = Icons.Outlined.Info,
+                            title = "About REON",
+                            subtitle = "Version 1.0.0",
+                            onClick = { showAboutDialog = true }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsItem(
+                            icon = Icons.Outlined.Person,
+                            title = "Created by",
+                            subtitle = "Rohith",
+                            onClick = { }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsItem(
+                            icon = Icons.Outlined.Code,
+                            title = "Open Source Libraries",
+                            subtitle = "View licenses",
+                            onClick = { /* Open source credits */ }
+                        )
+                    }
                 }
             }
             
-            item { Spacer(modifier = Modifier.height(80.dp)) }
+            // Bottom spacing
+            item { Spacer(modifier = Modifier.height(100.dp)) }
+        }
+    }
+    
+    // Audio Quality Dialog
+    if (showQualityDialog) {
+        AlertDialog(
+            onDismissRequest = { showQualityDialog = false },
+            title = { Text("Audio Quality", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    QualityOption(
+                        title = "Low (96 kbps)",
+                        subtitle = "Save data, lower quality",
+                        selected = uiState.audioQuality == AudioQuality.LOW,
+                        onClick = {
+                            settingsViewModel.setAudioQuality(AudioQuality.LOW)
+                            showQualityDialog = false
+                        }
+                    )
+                    QualityOption(
+                        title = "Medium (160 kbps)",
+                        subtitle = "Balanced quality and data",
+                        selected = uiState.audioQuality == AudioQuality.MEDIUM,
+                        onClick = {
+                            settingsViewModel.setAudioQuality(AudioQuality.MEDIUM)
+                            showQualityDialog = false
+                        }
+                    )
+                    QualityOption(
+                        title = "High (320 kbps)",
+                        subtitle = "Best quality, uses more data",
+                        selected = uiState.audioQuality == AudioQuality.HIGH,
+                        onClick = {
+                            settingsViewModel.setAudioQuality(AudioQuality.HIGH)
+                            showQualityDialog = false
+                        }
+                    )
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showQualityDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+    
+    // About Dialog
+    if (showAboutDialog) {
+        AlertDialog(
+            onDismissRequest = { showAboutDialog = false },
+            title = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // App Logo
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(CircleShape)
+                            .background(
+                                brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                    colors = listOf(
+                                        Color(0xFF424242),
+                                        Color(0xFF212121),
+                                        Color(0xFF1A1A1A)
+                                    )
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "R",
+                            style = MaterialTheme.typography.headlineLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "REON Music",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Version 1.0.0",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary
+                    )
+                }
+            },
+            text = {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "A premium music streaming experience with high-quality audio, lyrics support, and seamless playback.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Created by Rohith",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "© 2024 REON. All rights reserved.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showAboutDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentRed)
+                ) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+    
+    // Cache Dialog
+    if (showCacheDialog) {
+        AlertDialog(
+            onDismissRequest = { showCacheDialog = false },
+            title = { Text("Clear Cache", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("This will clear all cached images and data. Downloaded songs will not be affected.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        settingsViewModel.clearCache()
+                        showCacheDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentRed)
+                ) {
+                    Text("Clear")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCacheDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun QualityOption(
+    title: String,
+    subtitle: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .background(if (selected) AccentRed.copy(alpha = 0.1f) else Color.Transparent)
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = onClick,
+            colors = RadioButtonDefaults.colors(selectedColor = AccentRed)
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (selected) AccentRed else TextPrimary
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary
+            )
         }
     }
 }
@@ -298,25 +470,31 @@ private fun SettingsSection(
     title: String,
     content: @Composable () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+    Column {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = TextSecondary,
+            modifier = Modifier.padding(vertical = 8.dp)
         )
+        content()
+    }
+}
+
+@Composable
+private fun SettingsCard(
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfaceColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            content()
-        }
+            modifier = Modifier.fillMaxWidth(),
+            content = content
+        )
     }
 }
 
@@ -330,15 +508,14 @@ private fun SettingsItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
-            .padding(vertical = 12.dp),
+            .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
+            contentDescription = title,
+            tint = AccentRed,
             modifier = Modifier.size(24.dp)
         )
         Spacer(modifier = Modifier.width(16.dp))
@@ -346,14 +523,21 @@ private fun SettingsItem(
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
+                color = TextPrimary
             )
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = TextSecondary
             )
         }
+        Icon(
+            imageVector = Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = TextSecondary,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }
 
@@ -368,13 +552,14 @@ private fun SettingsSwitchItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .clickable { onCheckedChange(!checked) }
+            .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
+            contentDescription = title,
+            tint = AccentRed,
             modifier = Modifier.size(24.dp)
         )
         Spacer(modifier = Modifier.width(16.dp))
@@ -382,77 +567,24 @@ private fun SettingsSwitchItem(
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
+                color = TextPrimary
             )
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = TextSecondary
             )
         }
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = AccentRed,
+                uncheckedThumbColor = TextSecondary,
+                uncheckedTrackColor = CardColor
+            )
         )
-    }
-}
-
-@Composable
-private fun SettingsSliderItem(
-    icon: ImageVector,
-    title: String,
-    value: Float,
-    valueRange: ClosedFloatingPointRange<Float>,
-    steps: Int,
-    valueLabel: String,
-    onValueChange: (Float) -> Unit
-) {
-    var sliderValue by remember { mutableFloatStateOf(value) }
-    
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp)
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                text = valueLabel,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-        Slider(
-            value = sliderValue,
-            onValueChange = { sliderValue = it },
-            onValueChangeFinished = { onValueChange(sliderValue) },
-            valueRange = valueRange,
-            steps = steps,
-            modifier = Modifier.padding(start = 40.dp)
-        )
-    }
-}
-
-private fun formatTimestamp(timestamp: Long): String {
-    val diff = System.currentTimeMillis() - timestamp
-    return when {
-        diff < 60_000 -> "Just now"
-        diff < 3600_000 -> "${diff / 60_000} minutes ago"
-        diff < 86400_000 -> "${diff / 3600_000} hours ago"
-        else -> "${diff / 86400_000} days ago"
     }
 }

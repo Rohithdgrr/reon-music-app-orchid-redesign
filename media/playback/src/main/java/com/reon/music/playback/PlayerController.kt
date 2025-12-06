@@ -299,6 +299,43 @@ class PlayerController @Inject constructor(
             .build()
     }
     
+    /**
+     * Play from queue at specific index
+     */
+    fun playFromQueue(index: Int) {
+        skipToIndex(index)
+    }
+    
+    /**
+     * Remove song from queue at specific index
+     */
+    fun removeFromQueue(index: Int) {
+        mediaController?.let { controller ->
+            if (index >= 0 && index < controller.mediaItemCount) {
+                val currentIndex = controller.currentMediaItemIndex
+                controller.removeMediaItem(index)
+                
+                // Update queue in state
+                val updatedQueue = _playerState.value.queue.toMutableList()
+                if (index < updatedQueue.size) {
+                    updatedQueue.removeAt(index)
+                    val newIndex = if (index <= currentIndex && currentIndex > 0) currentIndex - 1 else currentIndex
+                    _playerState.value = _playerState.value.copy(
+                        queue = updatedQueue,
+                        currentIndex = newIndex
+                    )
+                }
+            }
+        }
+    }
+    
+    /**
+     * Set playback speed (0.5x to 2.0x)
+     */
+    fun setPlaybackSpeed(speed: Float) {
+        mediaController?.setPlaybackSpeed(speed.coerceIn(0.5f, 2.0f))
+    }
+    
     fun release() {
         mediaController?.removeListener(playerListener)
         mediaController?.release()

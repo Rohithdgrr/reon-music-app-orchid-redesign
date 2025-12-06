@@ -1,23 +1,21 @@
 /*
  * REON Music App - Enhanced Search ViewModel
  * Copyright (c) 2024 REON
- * Clean-room implementation - No GPL code included
+ * YouTube Music Only - Real-time Search
  */
 
 package com.reon.music.ui.viewmodels
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reon.music.core.common.Result
 import com.reon.music.core.model.Album
 import com.reon.music.core.model.Artist
-import com.reon.music.core.model.Playlist
 import com.reon.music.core.model.Song
-import com.reon.music.data.network.jiosaavn.JioSaavnClient
 import com.reon.music.data.network.youtube.YouTubeMusicClient
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,28 +29,25 @@ data class SearchUiState(
     val songs: List<Song> = emptyList(),
     val albums: List<Album> = emptyList(),
     val artists: List<Artist> = emptyList(),
-    val playlists: List<Playlist> = emptyList(),
     val searchHistory: List<String> = emptyList(),
-    val suggestions: List<String> = emptyList(),
     val activeFilter: SearchFilter = SearchFilter.ALL,
-    val sortBy: SearchSortBy = SearchSortBy.RELEVANCE,
     val error: String? = null,
     val hasSearched: Boolean = false
 )
 
 enum class SearchFilter {
-    ALL, SONGS, ALBUMS, ARTISTS, PLAYLISTS
-}
-
-enum class SearchSortBy {
-    RELEVANCE, DURATION_ASC, DURATION_DESC, TITLE_ASC, TITLE_DESC, DATE_NEWEST, DATE_OLDEST
+    ALL, SONGS, ALBUMS, ARTISTS
 }
 
 @HiltViewModel
 class SearchViewModel @Inject constructor(
-    private val jioSaavnClient: JioSaavnClient,
     private val youTubeClient: YouTubeMusicClient
 ) : ViewModel() {
+    
+    companion object {
+        private const val TAG = "SearchViewModel"
+        private const val DEBOUNCE_MS = 400L
+    }
     
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
@@ -60,77 +55,108 @@ class SearchViewModel @Inject constructor(
     private var searchJob: Job? = null
     private val searchHistoryList = mutableListOf<String>()
     
-    companion object {
-        private const val DEBOUNCE_MS = 300L
-        private const val MAX_HISTORY_ITEMS = 20
-    }
-    
-    init {
-        loadSearchHistory()
-    }
-    
+    /**
+     * Update query and trigger real-time search
+     */
     fun updateQuery(query: String) {
         _uiState.value = _uiState.value.copy(query = query)
         
-        // Debounced search suggestions
+        if (query.isBlank()) {
+            // Clear results when query is empty
+            _uiState.value = _uiState.value.copy(
+                songs = emptyList(),
+                albums = emptyList(),
+                artists = emptyList(),
+                hasSearched = false,
+                isLoading = false
+            )
+            return
+        }
+        
+        // Debounced search - search as user types
         searchJob?.cancel()
-        if (query.isNotBlank() && query.length >= 2) {
-            searchJob = viewModelScope.launch {
-                delay(DEBOUNCE_MS)
-                loadSuggestions(query)
-            }
-        } else {
-            _uiState.value = _uiState.value.copy(suggestions = emptyList())
+        searchJob = viewModelScope.launch {
+            delay(DEBOUNCE_MS)
+            performSearch(query)
         }
     }
     
-    fun search(query: String = _uiState.value.query) {
+    /**
+     * Perform immediate search (e.g., when user presses search button)
+     */
+    fun search(query: String) {
         if (query.isBlank()) return
         
-        _uiState.value = _uiState.value.copy(
-            query = query,
-            isLoading = true,
-            error = null,
-            hasSearched = true
-        )
-        
-        // Add to history
+        searchJob?.cancel()
         addToHistory(query)
         
-        viewModelScope.launch {
-            try {
-                // Search both sources in parallel
-                val jioSaavnDeferred = async { jioSaavnClient.searchSongs(query) }
-                val youtubeDeferred = async { youTubeClient.searchSongs(query) }
-                
-                val jioSaavnResult = jioSaavnDeferred.await()
-                val youtubeResult = youtubeDeferred.await()
-                
-                // Combine results
-                val allSongs = mutableListOf<Song>()
-                
-                if (jioSaavnResult is Result.Success) {
-                    allSongs.addAll(jioSaavnResult.data)
+        searchJob = viewModelScope.launch {
+            performSearch(query)
+        }
+    }
+    
+    /**
+     * Internal search function - uses YouTube Music only
+     */
+    private suspend fun performSearch(query: String) {
+        _uiState.value = _uiState.value.copy(
+            isLoading = true,
+            hasSearched = true,
+            error = null
+        )
+        
+        try {
+            // Search for songs using YouTube Music
+            val songsResult = youTubeClient.searchSongs(query)
+            val songs = when (songsResult) {
+                is Result.Success -> songsResult.data
+                is Result.Error -> {
+                    Log.e(TAG, "Error searching songs: ${songsResult.message}")
+                    emptyList()
                 }
-                
-                if (youtubeResult is Result.Success) {
-                    allSongs.addAll(youtubeResult.data)
-                }
-                
-                // Apply filters and sorting
-                val filteredSongs = applySorting(allSongs)
-                
-                _uiState.value = _uiState.value.copy(
-                    songs = filteredSongs,
-                    isLoading = false,
-                    suggestions = emptyList()
-                )
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = "Search failed: ${e.message}"
-                )
+                is Result.Loading -> emptyList()
             }
+            
+            // Extract unique artists from songs
+            val artists = songs
+                .map { song -> 
+                    Artist(
+                        id = song.artist.hashCode().toString(),
+                        name = song.artist,
+                        artworkUrl = song.artworkUrl
+                    )
+                }
+                .distinctBy { it.name }
+                .take(10)
+            
+            // Extract unique albums from songs
+            val albums = songs
+                .filter { it.album.isNotBlank() }
+                .map { song ->
+                    Album(
+                        id = song.album.hashCode().toString(),
+                        name = song.album,
+                        artist = song.artist,
+                        artworkUrl = song.artworkUrl
+                    )
+                }
+                .distinctBy { it.name }
+                .take(10)
+            
+            _uiState.value = _uiState.value.copy(
+                songs = songs,
+                albums = albums,
+                artists = artists,
+                isLoading = false,
+                error = if (songs.isEmpty()) "No results found" else null
+            )
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Search error", e)
+            _uiState.value = _uiState.value.copy(
+                isLoading = false,
+                error = e.message ?: "Search failed"
+            )
         }
     }
     
@@ -138,46 +164,14 @@ class SearchViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(activeFilter = filter)
     }
     
-    fun setSortBy(sortBy: SearchSortBy) {
-        _uiState.value = _uiState.value.copy(sortBy = sortBy)
-        // Re-apply sorting
-        val sortedSongs = applySorting(_uiState.value.songs)
-        _uiState.value = _uiState.value.copy(songs = sortedSongs)
-    }
-    
-    private fun applySorting(songs: List<Song>): List<Song> {
-        return when (_uiState.value.sortBy) {
-            SearchSortBy.RELEVANCE -> songs
-            SearchSortBy.DURATION_ASC -> songs.sortedBy { it.duration }
-            SearchSortBy.DURATION_DESC -> songs.sortedByDescending { it.duration }
-            SearchSortBy.TITLE_ASC -> songs.sortedBy { it.title.lowercase() }
-            SearchSortBy.TITLE_DESC -> songs.sortedByDescending { it.title.lowercase() }
-            SearchSortBy.DATE_NEWEST -> songs.sortedByDescending { it.releaseDate }
-            SearchSortBy.DATE_OLDEST -> songs.sortedBy { it.releaseDate }
-        }
-    }
-    
-    private suspend fun loadSuggestions(query: String) {
-        // Search suggestions not yet implemented
-        // Would call API endpoint when available
-        _uiState.value = _uiState.value.copy(suggestions = emptyList())
-    }
-    
-    private fun loadSearchHistory() {
-        // In production, load from DataStore
-        _uiState.value = _uiState.value.copy(searchHistory = searchHistoryList.toList())
-    }
-    
     private fun addToHistory(query: String) {
-        searchHistoryList.remove(query) // Remove if exists
-        searchHistoryList.add(0, query) // Add to front
-        
-        // Limit history size
-        while (searchHistoryList.size > MAX_HISTORY_ITEMS) {
-            searchHistoryList.removeAt(searchHistoryList.lastIndex)
+        if (query.isNotBlank() && !searchHistoryList.contains(query)) {
+            searchHistoryList.add(0, query)
+            if (searchHistoryList.size > 10) {
+                searchHistoryList.removeLast()
+            }
+            _uiState.value = _uiState.value.copy(searchHistory = searchHistoryList.toList())
         }
-        
-        _uiState.value = _uiState.value.copy(searchHistory = searchHistoryList.toList())
     }
     
     fun removeFromHistory(query: String) {
@@ -191,6 +185,7 @@ class SearchViewModel @Inject constructor(
     }
     
     fun clearSearch() {
+        searchJob?.cancel()
         _uiState.value = SearchUiState(searchHistory = searchHistoryList.toList())
     }
     

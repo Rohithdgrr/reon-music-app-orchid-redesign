@@ -49,6 +49,9 @@ interface SongDao {
     @Query("SELECT COUNT(*) FROM songs WHERE isLiked = 1")
     fun getLikedCount(): Flow<Int>
     
+    @Query("SELECT isLiked FROM songs WHERE id = :songId")
+    suspend fun isLiked(songId: String): Boolean
+    
     // Library songs
     @Query("SELECT * FROM songs WHERE inLibrary = 1 ORDER BY addedAt DESC")
     fun getLibrarySongs(): Flow<List<SongEntity>>

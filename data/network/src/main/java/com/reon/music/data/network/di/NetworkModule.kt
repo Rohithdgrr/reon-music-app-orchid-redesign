@@ -53,13 +53,13 @@ object NetworkModule {
         
         install(Logging) {
             logger = Logger.SIMPLE
-            level = LogLevel.NONE // Change to INFO for debugging
+            level = LogLevel.INFO // Enabled for debugging
         }
         
         install(HttpTimeout) {
-            requestTimeoutMillis = 30000
+            requestTimeoutMillis = 60000
             connectTimeoutMillis = 30000
-            socketTimeoutMillis = 30000
+            socketTimeoutMillis = 60000
         }
         
         defaultRequest {

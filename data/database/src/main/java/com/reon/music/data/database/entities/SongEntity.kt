@@ -58,7 +58,7 @@ data class SongEntity(
     )
     
     companion object {
-        fun fromSong(song: Song, isLiked: Boolean = false, inLibrary: Boolean = false): SongEntity {
+        fun fromSong(song: Song, isLiked: Boolean = false, inLibrary: Boolean = false, isDownloaded: Boolean = false): SongEntity {
             return SongEntity(
                 id = song.id,
                 title = song.title,
@@ -69,7 +69,8 @@ data class SongEntity(
                 streamUrl = song.streamUrl,
                 source = song.source,
                 isLiked = isLiked,
-                inLibrary = inLibrary
+                inLibrary = inLibrary,
+                downloadState = if (isDownloaded) DownloadState.DOWNLOADED else DownloadState.NOT_DOWNLOADED
             )
         }
     }

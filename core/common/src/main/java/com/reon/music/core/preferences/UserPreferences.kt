@@ -61,6 +61,9 @@ class UserPreferences @Inject constructor(
         private val SPONSOR_BLOCK_ENABLED = booleanPreferencesKey("sponsor_block_enabled")
         private val DISCORD_RPC_ENABLED = booleanPreferencesKey("discord_rpc_enabled")
         
+        // Content settings
+        private val PREFERRED_SOURCE = stringPreferencesKey("preferred_source")
+        
         // Sync
         private val DEVICE_ID = stringPreferencesKey("device_id")
         private val CLOUD_SYNC_ENABLED = booleanPreferencesKey("cloud_sync_enabled")
@@ -166,6 +169,15 @@ class UserPreferences @Inject constructor(
         prefs[LAST_SYNC_TIME] ?: 0L
     }
     
+    // Content settings
+    val preferredSource: Flow<MusicSource> = dataStore.data.map { prefs ->
+        MusicSource.fromString(prefs[PREFERRED_SOURCE] ?: "jiosaavn")
+    }
+    
+    suspend fun setPreferredSource(source: MusicSource) {
+        dataStore.edit { it[PREFERRED_SOURCE] = source.name.lowercase() }
+    }
+    
     // Setters
     suspend fun setAudioQuality(quality: AudioQuality) {
         dataStore.edit { it[AUDIO_QUALITY] = quality.name.lowercase() }
@@ -254,6 +266,18 @@ enum class AppTheme(val label: String) {
     companion object {
         fun fromString(value: String): AppTheme {
             return entries.find { it.name.equals(value, ignoreCase = true) } ?: SYSTEM
+        }
+    }
+}
+
+enum class MusicSource(val label: String) {
+    JIOSAAVN("JioSaavn"),
+    YOUTUBE("YouTube"),
+    BOTH("Both");
+    
+    companion object {
+        fun fromString(value: String): MusicSource {
+            return entries.find { it.name.equals(value, ignoreCase = true) } ?: BOTH
         }
     }
 }

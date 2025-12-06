@@ -177,14 +177,210 @@ class MusicRepository @Inject constructor(
      * Get trending songs (from JioSaavn)
      */
     suspend fun getTrendingSongs(): Result<List<Song>> {
-        // JioSaavn's trending endpoint
-        return jiosaavnClient.searchSongs("trending hindi songs", 1, 20)
+        return jiosaavnClient.searchSongs("trending songs 2024", 1, 20)
     }
     
     /**
      * Get new releases
      */
     suspend fun getNewReleases(): Result<List<Song>> {
-        return jiosaavnClient.searchSongs("new hindi songs 2024", 1, 20)
+        return jiosaavnClient.searchSongs("latest hindi songs 2024", 1, 20)
+    }
+    
+    /**
+     * Get Top 50 Hindi songs
+     */
+    suspend fun getTop50Hindi(): Result<List<Song>> {
+        return jiosaavnClient.searchSongs("top 50 hindi songs", 1, 50)
+    }
+    
+    /**
+     * Get Top 100 songs
+     */
+    suspend fun getTop100(): Result<List<Song>> {
+        return jiosaavnClient.searchSongs("top 100 bollywood songs", 1, 50)
+    }
+    
+    /**
+     * Get Telugu songs
+     */
+    suspend fun getTeluguSongs(): Result<List<Song>> {
+        return jiosaavnClient.searchSongs("telugu songs 2024", 1, 20)
+    }
+    
+    /**
+     * Get Telugu Top songs
+     */
+    suspend fun getTeluguTop(): Result<List<Song>> {
+        return jiosaavnClient.searchSongs("top telugu songs", 1, 20)
+    }
+    
+    /**
+     * Get Tamil songs
+     */
+    suspend fun getTamilSongs(): Result<List<Song>> {
+        return jiosaavnClient.searchSongs("tamil songs 2024", 1, 20)
+    }
+    
+    /**
+     * Get Punjabi songs
+     */
+    suspend fun getPunjabiSongs(): Result<List<Song>> {
+        return jiosaavnClient.searchSongs("punjabi songs 2024", 1, 20)
+    }
+    
+    /**
+     * Get English Top songs
+     */
+    suspend fun getEnglishSongs(): Result<List<Song>> {
+        return jiosaavnClient.searchSongs("english pop songs 2024", 1, 20)
+    }
+    
+    /**
+     * Get Romantic songs
+     */
+    suspend fun getRomanticSongs(): Result<List<Song>> {
+        return jiosaavnClient.searchSongs("romantic hindi songs", 1, 20)
+    }
+    
+    /**
+     * Get Party/Dance songs
+     */
+    suspend fun getPartySongs(): Result<List<Song>> {
+        return jiosaavnClient.searchSongs("party bollywood songs dance", 1, 20)
+    }
+    
+    /**
+     * Get Sad songs
+     */
+    suspend fun getSadSongs(): Result<List<Song>> {
+        return jiosaavnClient.searchSongs("sad hindi songs", 1, 20)
+    }
+    
+    /**
+     * Get Devotional songs
+     */
+    suspend fun getDevotionalSongs(): Result<List<Song>> {
+        return jiosaavnClient.searchSongs("devotional bhajan songs", 1, 20)
+    }
+    
+    /**
+     * Get Lo-Fi/Chill songs
+     */
+    suspend fun getLofiSongs(): Result<List<Song>> {
+        return jiosaavnClient.searchSongs("lofi hindi songs", 1, 20)
+    }
+    
+    /**
+     * Get Workout songs
+     */
+    suspend fun getWorkoutSongs(): Result<List<Song>> {
+        return jiosaavnClient.searchSongs("workout gym songs", 1, 20)
+    }
+    
+    /**
+     * Get 90s Retro songs
+     */
+    suspend fun getRetroSongs(): Result<List<Song>> {
+        return jiosaavnClient.searchSongs("90s bollywood songs", 1, 20)
+    }
+    
+    /**
+     * Get Arijit Singh songs
+     */
+    suspend fun getArijitSinghSongs(): Result<List<Song>> {
+        return jiosaavnClient.searchSongs("arijit singh songs", 1, 20)
+    }
+    
+    /**
+     * Get AR Rahman songs
+     */
+    suspend fun getARRahmanSongs(): Result<List<Song>> {
+        return jiosaavnClient.searchSongs("ar rahman songs", 1, 20)
+    }
+    
+    /**
+     * Get Atif Aslam songs
+     */
+    suspend fun getAtifAslamSongs(): Result<List<Song>> {
+        return jiosaavnClient.searchSongs("atif aslam songs", 1, 20)
+    }
+    
+    /**
+     * Get Shreya Ghoshal songs
+     */
+    suspend fun getShreyaGhoshalSongs(): Result<List<Song>> {
+        return jiosaavnClient.searchSongs("shreya ghoshal songs", 1, 20)
+    }
+    
+    /**
+     * Get songs by language
+     */
+    suspend fun getSongsByLanguage(language: String): Result<List<Song>> {
+        return jiosaavnClient.searchSongs("$language songs 2024", 1, 30)
+    }
+    
+    /**
+     * Get songs by genre
+     */
+    suspend fun getSongsByGenre(genre: String): Result<List<Song>> {
+        return jiosaavnClient.searchSongs("$genre songs", 1, 20)
+    }
+    
+    /**
+     * Get songs by mood
+     */
+    suspend fun getSongsByMood(mood: String): Result<List<Song>> {
+        return jiosaavnClient.searchSongs("$mood mood songs", 1, 20)
+    }
+    
+    /**
+     * Get featured playlists
+     */
+    suspend fun getFeaturedPlaylists(): Result<List<Playlist>> {
+        return jiosaavnClient.searchPlaylists("featured hindi", 1, 15)
+    }
+    
+    /**
+     * Get top artists
+     */
+    suspend fun getTopArtists(): Result<List<Artist>> {
+        return jiosaavnClient.searchArtists("Arijit Singh", 1, 15) // Searching for a top artist often returns similar top artists
+        // Alternatively, searching for "artists" might work but "Arijit Singh" or generic "bollywood" is safer
+    }
+    
+    /**
+     * Search songs with custom limit
+     */
+    suspend fun searchSongsWithLimit(query: String, limit: Int): Result<List<Song>> {
+        return jiosaavnClient.searchSongs(query, 1, limit)
+    }
+    
+    /**
+     * Search playlists
+     */
+    suspend fun searchPlaylists(query: String): Result<List<Playlist>> {
+        return jiosaavnClient.searchPlaylists(query, 1, 15)
+    }
+    
+    /**
+     * Search albums
+     */
+    suspend fun searchAlbums(query: String): Result<List<Album>> {
+        return jiosaavnClient.searchAlbums(query, 1, 15)
+    }
+    
+    /**
+     * Search artists
+     */
+    suspend fun searchArtists(query: String): Result<List<Artist>> {
+        return jiosaavnClient.searchArtists(query, 1, 15)
+    }
+    
+    /**
+     * Get trending albums
+     */
+    suspend fun getTrendingAlbums(): Result<List<Album>> {
+        return jiosaavnClient.searchAlbums("bollywood albums 2024", 1, 15)
     }
 }

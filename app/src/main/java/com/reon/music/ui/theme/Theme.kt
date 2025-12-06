@@ -166,24 +166,18 @@ private fun createDynamicLightScheme(palette: Palette): ColorScheme {
 }
 
 /**
- * REON Theme
+ * REON Theme - Light Theme Only
  */
 @Composable
 fun ReonTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = false,  // Always use light theme
     pureBlack: Boolean = false,
     dynamicColor: Boolean = false,
     dynamicColorImageUrl: String? = null,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && dynamicColorImageUrl != null -> {
-            rememberDynamicColorScheme(dynamicColorImageUrl, darkTheme)
-        }
-        pureBlack && darkTheme -> AmoledDarkColorScheme
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
+    // Force light theme for the entire application
+    val colorScheme = LightColorScheme
     
     // Animate color transitions
     val animatedColorScheme = colorScheme.copy(

@@ -27,19 +27,25 @@ import javax.inject.Inject
 data class PlayerUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
-    val showPlayer: Boolean = false
+    val showPlayer: Boolean = false,
+    val isLiked: Boolean = false,
+    val userPlaylists: List<com.reon.music.data.database.entities.PlaylistEntity> = emptyList()
 )
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
     private val playerController: PlayerController,
     private val streamResolver: StreamResolver,
-    private val repository: MusicRepository
+    private val repository: MusicRepository,
+    private val songDao: com.reon.music.data.database.dao.SongDao,
+    private val playlistDao: com.reon.music.data.database.dao.PlaylistDao,
+    private val downloadManager: com.reon.music.services.DownloadManager
 ) : ViewModel() {
     
     companion object {
         private const val TAG = "PlayerViewModel"
     }
+
     
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
@@ -53,6 +59,8 @@ class PlayerViewModel @Inject constructor(
     
     init {
         startPositionUpdates()
+        observeCurrentSong()
+        loadPlaylists()
     }
     
     private fun startPositionUpdates() {
@@ -65,35 +73,112 @@ class PlayerViewModel @Inject constructor(
         }
     }
     
+    private fun observeCurrentSong() {
+        viewModelScope.launch {
+            playerController.playerState.collect { state ->
+                state.currentSong?.let { song ->
+                    checkIfLiked(song.id)
+                }
+            }
+        }
+    }
+    
+    private fun loadPlaylists() {
+        viewModelScope.launch {
+            playlistDao.getAllPlaylists().collect { playlists ->
+                _uiState.value = _uiState.value.copy(userPlaylists = playlists)
+            }
+        }
+    }
+    
+    private suspend fun checkIfLiked(songId: String) {
+        val isLiked = songDao.isLiked(songId)
+        _uiState.value = _uiState.value.copy(isLiked = isLiked)
+    }
+
+    fun toggleLike() {
+        val song = playerState.value.currentSong ?: return
+        viewModelScope.launch {
+            val current = songDao.getSongById(song.id)
+            val newLikedState = !(current?.isLiked ?: false)
+            
+            if (current == null) {
+                songDao.insert(com.reon.music.data.database.entities.SongEntity.fromSong(song, isLiked = true))
+            } else {
+                songDao.setLiked(song.id, newLikedState)
+            }
+            // Update state immediately
+            _uiState.value = _uiState.value.copy(isLiked = newLikedState)
+        }
+    }
+    
+    fun addToPlaylist(playlistId: Long) {
+        val song = playerState.value.currentSong ?: return
+        viewModelScope.launch {
+            if (songDao.getSongById(song.id) == null) {
+                songDao.insert(com.reon.music.data.database.entities.SongEntity.fromSong(song))
+            }
+            
+            val maxPos = playlistDao.getMaxPosition(playlistId) ?: -1
+            playlistDao.addSongToPlaylist(
+                com.reon.music.data.database.entities.PlaylistSongCrossRef(
+                    playlistId = playlistId,
+                    songId = song.id,
+                    position = maxPos + 1
+                )
+            )
+            playlistDao.updatePlaylistStats(playlistId)
+        }
+    }
+    
     /**
-     * Play a song - resolves stream URL and plays
+     * Play a song - resolves stream URL and plays with retry logic
      */
-    fun playSong(song: Song) {
+    fun playSong(song: Song, retryCount: Int = 0) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             
             try {
-                Log.d(TAG, "Playing song: ${song.title}")
+                Log.d(TAG, "Playing song: ${song.title} (${song.source}) - attempt ${retryCount + 1}")
+                Log.d(TAG, "Existing streamUrl: ${song.streamUrl?.take(100) ?: "null"}")
                 
                 val streamUrl = streamResolver.resolveStreamUrl(song)
                 
                 if (streamUrl != null) {
-                    Log.d(TAG, "Got stream URL, playing...")
+                    Log.d(TAG, "Resolved stream URL: ${streamUrl.take(100)}...")
+                    Log.d(TAG, "Starting playback...")
                     playerController.playSong(song, streamUrl)
                     _uiState.value = _uiState.value.copy(isLoading = false, showPlayer = true)
+                    Log.d(TAG, "Playback started successfully")
                 } else {
                     Log.e(TAG, "Could not resolve stream URL")
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = "Could not play: ${song.title}"
-                    )
+                    
+                    // Retry up to 2 times
+                    if (retryCount < 2) {
+                        Log.d(TAG, "Retrying...")
+                        delay(1000) // Wait 1 second before retry
+                        playSong(song, retryCount + 1)
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            error = "Could not play: ${song.title}. Please try again."
+                        )
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error playing song", e)
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = "Error: ${e.message}"
-                )
+                
+                // Retry on exception
+                if (retryCount < 2) {
+                    Log.d(TAG, "Retrying after error...")
+                    delay(1000)
+                    playSong(song, retryCount + 1)
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        error = "Error playing: ${e.message}"
+                    )
+                }
             }
         }
     }
@@ -221,5 +306,66 @@ class PlayerViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         positionUpdateJob?.cancel()
+    }
+    
+    fun downloadSong() {
+        val song = playerState.value.currentSong ?: return
+        downloadSong(song)
+    }
+    
+    fun downloadSong(song: Song) {
+        viewModelScope.launch {
+            try {
+                // Initiate download via DownloadManager
+                downloadManager.downloadSong(song)
+                
+                // Also ensure it's in DB
+                if (songDao.getSongById(song.id) == null) {
+                    songDao.insert(com.reon.music.data.database.entities.SongEntity.fromSong(song, isDownloaded = true))
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error starting download", e)
+            }
+        }
+    }
+    
+    /**
+     * Play song from queue at specific index
+     */
+    fun playFromQueue(index: Int) {
+        playerController.playFromQueue(index)
+    }
+    
+    /**
+     * Remove song from queue at specific index
+     */
+    fun removeFromQueue(index: Int) {
+        playerController.removeFromQueue(index)
+    }
+    
+    /**
+     * Set playback speed (0.5x to 2.0x)
+     */
+    fun setPlaybackSpeed(speed: Float) {
+        playerController.setPlaybackSpeed(speed)
+    }
+    
+    /**
+     * Set sleep timer in minutes
+     */
+    fun setSleepTimer(minutes: Int) {
+        viewModelScope.launch {
+            delay(minutes * 60 * 1000L)
+            if (isActive) {
+                playerController.pause()
+            }
+        }
+    }
+    
+    /**
+     * Cycle through repeat modes: OFF -> ALL -> ONE -> OFF
+     */
+    fun cycleRepeatMode() {
+        playerController.toggleRepeatMode()
     }
 }

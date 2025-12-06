@@ -60,28 +60,34 @@ class StreamResolver @Inject constructor(
      * Resolve JioSaavn stream URL
      */
     private suspend fun resolveJioSaavnUrl(song: Song): String? {
-        // First try existing URL
+        // First try existing URL - JioSaavn URLs are typically valid, don't waste time checking
         song.streamUrl?.let { url ->
-            if (url.isNotBlank() && isUrlAccessible(url)) {
-                Log.d(TAG, "Using existing JioSaavn URL")
-                return url.replace("_96", "_320") // Upgrade to 320kbps
+            if (url.isNotBlank() && url.contains("aac.saavncdn.com")) {
+                Log.d(TAG, "Using existing JioSaavn URL: ${url.take(80)}...")
+                // Upgrade quality: _96 -> _160 -> _320
+                return url
+                    .replace("_96.mp4", "_320.mp4")
+                    .replace("_96_", "_320_")
+                    .replace("/96/", "/320/")
             }
         }
         
-        // Fetch fresh song details
+        // Fetch fresh song details if URL is missing or invalid
         Log.d(TAG, "Fetching fresh JioSaavn details for: ${song.id}")
-        val details = jiosaavnClient.getSongDetails(song.id).getOrNull()
-        details?.streamUrl?.let { url ->
-            if (url.isNotBlank()) {
-                val highQualityUrl = url.replace("_96", "_320")
-                if (isUrlAccessible(highQualityUrl)) {
-                    return highQualityUrl
-                }
-                // Fallback to original quality
-                if (isUrlAccessible(url)) {
+        try {
+            val details = jiosaavnClient.getSongDetails(song.id).getOrNull()
+            details?.streamUrl?.let { url ->
+                if (url.isNotBlank()) {
+                    Log.d(TAG, "Got fresh URL from JioSaavn")
+                    // Return with quality upgrade
                     return url
+                        .replace("_96.mp4", "_320.mp4")
+                        .replace("_96_", "_320_")
+                        .replace("/96/", "/320/")
                 }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fetching song details", e)
         }
         
         // Last resort: search by name
@@ -115,9 +121,11 @@ class StreamResolver @Inject constructor(
         // Try 3: Alternative Piped instances
         Log.d(TAG, "Trying alternative sources for: $videoId")
         val alternativeSources = listOf(
-            "https://pipedapi.adminforge.de",
+            "https://api.piped.privacydev.net",
             "https://pipedapi.in.projectsegfau.lt",
-            "https://api.piped.privacydev.net"
+            "https://pipedapi.adminforge.de",
+            "https://piped-api.hostux.net",
+            "https://api.piped.yt"
         )
         
         for (instance in alternativeSources) {

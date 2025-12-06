@@ -26,12 +26,15 @@ class PipedClient @Inject constructor(
     private val httpClient: HttpClient
 ) {
     companion object {
-        // Public Piped instances
+        // Public Piped instances - updated with currently active servers
         private val PIPED_INSTANCES = listOf(
             "https://pipedapi.kavin.rocks",
-            "https://pipedapi.syncpundit.io", 
+            "https://api.piped.privacydev.net",
+            "https://pipedapi.in.projectsegfau.lt",
+            "https://pipedapi.adminforge.de",
+            "https://piped-api.hostux.net",
             "https://api.piped.yt",
-            "https://pipedapi.moomoo.me"
+            "https://yapi.vyper.me"
         )
     }
     

@@ -57,18 +57,17 @@ class MusicService : MediaLibraryService() {
             .build()
         
         // Create pending intent for notification click
-        val pendingIntent = packageManager?.getLaunchIntentForPackage(packageName)?.let { intent ->
-            PendingIntent.getActivity(
-                this,
-                0,
-                intent,
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-            )
-        }
+        val sessionActivityIntent = Intent(this, Class.forName("com.reon.music.MainActivity"))
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            sessionActivityIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
         
         // Create MediaLibrarySession
         mediaSession = MediaLibrarySession.Builder(this, player, MediaLibraryCallback())
-            .setSessionActivity(pendingIntent!!)
+            .setSessionActivity(pendingIntent)
             .build()
     }
     

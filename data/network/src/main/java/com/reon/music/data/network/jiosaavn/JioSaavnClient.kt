@@ -60,6 +60,75 @@ class JioSaavnClient @Inject constructor(
     }
     
     /**
+     * Search for playlists
+     */
+    suspend fun searchPlaylists(
+        query: String,
+        page: Int = 1,
+        limit: Int = 20
+    ): Result<List<Playlist>> = safeApiCall {
+        val url = "$baseUrl?$baseParams&__call=search.getPlaylistResults&p=$page&q=$query&n=$limit"
+        
+        val response: HttpResponse = httpClient.get(url) {
+            header("Accept", "application/json")
+            header("User-Agent", USER_AGENT)
+        }
+        
+        val json = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        val results = json["results"]?.jsonArray ?: return@safeApiCall emptyList()
+        
+        results.mapNotNull { element ->
+            parsePlaylistFromSearchJson(element.jsonObject)
+        }
+    }
+    
+    /**
+     * Search for artists
+     */
+    suspend fun searchArtists(
+        query: String,
+        page: Int = 1,
+        limit: Int = 20
+    ): Result<List<Artist>> = safeApiCall {
+        val url = "$baseUrl?$baseParams&__call=search.getArtistResults&p=$page&q=$query&n=$limit"
+        
+        val response: HttpResponse = httpClient.get(url) {
+            header("Accept", "application/json")
+            header("User-Agent", USER_AGENT)
+        }
+        
+        val json = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        val results = json["results"]?.jsonArray ?: return@safeApiCall emptyList()
+        
+        results.mapNotNull { element ->
+            parseArtistFromSearchJson(element.jsonObject)
+        }
+    }
+    
+    /**
+     * Search for albums
+     */
+    suspend fun searchAlbums(
+        query: String,
+        page: Int = 1,
+        limit: Int = 20
+    ): Result<List<Album>> = safeApiCall {
+        val url = "$baseUrl?$baseParams&__call=search.getAlbumResults&p=$page&q=$query&n=$limit"
+        
+        val response: HttpResponse = httpClient.get(url) {
+            header("Accept", "application/json")
+            header("User-Agent", USER_AGENT)
+        }
+        
+        val json = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        val results = json["results"]?.jsonArray ?: return@safeApiCall emptyList()
+        
+        results.mapNotNull { element ->
+            parseAlbumFromSearchJson(element.jsonObject)
+        }
+    }
+    
+    /**
      * Get song details by ID
      */
     suspend fun getSongDetails(songId: String): Result<Song?> = safeApiCall {

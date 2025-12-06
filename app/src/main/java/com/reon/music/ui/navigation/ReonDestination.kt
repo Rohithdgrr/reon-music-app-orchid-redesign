@@ -10,11 +10,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.LibraryMusic
-import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -47,14 +47,23 @@ sealed class ReonDestination(
         unselectedIcon = Icons.Outlined.LibraryMusic
     )
     
+    data object Downloads : ReonDestination(
+        route = "downloads",
+        title = "Downloads",
+        selectedIcon = Icons.Filled.Download,
+        unselectedIcon = Icons.Outlined.Download
+    )
+    
+    // Settings is no longer in bottom nav, but still a valid destination
     data object Settings : ReonDestination(
         route = "settings",
         title = "Settings",
-        selectedIcon = Icons.Filled.Settings,
-        unselectedIcon = Icons.Outlined.Settings
+        selectedIcon = Icons.Filled.Home, // Not used in bottom nav
+        unselectedIcon = Icons.Outlined.Home
     )
     
     companion object {
-        val bottomNavDestinations = listOf(Home, Search, Library, Settings)
+        // Bottom nav: Home, Search, Library, Downloads (removed Settings)
+        val bottomNavDestinations = listOf(Home, Search, Library, Downloads)
     }
 }
