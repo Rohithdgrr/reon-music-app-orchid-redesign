@@ -58,16 +58,55 @@ data class HomeUiState(
     // Most Played
     val mostPlayedSongs: List<Song> = emptyList(),
     
+    // Recently Played
+    val recentlyPlayedSongs: List<Song> = emptyList(),
+    
+    // All Time Favorites (most liked songs)
+    val allTimeFavoriteSongs: List<Song> = emptyList(),
+    
+    // Indian Songs Playlists
+    val indianPlaylists: List<Playlist> = emptyList(),
+    
     // Telugu Section
     val teluguSongs: List<Song> = emptyList(),
     val teluguPlaylists: List<Playlist> = emptyList(),
+    val teluguDjSongs: List<Song> = emptyList(),
     
     // ST Banjara Songs
     val banjaraSongs: List<Song> = emptyList(),
     
+    // Indian Playlists - Love & Romance
+    val loveSongs: List<Song> = emptyList(),
+    val romanticHits: List<Song> = emptyList(),
+    val weddingSongs: List<Song> = emptyList(),
+    
+    // Heartbreak & Sad Songs
+    val heartbreakSongs: List<Song> = emptyList(),
+    val sadSongPlaylist: List<Song> = emptyList(),
+    
+    // Party & Dance
+    val partyHits: List<Song> = emptyList(),
+    val djRemixes: List<Song> = emptyList(),
+    val danceFloor: List<Song> = emptyList(),
+    
+    // Language-specific Playlists
+    val bhojpuriSongs: List<Song> = emptyList(),
+    val malayalamSongs: List<Song> = emptyList(),
+    val kannadaSongs: List<Song> = emptyList(),
+    val marathiSongs: List<Song> = emptyList(),
+    val bengaliSongs: List<Song> = emptyList(),
+    val gujaratiSongs: List<Song> = emptyList(),
+    val rajasthaniSongs: List<Song> = emptyList(),
+    
+    // Mix & Trending
+    val mixSongs: List<Song> = emptyList(),
+    val viralHits: List<Song> = emptyList(),
+    val reelsTrending: List<Song> = emptyList(),
+    
     // Playlists
     val featuredPlaylists: List<Playlist> = emptyList(),
     val moodPlaylists: List<Playlist> = emptyList(),
+    val trendingPlaylists: List<Playlist> = emptyList(),
     
     // New Releases
     val newReleases: List<Song> = emptyList(),
@@ -79,12 +118,15 @@ data class HomeUiState(
     // Artists
     val topArtists: List<Artist> = emptyList(),
     val recommendedArtists: List<Artist> = emptyList(),
+    val indianArtists: List<Artist> = emptyList(),
     
     // Charts
     val charts: List<ChartSection> = emptyList(),
     val top50Hindi: List<Song> = emptyList(),
     val top50English: List<Song> = emptyList(),
     val top50Telugu: List<Song> = emptyList(),
+    val top50Tamil: List<Song> = emptyList(),
+    val top50Punjabi: List<Song> = emptyList(),
     
     // Language/Region Sections
     val hindiSongs: List<Song> = emptyList(),
@@ -100,21 +142,82 @@ data class HomeUiState(
     val devotionalSongs: List<Song> = emptyList(),
     val workoutSongs: List<Song> = emptyList(),
     val retroSongs: List<Song> = emptyList(),
+    val sufiSongs: List<Song> = emptyList(),
+    val ghazals: List<Song> = emptyList(),
+    val indipop: List<Song> = emptyList(),
     
     // Artist Spotlights
     val arijitSinghSongs: List<Song> = emptyList(),
     val arRahmanSongs: List<Song> = emptyList(),
     val shreyaGhoshalSongs: List<Song> = emptyList(),
+    val sidSriram: List<Song> = emptyList(),
+    val anirudhSongs: List<Song> = emptyList(),
+    val kanikKapoor: List<Song> = emptyList(),
+    val badshah: List<Song> = emptyList(),
+    val honeysingh: List<Song> = emptyList(),
     
     // Genres for Selection
     val genres: List<Genre> = defaultGenres,
     val selectedGenre: Genre? = null,
     val genreSongs: List<Song> = emptyList(),
     
+    // NEW: Language-specific Playlists (Playlist objects from API)
+    val teluguPlaylistCollection: List<Playlist> = emptyList(),
+    val hindiPlaylistCollection: List<Playlist> = emptyList(),
+    val tamilPlaylistCollection: List<Playlist> = emptyList(),
+    val punjabiPlaylistCollection: List<Playlist> = emptyList(),
+    
+    // NEW: Curated Playlist Categories
+    val mostListeningTeluguSongs: List<Song> = emptyList(),
+    val mostListeningHindiSongs: List<Song> = emptyList(),
+    val allTimeFavoriteTeluguSongs: List<Song> = emptyList(),
+    val allTimeFavoriteHindiSongs: List<Song> = emptyList(),
+    val popularIndianSongs: List<Song> = emptyList(),
+    val mostListeningIndianSongs: List<Song> = emptyList(),
+    val everGreenHindiSongs: List<Song> = emptyList(),
+    val everGreenTeluguSongs: List<Song> = emptyList(),
+    val top100IndianSongs: List<Song> = emptyList(),
+    
+    // NEW: Followed Artists
+    val followedArtists: List<Artist> = emptyList(),
+    
+    // International Songs
+    val internationalSongs: List<Song> = emptyList(),
+    val internationalHits: List<Song> = emptyList(),
+    val globalTop50: List<Song> = emptyList(),
+    val englishPopSongs: List<Song> = emptyList(),
+    val edm: List<Song> = emptyList(),
+    val kpopSongs: List<Song> = emptyList(),
+    
+    // All Time Favorites - User curated
+    val allTimeFavorites: List<Song> = emptyList(),
+    
+    // Most Listening Categories
+    val mostListeningSongs: List<Song> = emptyList(),
+    val trendingNowSongs: List<Song> = emptyList(),
+    
+    // Additional Artists Collections
+    val spbSongs: List<Song> = emptyList(),
+    val lataMangeshkarSongs: List<Song> = emptyList(),
+    val kishorKumarSongs: List<Song> = emptyList(),
+    val mohammedRafiSongs: List<Song> = emptyList(),
+    val aborubaPattuSongs: List<Song> = emptyList(),
+    
+    // Indian Artists - Popular
+    val anupamKher: List<Song> = emptyList(),
+    val pritam: List<Song> = emptyList(),
+    val harishJeyaraj: List<Song> = emptyList(),
+    val shaileshoSongs: List<Song> = emptyList(),
+    val vijaySongs: List<Song> = emptyList(),
+    val dspSongs: List<Song> = emptyList(),
+    val manisharma: List<Song> = emptyList(),
+    val thamanSongs: List<Song> = emptyList(),
+    
     // State
     val isLoading: Boolean = true,
     val error: String? = null,
     val preferredSource: MusicSource = MusicSource.BOTH
+
 ) {
     companion object {
         val defaultGenres = listOf(
@@ -126,9 +229,9 @@ data class HomeUiState(
             Genre("electronic", "Electronic", "🎧", 0xFF00BCD4),
             Genre("folk", "Folk", "🪕", 0xFF4CAF50),
             Genre("indie", "Indie", "🎹", 0xFFFF9800),
-            Genre("metal", "Metal", "🤘", 0xFF795548),
-            Genre("rnb", "R&B", "💜", 0xFF607D8B),
-            Genre("country", "Country", "🤠", 0xFFCDDC39),
+            Genre("sufi", "Sufi", "🕌", 0xFF795548),
+            Genre("ghazal", "Ghazal", "💫", 0xFF607D8B),
+            Genre("devotional", "Devotional", "🙏", 0xFFCDDC39),
             Genre("bollywood", "Bollywood", "🎬", 0xFFFF5722)
         )
     }
@@ -184,7 +287,15 @@ class HomeViewModel @Inject constructor(
                 
                 _uiState.value = _uiState.value.copy(
                     newReleases = newReleasesResult.getOrNull() ?: emptyList(),
-                    featuredPlaylists = playlistsResult.getOrNull() ?: emptyList(),
+                    featuredPlaylists = (playlistsResult.getOrNull() ?: emptyList()).filter { playlist ->
+                        // Filter out problematic playlists that cause crashes
+                        val hasValidSongs = playlist.songCount > 0
+                        val isNotProblematic = !playlist.name.contains("1990s", ignoreCase = true) &&
+                                              !playlist.name.contains("2000s", ignoreCase = true) &&
+                                              !playlist.name.contains("Hindi 1990", ignoreCase = true) &&
+                                              !playlist.name.contains("Hindi 2000", ignoreCase = true)
+                        hasValidSongs && isNotProblematic
+                    },
                     trendingAlbums = albumsResult.getOrNull() ?: emptyList(),
                     isLoading = false
                 )
@@ -198,6 +309,10 @@ class HomeViewModel @Inject constructor(
                 loadLanguageSections()
                 loadMoodSections()
                 loadArtistSpotlights()
+                loadIndianPlaylists()
+                loadRecentlyPlayed()
+                loadCuratedPlaylists() // NEW: Load curated playlist categories
+
                 
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading home content", e)
@@ -301,7 +416,16 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 repository.searchPlaylists("mood chill relax").getOrNull()?.let { playlists ->
-                    _uiState.value = _uiState.value.copy(moodPlaylists = playlists)
+                    _uiState.value = _uiState.value.copy(
+                        moodPlaylists = playlists.filter { playlist ->
+                            // Filter out problematic playlists
+                            val hasValidSongs = playlist.songCount > 0
+                            val isNotProblematic = !playlist.name.contains("2000s", ignoreCase = true) &&
+                                                  !playlist.name.contains("2020s", ignoreCase = true) &&
+                                                  !playlist.name.contains("1990s", ignoreCase = true)
+                            hasValidSongs && isNotProblematic
+                        }
+                    )
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading mood playlists", e)
@@ -356,6 +480,30 @@ class HomeViewModel @Inject constructor(
                 Log.e(TAG, "Error loading Top 50 Telugu", e)
             }
         }
+        
+        // Top 50 Tamil
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("top tamil songs 2024", 50).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(top50Tamil = songs)
+                    updateCharts()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Top 50 Tamil", e)
+            }
+        }
+        
+        // Top 50 Punjabi
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("top punjabi songs 2024", 50).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(top50Punjabi = songs)
+                    updateCharts()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Top 50 Punjabi", e)
+            }
+        }
     }
     
     private fun updateCharts() {
@@ -370,6 +518,12 @@ class HomeViewModel @Inject constructor(
         }
         if (state.top50Telugu.isNotEmpty()) {
             charts.add(ChartSection("telugu", "🎬 Top 50 Telugu", state.top50Telugu))
+        }
+        if (state.top50Tamil.isNotEmpty()) {
+            charts.add(ChartSection("tamil", "🎵 Top 50 Tamil", state.top50Tamil))
+        }
+        if (state.top50Punjabi.isNotEmpty()) {
+            charts.add(ChartSection("punjabi", "🎧 Top 50 Punjabi", state.top50Punjabi))
         }
         
         _uiState.value = state.copy(charts = charts)
@@ -579,5 +733,666 @@ class HomeViewModel @Inject constructor(
     
     fun refresh() {
         loadHomeContent()
+    }
+    
+    /**
+     * Search songs with limit - for endless scrolling
+     */
+    suspend fun searchSongsForChart(query: String, limit: Int): List<Song> {
+        return repository.searchSongsWithLimit(query, limit).getOrNull() ?: emptyList()
+    }
+    
+    /**
+     * Search songs unlimited from YouTube
+     */
+    fun searchSongsUnlimited(query: String, maxResults: Int = 1000): kotlinx.coroutines.flow.Flow<List<Song>> {
+        return repository.searchSongsUnlimited(query, maxResults)
+    }
+    
+    /**
+     * Sort songs by option
+     */
+    fun sortSongs(songs: List<Song>, sortOption: com.reon.music.core.model.SongSortOption): List<Song> {
+        return repository.sortSongs(songs, sortOption)
+    }
+    
+    private fun loadRecentlyPlayed() {
+        viewModelScope.launch {
+            try {
+                val recentHistory = historyDao.getRecentHistory(15).first()
+                val recentSongIds = recentHistory.map { it.songId }
+                val recentSongs = recentSongIds.mapNotNull { songId ->
+                    songDao.getSongById(songId)?.toSong()
+                }
+                _uiState.value = _uiState.value.copy(recentlyPlayedSongs = recentSongs)
+                Log.d(TAG, "Loaded ${recentSongs.size} recently played songs")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading recently played", e)
+            }
+        }
+    }
+    
+    private fun loadIndianPlaylists() {
+        // Love Songs
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("love songs hindi romantic", 20).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(loveSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading love songs", e)
+            }
+        }
+        
+        // Romantic Hits
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("romantic hits bollywood", 20).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(romanticHits = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading romantic hits", e)
+            }
+        }
+        
+        // Heartbreak / Love Failure Songs
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("heartbreak sad songs hindi breakup", 20).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(heartbreakSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading heartbreak songs", e)
+            }
+        }
+        
+        // Sad Songs Playlist
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("sad songs emotional hindi", 20).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(sadSongPlaylist = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading sad playlist", e)
+            }
+        }
+        
+        // Party Hits
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("party songs bollywood dance hits", 20).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(partyHits = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading party hits", e)
+            }
+        }
+        
+        // DJ Remixes
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("dj remix bollywood nonstop", 20).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(djRemixes = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading DJ remixes", e)
+            }
+        }
+        
+        // Telugu DJ Songs
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("telugu dj songs remix folk", 20).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(teluguDjSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Telugu DJ songs", e)
+            }
+        }
+        
+        // Wedding Songs
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("wedding songs hindi shaadi sangeet", 20).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(weddingSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading wedding songs", e)
+            }
+        }
+        
+        // Mix Songs (Mashup/Mix)
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("bollywood mashup mix songs", 20).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(mixSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading mix songs", e)
+            }
+        }
+        
+        // Viral Hits / Trending Reels
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("viral songs trending reels", 20).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(viralHits = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading viral hits", e)
+            }
+        }
+        
+        // Regional Language Songs
+        loadRegionalSongs()
+        
+        // More Artist Spotlights
+        loadMoreArtistSpotlights()
+    }
+    
+    private fun loadRegionalSongs() {
+        // Bhojpuri
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("bhojpuri songs hits", 15).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(bhojpuriSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Bhojpuri songs", e)
+            }
+        }
+        
+        // Malayalam
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("malayalam songs hits", 15).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(malayalamSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Malayalam songs", e)
+            }
+        }
+        
+        // Kannada
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("kannada songs hits", 15).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(kannadaSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Kannada songs", e)
+            }
+        }
+        
+        // Marathi
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("marathi songs hits", 15).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(marathiSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Marathi songs", e)
+            }
+        }
+        
+        // Bengali
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("bengali songs hits", 15).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(bengaliSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Bengali songs", e)
+            }
+        }
+        
+        // Gujarati
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("gujarati songs hits", 15).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(gujaratiSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Gujarati songs", e)
+            }
+        }
+        
+        // Rajasthani
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("rajasthani folk songs", 15).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(rajasthaniSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Rajasthani songs", e)
+            }
+        }
+    }
+    
+    private fun loadMoreArtistSpotlights() {
+        // Sid Sriram
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("Sid Sriram songs", 15).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(sidSriram = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Sid Sriram songs", e)
+            }
+        }
+        
+        // Anirudh
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("Anirudh Ravichander songs", 15).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(anirudhSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Anirudh songs", e)
+            }
+        }
+        
+        // Kanika Kapoor
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("Kanika Kapoor songs", 15).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(kanikKapoor = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Kanika Kapoor songs", e)
+            }
+        }
+        
+        // Badshah
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("Badshah songs hits", 15).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(badshah = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Badshah songs", e)
+            }
+        }
+        
+        // Honey Singh
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("Yo Yo Honey Singh songs", 15).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(honeysingh = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Honey Singh songs", e)
+            }
+        }
+    }
+    
+    /**
+     * Load curated playlist categories
+     */
+    private fun loadCuratedPlaylists() {
+        // Most Listening Telugu Songs
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("most popular telugu songs 2024", 20).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(mostListeningTeluguSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading most listening Telugu songs", e)
+            }
+        }
+        
+        // Most Listening Hindi Songs
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("most popular hindi songs 2024", 20).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(mostListeningHindiSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading most listening Hindi songs", e)
+            }
+        }
+        
+        // All Time Favorite Telugu Songs
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("all time best telugu songs evergreen", 20).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(allTimeFavoriteTeluguSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading all time favorite Telugu", e)
+            }
+        }
+        
+        // All Time Favorite Hindi Songs
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("all time best hindi songs evergreen", 20).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(allTimeFavoriteHindiSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading all time favorite Hindi", e)
+            }
+        }
+        
+        // Popular Indian Songs
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("popular indian songs hits", 20).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(popularIndianSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading popular Indian songs", e)
+            }
+        }
+        
+        // Most Listening Indian Songs
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("most streamed indian songs 2024", 20).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(mostListeningIndianSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading most listening Indian songs", e)
+            }
+        }
+        
+        // Evergreen Hindi Songs
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("evergreen hindi songs 90s 2000s", 20).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(everGreenHindiSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading evergreen Hindi songs", e)
+            }
+        }
+        
+        // Evergreen Telugu Songs
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("evergreen telugu songs old classics", 20).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(everGreenTeluguSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading evergreen Telugu songs", e)
+            }
+        }
+        
+        // Top 100 Indian Songs
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("top 100 indian songs best", 20).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(top100IndianSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading top 100 Indian songs", e)
+            }
+        }
+        
+        // Telugu Playlist Collection
+        viewModelScope.launch {
+            try {
+                repository.searchPlaylists("telugu songs playlist").getOrNull()?.let { playlists ->
+                    _uiState.value = _uiState.value.copy(teluguPlaylistCollection = playlists)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Telugu playlist collection", e)
+            }
+        }
+        
+        // Hindi Playlist Collection
+        viewModelScope.launch {
+            try {
+                repository.searchPlaylists("hindi songs playlist").getOrNull()?.let { playlists ->
+                    _uiState.value = _uiState.value.copy(hindiPlaylistCollection = playlists)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Hindi playlist collection", e)
+            }
+        }
+        
+        // Tamil Playlist Collection
+        viewModelScope.launch {
+            try {
+                repository.searchPlaylists("tamil songs playlist").getOrNull()?.let { playlists ->
+                    _uiState.value = _uiState.value.copy(tamilPlaylistCollection = playlists)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Tamil playlist collection", e)
+            }
+        }
+        
+        // Punjabi Playlist Collection
+        viewModelScope.launch {
+            try {
+                repository.searchPlaylists("punjabi songs playlist").getOrNull()?.let { playlists ->
+                    _uiState.value = _uiState.value.copy(punjabiPlaylistCollection = playlists)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Punjabi playlist collection", e)
+            }
+        }
+        
+        // Load International and additional categories
+        loadInternationalSongs()
+        loadAllTimeFavorites()
+        loadMoreArtistCollections()
+    }
+    
+    /**
+     * Load International Songs
+     */
+    private fun loadInternationalSongs() {
+        // Global Top 50
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("global top 50 songs 2024", 50).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(globalTop50 = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Global Top 50", e)
+            }
+        }
+        
+        // International Hits
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("international hits english pop", 20).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(internationalHits = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading international hits", e)
+            }
+        }
+        
+        // English Pop Songs
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("english pop songs 2024", 20).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(englishPopSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading English pop songs", e)
+            }
+        }
+        
+        // EDM
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("EDM electronic dance music hits", 20).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(edm = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading EDM", e)
+            }
+        }
+        
+        // K-Pop
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("kpop korean pop songs BTS", 20).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(kpopSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading K-Pop", e)
+            }
+        }
+    }
+    
+    /**
+     * Load All Time Favorites from database
+     */
+    private fun loadAllTimeFavorites() {
+        viewModelScope.launch {
+            try {
+                // Get liked songs from database - these are the user's all-time favorites
+                songDao.getLikedSongs().collect { likedSongs ->
+                    val favoriteSongs = likedSongs.map { it.toSong() }
+                    _uiState.value = _uiState.value.copy(allTimeFavorites = favoriteSongs)
+                    Log.d(TAG, "Loaded ${favoriteSongs.size} all time favorites")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading all time favorites", e)
+            }
+        }
+        
+        // Most Listening Songs (from history)
+        viewModelScope.launch {
+            try {
+                val mostListened = historyDao.getMostPlayedFromHistory(30).first()
+                val songs = mostListened.map { it.toSong() }
+                _uiState.value = _uiState.value.copy(mostListeningSongs = songs)
+                Log.d(TAG, "Loaded ${songs.size} most listening songs")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading most listening songs", e)
+            }
+        }
+        
+        // Trending Now
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("trending songs 2024 viral", 20).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(trendingNowSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading trending now songs", e)
+            }
+        }
+    }
+    
+    /**
+     * Load more artist collections
+     */
+    private fun loadMoreArtistCollections() {
+        // SPB - S.P. Balasubrahmanyam
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("S.P. Balasubrahmanyam songs best", 15).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(spbSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading SPB songs", e)
+            }
+        }
+        
+        // Lata Mangeshkar
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("Lata Mangeshkar songs best", 15).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(lataMangeshkarSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Lata Mangeshkar songs", e)
+            }
+        }
+        
+        // Kishore Kumar
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("Kishore Kumar songs best evergreen", 15).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(kishorKumarSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Kishore Kumar songs", e)
+            }
+        }
+        
+        // Mohammed Rafi
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("Mohammed Rafi songs best", 15).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(mohammedRafiSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Mohammed Rafi songs", e)
+            }
+        }
+        
+        // Pritam
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("Pritam songs bollywood hits", 15).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(pritam = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Pritam songs", e)
+            }
+        }
+        
+        // Harris Jayaraj
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("Harris Jayaraj songs tamil", 15).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(harishJeyaraj = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Harris Jayaraj songs", e)
+            }
+        }
+        
+        // DSP - Devi Sri Prasad
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("Devi Sri Prasad songs telugu hits", 15).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(dspSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading DSP songs", e)
+            }
+        }
+        
+        // Mani Sharma
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("Mani Sharma songs telugu", 15).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(manisharma = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Mani Sharma songs", e)
+            }
+        }
+        
+        // Thaman
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("Thaman S songs telugu hits", 15).getOrNull()?.let { songs ->
+                    _uiState.value = _uiState.value.copy(thamanSongs = songs)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Thaman songs", e)
+            }
+        }
+    }
+    
+    /**
+     * Search songs by album/movie name
+     */
+    suspend fun searchByAlbumOrMovie(albumName: String): List<Song> {
+        return try {
+            repository.searchSongsWithLimit("$albumName movie songs", 20).getOrNull() ?: emptyList()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error searching by album/movie", e)
+            emptyList()
+        }
     }
 }

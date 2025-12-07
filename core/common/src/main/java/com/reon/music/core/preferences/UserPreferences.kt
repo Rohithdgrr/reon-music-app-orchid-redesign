@@ -42,6 +42,10 @@ class UserPreferences @Inject constructor(
         private val PURE_BLACK = booleanPreferencesKey("pure_black")
         private val DYNAMIC_COLORS = booleanPreferencesKey("dynamic_colors")
         private val LANGUAGE = stringPreferencesKey("language")
+        // NEW: Personalization
+        private val THEME_PRESET_ID = stringPreferencesKey("theme_preset_id")
+        private val FONT_PRESET_ID = stringPreferencesKey("font_preset_id")
+        private val FONT_SIZE_PRESET = stringPreferencesKey("font_size_preset")
         
         // Downloads
         private val DOWNLOAD_QUALITY = stringPreferencesKey("download_quality")
@@ -68,6 +72,11 @@ class UserPreferences @Inject constructor(
         private val DEVICE_ID = stringPreferencesKey("device_id")
         private val CLOUD_SYNC_ENABLED = booleanPreferencesKey("cloud_sync_enabled")
         private val LAST_SYNC_TIME = longPreferencesKey("last_sync_time")
+        
+        // NEW: Auto-Update
+        private val AUTO_UPDATE_ENABLED = booleanPreferencesKey("auto_update_enabled")
+        private val AUTO_UPDATE_FREQUENCY = intPreferencesKey("auto_update_frequency")
+        private val AUTO_UPDATE_WIFI_ONLY = booleanPreferencesKey("auto_update_wifi_only")
     }
     
     // Playback settings
@@ -241,6 +250,72 @@ class UserPreferences @Inject constructor(
     
     suspend fun setLastSyncTime(timestamp: Long) {
         dataStore.edit { it[LAST_SYNC_TIME] = timestamp }
+    }
+    
+    // NEW: Theme Preset
+    val themePresetId: Flow<String?> = dataStore.data.map { prefs ->
+        prefs[THEME_PRESET_ID]?.takeIf { it.isNotEmpty() }
+    }
+    
+    suspend fun setThemePreset(presetId: String?) {
+        dataStore.edit { 
+            if (presetId != null) {
+                it[THEME_PRESET_ID] = presetId
+            } else {
+                it.remove(THEME_PRESET_ID)
+            }
+        }
+    }
+    
+    // NEW: Font Preset
+    val fontPresetId: Flow<String?> = dataStore.data.map { prefs ->
+        prefs[FONT_PRESET_ID]?.takeIf { it.isNotEmpty() }
+    }
+    
+    suspend fun setFontPreset(presetId: String?) {
+        dataStore.edit { 
+            if (presetId != null) {
+                it[FONT_PRESET_ID] = presetId
+            } else {
+                it.remove(FONT_PRESET_ID)
+            }
+        }
+    }
+    
+    // NEW: Font Size Preset
+    val fontSizePreset: Flow<String> = dataStore.data.map { prefs ->
+        prefs[FONT_SIZE_PRESET] ?: "MEDIUM"
+    }
+    
+    suspend fun setFontSizePreset(preset: String) {
+        dataStore.edit { it[FONT_SIZE_PRESET] = preset }
+    }
+    
+    // NEW: Auto-Update Enabled
+    val autoUpdateEnabled: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[AUTO_UPDATE_ENABLED] ?: true
+    }
+    
+    suspend fun setAutoUpdateEnabled(enabled: Boolean) {
+        dataStore.edit { it[AUTO_UPDATE_ENABLED] = enabled }
+    }
+    
+    // NEW: Auto-Update Frequency
+    val autoUpdateFrequency: Flow<Int> = dataStore.data.map { prefs ->
+        prefs[AUTO_UPDATE_FREQUENCY] ?: 60 // Default: 1 hour
+    }
+    
+    suspend fun setAutoUpdateFrequency(minutes: Int) {
+        dataStore.edit { it[AUTO_UPDATE_FREQUENCY] = minutes }
+    }
+    
+    // NEW: Auto-Update WiFi Only
+    val autoUpdateWifiOnly: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[AUTO_UPDATE_WIFI_ONLY] ?: true
+    }
+    
+    suspend fun setAutoUpdateWifiOnly(enabled: Boolean) {
+        dataStore.edit { it[AUTO_UPDATE_WIFI_ONLY] = enabled }
     }
 }
 

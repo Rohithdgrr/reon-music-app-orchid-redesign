@@ -1,7 +1,7 @@
 /*
- * REON Music App - Enhanced Search ViewModel
+ * REON Music App - Enhanced Power Search ViewModel
  * Copyright (c) 2024 REON
- * YouTube Music Only - Real-time Search
+ * YouTube Music Only - Multi-Language Real-time Search
  */
 
 package com.reon.music.ui.viewmodels
@@ -12,10 +12,14 @@ import androidx.lifecycle.viewModelScope
 import com.reon.music.core.common.Result
 import com.reon.music.core.model.Album
 import com.reon.music.core.model.Artist
+import com.reon.music.core.model.SearchResult
 import com.reon.music.core.model.Song
 import com.reon.music.data.network.youtube.YouTubeMusicClient
+import com.reon.music.data.repository.MusicRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,37 +30,75 @@ import javax.inject.Inject
 data class SearchUiState(
     val query: String = "",
     val isLoading: Boolean = false,
+    val isLoadingMore: Boolean = false,
     val songs: List<Song> = emptyList(),
     val albums: List<Album> = emptyList(),
     val artists: List<Artist> = emptyList(),
     val searchHistory: List<String> = emptyList(),
+    val suggestions: List<String> = emptyList(),
+    val trendingSearches: List<String> = emptyList(),
     val activeFilter: SearchFilter = SearchFilter.ALL,
     val error: String? = null,
-    val hasSearched: Boolean = false
+    val hasSearched: Boolean = false,
+    val hasMore: Boolean = true,
+    val currentPage: Int = 1,
+    val isUnlimitedMode: Boolean = false
 )
 
 enum class SearchFilter {
-    ALL, SONGS, ALBUMS, ARTISTS
+    ALL, SONGS, ALBUMS, ARTISTS, MOVIES
 }
+
+// Indian language search priorities
+private val INDIAN_LANGUAGES = listOf(
+    "telugu", "hindi", "tamil", "malayalam", "kannada", 
+    "punjabi", "marathi", "bengali", "gujarati", "bhojpuri",
+    "banjara", "rajasthani", "odia"
+)
 
 @HiltViewModel
 class SearchViewModel @Inject constructor(
-    private val youTubeClient: YouTubeMusicClient
+    private val youTubeClient: YouTubeMusicClient,
+    private val repository: MusicRepository
 ) : ViewModel() {
     
     companion object {
         private const val TAG = "SearchViewModel"
         private const val DEBOUNCE_MS = 400L
+        private const val SUGGESTION_DEBOUNCE_MS = 300L
+        private const val INITIAL_SEARCH_LIMIT = 50
+        private const val PAGE_SIZE = 30
     }
     
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
     
     private var searchJob: Job? = null
+    private var suggestionJob: Job? = null
+    private var loadMoreJob: Job? = null
     private val searchHistoryList = mutableListOf<String>()
+    private var allSearchResults = mutableListOf<Song>()
+    
+    init {
+        loadTrendingSearches()
+    }
+    
+    private fun loadTrendingSearches() {
+        viewModelScope.launch {
+            // Enhanced trending searches with Indian languages first
+            val trending = listOf(
+                "Telugu Songs", "Hindi Songs", "Tamil Hits",
+                "Arijit Singh", "Devi Sri Prasad", "AR Rahman",
+                "Pushpa", "RRR", "Pathaan", "Animal",
+                "Romantic Songs", "Party Songs", "Sad Songs",
+                "English Pop", "BTS", "Punjabi Hits"
+            )
+            _uiState.value = _uiState.value.copy(trendingSearches = trending)
+        }
+    }
     
     /**
-     * Update query and trigger real-time search
+     * Update query and trigger real-time search and suggestions
      */
     fun updateQuery(query: String) {
         _uiState.value = _uiState.value.copy(query = query)
@@ -67,17 +109,59 @@ class SearchViewModel @Inject constructor(
                 songs = emptyList(),
                 albums = emptyList(),
                 artists = emptyList(),
+                suggestions = emptyList(),
                 hasSearched = false,
                 isLoading = false
             )
+            allSearchResults.clear()
             return
+        }
+        
+        // Get suggestions as user types
+        suggestionJob?.cancel()
+        suggestionJob = viewModelScope.launch {
+            delay(SUGGESTION_DEBOUNCE_MS)
+            loadSuggestions(query)
         }
         
         // Debounced search - search as user types
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             delay(DEBOUNCE_MS)
-            performSearch(query)
+            performPowerSearch(query)
+        }
+    }
+    
+    /**
+     * Load search suggestions using autocomplete
+     */
+    private suspend fun loadSuggestions(query: String) {
+        try {
+            val result = repository.autocomplete(query)
+            val suggestions = mutableListOf<String>()
+            
+            result.getOrNull()?.let { searchResult ->
+                // Extract suggestions from autocomplete results
+                searchResult.artists.take(3).forEach { suggestions.add(it.name) }
+                searchResult.albums.take(3).forEach { suggestions.add(it.name) }
+                searchResult.playlists.take(2).forEach { suggestions.add(it.name) }
+            }
+            
+            // Add movie/album suggestions
+            val movieSuggestions = listOf(
+                "$query movie songs", "$query telugu", "$query hindi",
+                "$query tamil", "$query album"
+            )
+            suggestions.addAll(movieSuggestions.take(3))
+            
+            // Also add matching history items
+            searchHistoryList.filter { it.contains(query, ignoreCase = true) }
+                .take(3)
+                .forEach { suggestions.add(it) }
+            
+            _uiState.value = _uiState.value.copy(suggestions = suggestions.distinct().take(10))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading suggestions", e)
         }
     }
     
@@ -91,46 +175,75 @@ class SearchViewModel @Inject constructor(
         addToHistory(query)
         
         searchJob = viewModelScope.launch {
-            performSearch(query)
+            performPowerSearch(query)
         }
     }
     
     /**
-     * Internal search function - uses YouTube Music only
+     * POWER SEARCH - Multi-language, multi-source comprehensive search
+     * Prioritizes Indian languages and searches by song, artist, album/movie
      */
-    private suspend fun performSearch(query: String) {
+    private suspend fun performPowerSearch(query: String) {
         _uiState.value = _uiState.value.copy(
             isLoading = true,
             hasSearched = true,
+            hasMore = true,
+            currentPage = 1,
             error = null
         )
+        allSearchResults.clear()
         
         try {
-            // Search for songs using YouTube Music
-            val songsResult = youTubeClient.searchSongs(query)
-            val songs = when (songsResult) {
-                is Result.Success -> songsResult.data
-                is Result.Error -> {
-                    Log.e(TAG, "Error searching songs: ${songsResult.message}")
-                    emptyList()
+            // Build comprehensive search queries
+            val searchQueries = buildPowerSearchQueries(query)
+            
+            // Perform parallel searches for faster results
+            val allSongs = mutableListOf<Song>()
+            val searchResults = searchQueries.map { searchQuery ->
+                viewModelScope.async {
+                    try {
+                        val result = youTubeClient.searchSongs(searchQuery)
+                        when (result) {
+                            is Result.Success -> result.data
+                            else -> emptyList()
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Search query failed: $searchQuery", e)
+                        emptyList()
+                    }
                 }
-                is Result.Loading -> emptyList()
             }
             
+            // Collect all results
+            searchResults.awaitAll().forEach { songs ->
+                allSongs.addAll(songs)
+            }
+            
+            // Remove duplicates and prioritize by relevance
+            val uniqueSongs = allSongs
+                .distinctBy { it.id }
+                .sortedByDescending { song ->
+                    calculateRelevanceScore(query, song)
+                }
+            
+            allSearchResults.addAll(uniqueSongs)
+            
             // Extract unique artists from songs
-            val artists = songs
+            val artists = uniqueSongs
                 .map { song -> 
                     Artist(
                         id = song.artist.hashCode().toString(),
                         name = song.artist,
-                        artworkUrl = song.artworkUrl
+                        artworkUrl = song.artworkUrl,
+                        followerCount = song.channelSubscriberCount.toInt()
                     )
                 }
-                .distinctBy { it.name }
-                .take(10)
+                .distinctBy { it.name.lowercase() }
+                .sortedByDescending { it.followerCount }
+                .take(15)
             
             // Extract unique albums from songs
-            val albums = songs
+            val albums = uniqueSongs
                 .filter { it.album.isNotBlank() }
                 .map { song ->
                     Album(
@@ -140,16 +253,19 @@ class SearchViewModel @Inject constructor(
                         artworkUrl = song.artworkUrl
                     )
                 }
-                .distinctBy { it.name }
-                .take(10)
+                .distinctBy { it.name.lowercase() }
+                .take(15)
             
             _uiState.value = _uiState.value.copy(
-                songs = songs,
+                songs = uniqueSongs.take(INITIAL_SEARCH_LIMIT),
                 albums = albums,
                 artists = artists,
                 isLoading = false,
-                error = if (songs.isEmpty()) "No results found" else null
+                hasMore = uniqueSongs.size > INITIAL_SEARCH_LIMIT,
+                error = if (uniqueSongs.isEmpty()) "No results found. Try searching with different keywords." else null
             )
+            
+            Log.d(TAG, "Power search completed: ${uniqueSongs.size} songs found for '$query'")
             
         } catch (e: Exception) {
             Log.e(TAG, "Search error", e)
@@ -160,6 +276,203 @@ class SearchViewModel @Inject constructor(
         }
     }
     
+    /**
+     * Build comprehensive search queries for power search
+     * Prioritizes Indian languages and includes movie/album searches
+     */
+    private fun buildPowerSearchQueries(query: String): List<String> {
+        val queries = mutableListOf<String>()
+        
+        // Primary query
+        queries.add(query)
+        
+        // Movie/Album search variations
+        queries.add("$query movie songs")
+        queries.add("$query songs")
+        queries.add("$query album")
+        
+        // Determine if query might be targeting specific language
+        val isIndianLanguageQuery = INDIAN_LANGUAGES.any { 
+            query.lowercase().contains(it) 
+        }
+        
+        // Add Indian language variations for better coverage
+        if (!isIndianLanguageQuery) {
+            // Telugu - highest priority
+            queries.add("$query telugu")
+            queries.add("$query telugu songs")
+            
+            // Hindi - second priority
+            queries.add("$query hindi")
+            queries.add("$query hindi songs")
+            
+            // Tamil
+            queries.add("$query tamil")
+            
+            // Punjabi
+            queries.add("$query punjabi")
+        }
+        
+        // Artist search
+        queries.add("$query artist songs")
+        
+        return queries.distinct().take(8) // Limit to prevent too many parallel requests
+    }
+    
+    /**
+     * Calculate relevance score for sorting results
+     */
+    private fun calculateRelevanceScore(query: String, song: Song): Int {
+        var score = 0
+        val lowerQuery = query.lowercase()
+        val lowerTitle = song.title.lowercase()
+        val lowerArtist = song.artist.lowercase()
+        val lowerAlbum = song.album.lowercase()
+        
+        // Exact title match
+        if (lowerTitle == lowerQuery) score += 100
+        else if (lowerTitle.contains(lowerQuery)) score += 50
+        
+        // Artist match
+        if (lowerArtist == lowerQuery) score += 80
+        else if (lowerArtist.contains(lowerQuery)) score += 40
+        
+        // Album/Movie match
+        if (lowerAlbum == lowerQuery) score += 70
+        else if (lowerAlbum.contains(lowerQuery)) score += 35
+        
+        // Boost for high view count
+        score += (song.viewCount / 1000000).toInt().coerceAtMost(30)
+        
+        // Boost for high quality
+        if (song.is320kbps) score += 10
+        
+        // Boost for Indian languages
+        val language = song.language.lowercase()
+        if (INDIAN_LANGUAGES.contains(language)) score += 15
+        
+        return score
+    }
+    
+    /**
+     * Load more results for endless scrolling
+     */
+    fun loadMoreResults() {
+        if (_uiState.value.isLoadingMore || !_uiState.value.hasMore) return
+        
+        loadMoreJob?.cancel()
+        loadMoreJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingMore = true)
+            
+            val currentPage = _uiState.value.currentPage
+            val startIndex = currentPage * PAGE_SIZE
+            val endIndex = startIndex + PAGE_SIZE
+            
+            if (startIndex < allSearchResults.size) {
+                val nextBatch = allSearchResults.subList(
+                    startIndex,
+                    endIndex.coerceAtMost(allSearchResults.size)
+                )
+                
+                _uiState.value = _uiState.value.copy(
+                    songs = _uiState.value.songs + nextBatch,
+                    currentPage = currentPage + 1,
+                    isLoadingMore = false,
+                    hasMore = endIndex < allSearchResults.size
+                )
+            } else {
+                // Fetch more from API
+                val query = _uiState.value.query
+                if (query.isNotBlank()) {
+                    try {
+                        val moreQueries = listOf(
+                            "$query ${currentPage + 1}",
+                            "$query latest",
+                            "$query hits"
+                        )
+                        
+                        moreQueries.forEach { searchQuery ->
+                            val result = youTubeClient.searchSongs(searchQuery)
+                            if (result is Result.Success) {
+                                val newSongs = result.data.filter { newSong ->
+                                    !allSearchResults.any { it.id == newSong.id }
+                                }
+                                allSearchResults.addAll(newSongs)
+                                _uiState.value = _uiState.value.copy(
+                                    songs = _uiState.value.songs + newSongs,
+                                    currentPage = currentPage + 1,
+                                    hasMore = newSongs.isNotEmpty()
+                                )
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error loading more results", e)
+                    }
+                }
+                _uiState.value = _uiState.value.copy(isLoadingMore = false)
+            }
+        }
+    }
+    
+    /**
+     * Toggle unlimited search mode
+     */
+    fun toggleUnlimitedMode() {
+        val newMode = !_uiState.value.isUnlimitedMode
+        _uiState.value = _uiState.value.copy(isUnlimitedMode = newMode)
+        
+        if (newMode && _uiState.value.query.isNotBlank()) {
+            performUnlimitedSearch(_uiState.value.query)
+        }
+    }
+    
+    /**
+     * Unlimited search - fetches maximum results
+     */
+    private fun performUnlimitedSearch(query: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            
+            try {
+                // Perform extensive search across all variations
+                val allQueries = buildPowerSearchQueries(query) + listOf(
+                    "$query full album", "$query jukebox", "$query all songs",
+                    "$query collection", "$query best of", "$query top hits"
+                )
+                
+                val allSongs = mutableListOf<Song>()
+                allQueries.forEach { searchQuery ->
+                    try {
+                        val result = repository.searchSongsWithLimit(searchQuery, 100)
+                        result.getOrNull()?.let { songs ->
+                            allSongs.addAll(songs)
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Unlimited search query failed: $searchQuery", e)
+                    }
+                }
+                
+                val uniqueSongs = allSongs.distinctBy { it.id }
+                    .sortedByDescending { calculateRelevanceScore(query, it) }
+                
+                allSearchResults.clear()
+                allSearchResults.addAll(uniqueSongs)
+                
+                _uiState.value = _uiState.value.copy(
+                    songs = uniqueSongs,
+                    isLoading = false,
+                    hasMore = false // All results loaded
+                )
+                
+                Log.d(TAG, "Unlimited search: ${uniqueSongs.size} total songs found")
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "Unlimited search error", e)
+                _uiState.value = _uiState.value.copy(isLoading = false)
+            }
+        }
+    }
+    
     fun setFilter(filter: SearchFilter) {
         _uiState.value = _uiState.value.copy(activeFilter = filter)
     }
@@ -167,7 +480,7 @@ class SearchViewModel @Inject constructor(
     private fun addToHistory(query: String) {
         if (query.isNotBlank() && !searchHistoryList.contains(query)) {
             searchHistoryList.add(0, query)
-            if (searchHistoryList.size > 10) {
+            if (searchHistoryList.size > 15) {
                 searchHistoryList.removeLast()
             }
             _uiState.value = _uiState.value.copy(searchHistory = searchHistoryList.toList())
@@ -186,6 +499,8 @@ class SearchViewModel @Inject constructor(
     
     fun clearSearch() {
         searchJob?.cancel()
+        loadMoreJob?.cancel()
+        allSearchResults.clear()
         _uiState.value = SearchUiState(searchHistory = searchHistoryList.toList())
     }
     

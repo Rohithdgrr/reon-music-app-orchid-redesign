@@ -29,7 +29,18 @@ data class Song(
     val releaseDate: String = "",
     val is320kbps: Boolean = false,
     val permaUrl: String? = null,
-    val extras: Map<String, String> = emptyMap()
+    val genre: String = "", // Genre category (Pop, Rock, Classical, etc.)
+    val description: String = "", // Song description/notes
+    val type: String = "", // Type of song (Single, Album Track, etc.)
+    val extras: Map<String, String> = emptyMap(),
+    // YouTube metadata
+    val viewCount: Long = 0L, // Video view count
+    val likeCount: Long = 0L, // Video like count
+    val channelName: String = "", // YouTube channel name
+    val channelId: String = "", // YouTube channel ID
+    val channelSubscriberCount: Long = 0L, // Channel subscriber count
+    val quality: String = "", // Video quality (HD, 4K, etc.)
+    val uploadDate: String = "" // Video upload date
 ) {
     /**
      * Get high quality artwork URL
@@ -78,7 +89,9 @@ data class Album(
     val songCount: Int = 0,
     val songs: List<Song> = emptyList(),
     val permaUrl: String? = null,
-    val language: String = ""
+    val language: String = "",
+    val description: String = "", // Album description
+    val genre: String = "" // Album genre
 )
 
 /**
@@ -92,7 +105,9 @@ data class Artist(
     val followerCount: Int = 0,
     val topSongs: List<Song> = emptyList(),
     val albums: List<Album> = emptyList(),
-    val permaUrl: String? = null
+    val permaUrl: String? = null,
+    val description: String = "", // Artist bio
+    val genres: List<String> = emptyList() // Artist genres
 )
 
 /**

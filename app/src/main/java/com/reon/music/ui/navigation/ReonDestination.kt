@@ -62,8 +62,45 @@ sealed class ReonDestination(
         unselectedIcon = Icons.Outlined.Home
     )
     
+    // Artist Detail Screen
+    data object ArtistDetail : ReonDestination(
+        route = "artist/{artistId}/{artistName}",
+        title = "Artist",
+        selectedIcon = Icons.Filled.Home,
+        unselectedIcon = Icons.Outlined.Home
+    ) {
+        fun createRoute(artistId: String, artistName: String): String {
+            return "artist/$artistId/${java.net.URLEncoder.encode(artistName, "UTF-8")}"
+        }
+    }
+    
+    // Chart Detail Screen
+    data object ChartDetail : ReonDestination(
+        route = "chart/{chartType}/{chartTitle}",
+        title = "Chart",
+        selectedIcon = Icons.Filled.Home,
+        unselectedIcon = Icons.Outlined.Home
+    ) {
+        fun createRoute(chartType: String, chartTitle: String): String {
+            return "chart/$chartType/${java.net.URLEncoder.encode(chartTitle, "UTF-8")}"
+        }
+    }
+    
+    // Playlist Detail Screen
+    data object PlaylistDetail : ReonDestination(
+        route = "playlist/{playlistId}/{playlistTitle}",
+        title = "Playlist",
+        selectedIcon = Icons.Filled.Home,
+        unselectedIcon = Icons.Outlined.Home
+    ) {
+        fun createRoute(playlistId: String, playlistTitle: String): String {
+            return "playlist/$playlistId/${java.net.URLEncoder.encode(playlistTitle, "UTF-8")}"
+        }
+    }
+    
     companion object {
         // Bottom nav: Home, Search, Library, Downloads (removed Settings)
         val bottomNavDestinations = listOf(Home, Search, Library, Downloads)
     }
 }
+

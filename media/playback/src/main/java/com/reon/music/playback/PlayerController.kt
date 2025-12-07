@@ -37,7 +37,8 @@ data class PlayerState(
     val queue: List<Song> = emptyList(),
     val currentIndex: Int = -1,
     val shuffleEnabled: Boolean = false,
-    val repeatMode: Int = Player.REPEAT_MODE_OFF
+    val repeatMode: Int = Player.REPEAT_MODE_OFF,
+    val radioModeEnabled: Boolean = false
 )
 
 /**
@@ -59,6 +60,8 @@ class PlayerController @Inject constructor(
     val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
     
     private var currentQueue: MutableList<Song> = mutableListOf()
+    private var radioModeCallback: ((Song) -> Unit)? = null
+    private var isRadioModeEnabled = false
     
     init {
         connectToService()
@@ -102,6 +105,14 @@ class PlayerController @Inject constructor(
                     currentSong = currentSong,
                     currentIndex = index
                 )
+                
+                // Radio mode: when near end of queue, add more songs
+                if (isRadioModeEnabled && currentSong != null) {
+                    val remainingSongs = currentQueue.size - index
+                    if (remainingSongs < 5) {
+                        radioModeCallback?.invoke(currentSong)
+                    }
+                }
             }
             updateState()
         }
@@ -284,19 +295,22 @@ class PlayerController @Inject constructor(
      */
     fun getDuration(): Long = mediaController?.duration?.coerceAtLeast(0) ?: 0L
     
-    private fun buildMediaItem(song: Song, streamUrl: String): MediaItem {
-        return MediaItem.Builder()
-            .setMediaId(song.id)
-            .setUri(streamUrl)
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(song.title)
-                    .setArtist(song.artist)
-                    .setAlbumTitle(song.album)
-                    .setArtworkUri(song.artworkUrl?.let { android.net.Uri.parse(it) })
-                    .build()
-            )
-            .build()
+    /**
+     * Enable radio mode - automatically adds more songs when queue is running low
+     */
+    fun enableRadioMode(callback: (Song) -> Unit) {
+        isRadioModeEnabled = true
+        radioModeCallback = callback
+        _playerState.value = _playerState.value.copy(radioModeEnabled = true)
+    }
+    
+    /**
+     * Disable radio mode
+     */
+    fun disableRadioMode() {
+        isRadioModeEnabled = false
+        radioModeCallback = null
+        _playerState.value = _playerState.value.copy(radioModeEnabled = false)
     }
     
     /**
@@ -310,23 +324,36 @@ class PlayerController @Inject constructor(
      * Remove song from queue at specific index
      */
     fun removeFromQueue(index: Int) {
-        mediaController?.let { controller ->
-            if (index >= 0 && index < controller.mediaItemCount) {
+        scope.launch {
+            val controller = mediaController ?: return@launch
+            if (index >= 0 && index < currentQueue.size) {
                 val currentIndex = controller.currentMediaItemIndex
+                currentQueue.removeAt(index)
                 controller.removeMediaItem(index)
                 
                 // Update queue in state
-                val updatedQueue = _playerState.value.queue.toMutableList()
-                if (index < updatedQueue.size) {
-                    updatedQueue.removeAt(index)
-                    val newIndex = if (index <= currentIndex && currentIndex > 0) currentIndex - 1 else currentIndex
-                    _playerState.value = _playerState.value.copy(
-                        queue = updatedQueue,
-                        currentIndex = newIndex
-                    )
-                }
+                val newIndex = if (index <= currentIndex && currentIndex > 0) currentIndex - 1 else currentIndex
+                _playerState.value = _playerState.value.copy(
+                    queue = currentQueue.toList(),
+                    currentIndex = newIndex
+                )
             }
         }
+    }
+    
+    private fun buildMediaItem(song: Song, streamUrl: String): MediaItem {
+        return MediaItem.Builder()
+            .setMediaId(song.id)
+            .setUri(streamUrl)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(song.title)
+                    .setArtist(song.artist)
+                    .setAlbumTitle(song.album)
+                    .setArtworkUri(song.artworkUrl?.let { android.net.Uri.parse(it) })
+                    .build()
+            )
+            .build()
     }
     
     /**

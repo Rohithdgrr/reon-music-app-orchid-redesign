@@ -15,9 +15,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import com.reon.music.ui.ReonApp
 import com.reon.music.ui.theme.ReonTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Main Activity - Entry point for the UI
@@ -26,20 +29,25 @@ import dagger.hilt.android.AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        // Install splash screen with 2-second delay
+        val splashScreen = installSplashScreen()
+        var keepSplashOnScreen = true
+        
+        // Keep splash screen visible for 2 seconds
+        splashScreen.setKeepOnScreenCondition { keepSplashOnScreen }
+        
+        // Launch coroutine to dismiss splash after 2 seconds
+        lifecycleScope.launch {
+            delay(2000) // 2 seconds
+            keepSplashOnScreen = false
+        }
+        
         super.onCreate(savedInstanceState)
         
         enableEdgeToEdge()
         
         setContent {
-            ReonTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    ReonApp()
-                }
-            }
+            ReonApp()
         }
     }
 }

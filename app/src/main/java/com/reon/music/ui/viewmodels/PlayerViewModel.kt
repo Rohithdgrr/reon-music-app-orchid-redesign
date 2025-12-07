@@ -17,9 +17,11 @@ import com.reon.music.playback.PlayerState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -39,7 +41,10 @@ class PlayerViewModel @Inject constructor(
     private val repository: MusicRepository,
     private val songDao: com.reon.music.data.database.dao.SongDao,
     private val playlistDao: com.reon.music.data.database.dao.PlaylistDao,
-    private val downloadManager: com.reon.music.services.DownloadManager
+    private val downloadManager: com.reon.music.services.DownloadManager,
+    private val discordRichPresence: com.reon.music.services.DiscordRichPresence,
+    private val aiSuggestions: com.reon.music.services.AISongSuggestions,
+    private val smartOfflineCache: com.reon.music.services.SmartOfflineCache
 ) : ViewModel() {
     
     companion object {
@@ -61,13 +66,57 @@ class PlayerViewModel @Inject constructor(
         startPositionUpdates()
         observeCurrentSong()
         loadPlaylists()
+        observeDiscordPresence()
+    }
+    
+    /**
+     * Update Discord Rich Presence when song changes
+     */
+    private fun observeDiscordPresence() {
+        viewModelScope.launch {
+            playerController.playerState.collect { state ->
+                state.currentSong?.let { song ->
+                    discordRichPresence.updatePresence(
+                        songTitle = song.title,
+                        artist = song.artist,
+                        albumArtUrl = song.getHighQualityArtwork(),
+                        isPlaying = state.isPlaying,
+                        position = _currentPosition.value,
+                        duration = (song.duration * 1000).toLong()
+                    )
+                } ?: discordRichPresence.clearPresence()
+            }
+        }
+    }
+    
+    /**
+     * Get AI song suggestions for current song
+     */
+    fun getAISuggestions(): Flow<List<Song>> = flow {
+        val currentSong = playerState.value.currentSong
+        if (currentSong != null) {
+            val suggestions = aiSuggestions.getSuggestions(currentSong)
+            emit(suggestions)
+        } else {
+            emit(emptyList())
+        }
     }
     
     private fun startPositionUpdates() {
         positionUpdateJob?.cancel()
         positionUpdateJob = viewModelScope.launch {
             while (isActive) {
-                _currentPosition.value = playerController.getCurrentPosition()
+                val position = playerController.getCurrentPosition()
+                _currentPosition.value = position
+                
+                // Track playback for smart offline caching
+                playerState.value.currentSong?.let { song ->
+                    val duration = song.duration * 1000L
+                    if (duration > 0) {
+                        smartOfflineCache.trackPlayback(song, position, duration)
+                    }
+                }
+                
                 delay(500) // Update every 500ms
             }
         }
@@ -75,10 +124,32 @@ class PlayerViewModel @Inject constructor(
     
     private fun observeCurrentSong() {
         viewModelScope.launch {
+            var previousSong: Song? = null
+            
             playerController.playerState.collect { state ->
                 state.currentSong?.let { song ->
                     checkIfLiked(song.id)
+                    
+                    // If song changed, mark previous song as completed
+                    if (previousSong != null && previousSong?.id != song.id) {
+                        previousSong?.let { completedSong ->
+                            smartOfflineCache.markSongCompleted(completedSong)
+                        }
+                    }
+                    
+                    previousSong = song
                 }
+            }
+        }
+    }
+    
+    /**
+     * Handle song completion (called when song ends)
+     */
+    fun onSongCompleted() {
+        viewModelScope.launch {
+            playerState.value.currentSong?.let { song ->
+                smartOfflineCache.markSongCompleted(song)
             }
         }
     }
@@ -337,6 +408,24 @@ class PlayerViewModel @Inject constructor(
     }
     
     /**
+     * Add song to queue - either at end or as next song
+     * Note: playNext currently adds to queue end (player controller feature pending)
+     */
+    fun addToQueue(song: Song, playNext: Boolean = false) {
+        viewModelScope.launch {
+            try {
+                val streamUrl = streamResolver.resolveStreamUrl(song)
+                if (streamUrl != null) {
+                    playerController.addToQueue(song, streamUrl)
+                    Log.d(TAG, if (playNext) "Added as next: ${song.title}" else "Added to queue: ${song.title}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error adding to queue", e)
+            }
+        }
+    }
+    
+    /**
      * Remove song from queue at specific index
      */
     fun removeFromQueue(index: Int) {
@@ -363,9 +452,71 @@ class PlayerViewModel @Inject constructor(
     }
     
     /**
+     * Create a new playlist
+     */
+    fun createPlaylist(name: String, description: String? = null) {
+        viewModelScope.launch {
+            val playlist = com.reon.music.data.database.entities.PlaylistEntity(
+                title = name,
+                description = description
+            )
+            playlistDao.insert(playlist)
+            loadPlaylists() // Reload playlists
+        }
+    }
+    
+    /**
      * Cycle through repeat modes: OFF -> ALL -> ONE -> OFF
      */
     fun cycleRepeatMode() {
         playerController.toggleRepeatMode()
+    }
+    
+    /**
+     * Enable radio mode - plays endless songs automatically with smart auto-queue
+     */
+    fun enableRadioMode(seedSongs: List<Song>) {
+        viewModelScope.launch {
+            // Start with seed songs
+            if (seedSongs.isNotEmpty()) {
+                playQueue(seedSongs)
+            }
+            
+            // Set up automatic queue extension with smart queue management
+            playerController.enableRadioMode { currentSong ->
+                if (currentSong != null) {
+                    viewModelScope.launch {
+                        // Get multiple sources for variety
+                        val relatedSongs = repository.getRelatedSongs(currentSong, 30).getOrNull() ?: emptyList()
+                        val artistSongs = if (currentSong.artist.isNotBlank()) {
+                            repository.searchSongsWithLimit("${currentSong.artist} songs", 20).getOrNull() ?: emptyList()
+                        } else emptyList()
+                        
+                        val genreSongs = if (currentSong.genre.isNotBlank()) {
+                            repository.searchSongsWithLimit("${currentSong.genre} songs", 20).getOrNull() ?: emptyList()
+                        } else emptyList()
+                        
+                        // Combine and shuffle for variety
+                        val allNewSongs = (relatedSongs + artistSongs + genreSongs)
+                            .distinctBy { it.id }
+                            .filter { it.id != currentSong.id }
+                            .shuffled()
+                            .take(25) // Add 25 songs at a time
+                        
+                        // Add to queue
+                        allNewSongs.forEach { song ->
+                            addToQueue(song)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    /**
+     * Disable radio mode
+     */
+    fun disableRadioMode() {
+        playerController.disableRadioMode()
     }
 }

@@ -136,3 +136,8 @@
     public static **[] values();
     public static ** valueOf(java.lang.String);
 }
+
+# SLF4J (logging framework - used by some dependencies)
+-dontwarn org.slf4j.impl.StaticLoggerBinder
+-dontwarn org.slf4j.**
+-keep class org.slf4j.** { *; }

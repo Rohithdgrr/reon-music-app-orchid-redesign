@@ -26,25 +26,26 @@ import androidx.palette.graphics.Palette
 import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import androidx.compose.ui.text.font.FontFamily
 
-// Light theme colors
+// Light theme colors - Premium Red Palette
 private val LightColorScheme = lightColorScheme(
-    primary = ReonGreen,
+    primary = ReonPrimary,
     onPrimary = Color.White,
-    primaryContainer = ReonGreenLight,
-    onPrimaryContainer = ReonGreenDark,
-    secondary = Color(0xFF625B71),
+    primaryContainer = ReonPrimaryLight,
+    onPrimaryContainer = ReonPrimaryDark,
+    secondary = Color(0xFF5F6368),
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFE8DEF8),
-    onSecondaryContainer = Color(0xFF1D192B),
-    tertiary = Color(0xFF7D5260),
+    secondaryContainer = Color(0xFFF1F3F4),
+    onSecondaryContainer = Color(0xFF1A1A1A),
+    tertiary = AccentPink,
     onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFFFD8E4),
-    onTertiaryContainer = Color(0xFF31111D),
+    tertiaryContainer = Color(0xFFFCE4EC),
+    onTertiaryContainer = Color(0xFF880E4F),
     error = ReonError,
     onError = Color.White,
-    errorContainer = Color(0xFFF9DEDC),
-    onErrorContainer = Color(0xFF410E0B),
+    errorContainer = Color(0xFFFCE4EC),
+    onErrorContainer = Color(0xFF5F0000),
     background = ReonBackground,
     onBackground = ReonOnSurface,
     surface = ReonSurface,
@@ -166,30 +167,67 @@ private fun createDynamicLightScheme(palette: Palette): ColorScheme {
 }
 
 /**
- * REON Theme - Light Theme Only
+ * REON Theme - Supports Light/Dark/System themes with presets
  */
 @Composable
 fun ReonTheme(
-    darkTheme: Boolean = false,  // Always use light theme
+    darkTheme: Boolean = isSystemInDarkTheme(),
     pureBlack: Boolean = false,
     dynamicColor: Boolean = false,
     dynamicColorImageUrl: String? = null,
+    themePresetId: String? = null,
+    fontPresetId: String? = null,
+    fontSizePreset: FontSizePreset = FontSizePreset.MEDIUM,
     content: @Composable () -> Unit
 ) {
-    // Force light theme for the entire application
-    val colorScheme = LightColorScheme
+    // Get theme preset if specified
+    val themePreset = themePresetId?.let { ThemePresets.getPresetById(it) }
+    
+    // Determine which color scheme to use
+    val colorScheme = when {
+        themePreset != null -> if (darkTheme || pureBlack) themePreset.darkScheme else themePreset.lightScheme
+        pureBlack -> AmoledDarkColorScheme
+        darkTheme -> DarkColorScheme
+        else -> LightColorScheme
+    }
+    
+    // Apply pure black to AMOLED theme
+    val finalBaseScheme = if (pureBlack && themePreset != null) {
+        colorScheme.copy(
+            background = Color.Black,
+            surface = Color.Black,
+            surfaceVariant = Color(0xFF0A0A0A)
+        )
+    } else {
+        colorScheme
+    }
+    
+    // Use dynamic colors if enabled and image URL provided
+    val finalColorScheme = if (dynamicColor && dynamicColorImageUrl != null) {
+        rememberDynamicColorScheme(dynamicColorImageUrl, darkTheme)
+    } else {
+        finalBaseScheme
+    }
     
     // Animate color transitions
-    val animatedColorScheme = colorScheme.copy(
-        primary = animateColorAsState(colorScheme.primary, tween(300), label = "primary").value,
-        secondary = animateColorAsState(colorScheme.secondary, tween(300), label = "secondary").value,
-        background = animateColorAsState(colorScheme.background, tween(300), label = "background").value,
-        surface = animateColorAsState(colorScheme.surface, tween(300), label = "surface").value
+    val animatedColorScheme = finalColorScheme.copy(
+        primary = animateColorAsState(finalColorScheme.primary, tween(300), label = "primary").value,
+        secondary = animateColorAsState(finalColorScheme.secondary, tween(300), label = "secondary").value,
+        background = animateColorAsState(finalColorScheme.background, tween(300), label = "background").value,
+        surface = animateColorAsState(finalColorScheme.surface, tween(300), label = "surface").value
     )
+    
+    // Get font preset and create typography
+    val fontPreset = fontPresetId?.let { FontPresets.getPresetById(it) }
+    val typography = if (fontPreset != null) {
+        FontPresets.createTypography(fontPreset.fontFamily, fontSizePreset)
+    } else {
+        FontPresets.createTypography(FontFamily.Default, fontSizePreset)
+    }
     
     MaterialTheme(
         colorScheme = animatedColorScheme,
-        typography = ReonTypography,
+        typography = typography,
         content = content
     )
 }

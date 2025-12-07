@@ -30,15 +30,24 @@ data class SettingsUiState(
     val normalizeAudio: Boolean = false,
     val skipSilence: Boolean = false,
     val playbackSpeed: Float = 1.0f,
+    val autoPlaySimilar: Boolean = true,
     
     // Appearance
     val theme: AppTheme = AppTheme.SYSTEM,
     val pureBlack: Boolean = false,
     val dynamicColors: Boolean = true,
+    val themePresetId: String? = null, // NEW: Theme preset selection
+    val fontPresetId: String? = null, // NEW: Font preset selection
+    val fontSizePreset: com.reon.music.ui.theme.FontSizePreset = com.reon.music.ui.theme.FontSizePreset.MEDIUM, // NEW: Font size
     
     // Downloads
     val downloadQuality: AudioQuality = AudioQuality.HIGH,
     val downloadWifiOnly: Boolean = true,
+    
+    // Smart Offline Cache
+    val autoCacheEnabled: Boolean = true,
+    val offlineSongCount: Int = 0,
+    val cacheWifiOnly: Boolean = true,
     
     // Lyrics
     val showLyricsDefault: Boolean = false,
@@ -47,20 +56,41 @@ data class SettingsUiState(
     val saveHistory: Boolean = true,
     val incognitoMode: Boolean = false,
     
-    // Sync
+    // Social & Sharing
+    val shareActivity: Boolean = false,
+    val discordRichPresence: Boolean = false,
+    val artistNotifications: Boolean = true,
+    
+    // AI & Recommendations
+    val aiRecommendations: Boolean = true,
+    
+    // Car Mode
+    val carMode: Boolean = false,
+    val voiceCommands: Boolean = false,
+    
+    // Sleep Timer
+    val sleepTimerMinutes: Int = 0,
+    
     // Sync
     val cloudSyncEnabled: Boolean = true,
     val lastSyncTime: Long = 0,
     val isSyncing: Boolean = false,
     
     // Content
-    val preferredSource: MusicSource = MusicSource.BOTH
+    val preferredSource: MusicSource = MusicSource.BOTH,
+    
+    // Auto-Update (NEW)
+    val autoUpdateEnabled: Boolean = true,
+    val autoUpdateFrequency: Int = 60, // minutes
+    val autoUpdateWifiOnly: Boolean = true
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val userPreferences: UserPreferences,
-    private val neonSyncClient: NeonSyncClient
+    private val neonSyncClient: NeonSyncClient,
+    private val smartOfflineCache: com.reon.music.services.SmartOfflineCache,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -68,6 +98,19 @@ class SettingsViewModel @Inject constructor(
     
     init {
         loadSettings()
+        observeOfflineCount()
+    }
+    
+    private fun observeOfflineCount() {
+        viewModelScope.launch {
+            smartOfflineCache.offlineSongCount.collect { count ->
+                updateOfflineSongCount(count)
+            }
+        }
+    }
+    
+    private fun updateOfflineSongCount(count: Int) {
+        _uiState.value = _uiState.value.copy(offlineSongCount = count)
     }
     
     private fun loadSettings() {
@@ -143,6 +186,82 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { userPreferences.setDynamicColors(enabled) }
     }
     
+    // NEW: Theme preset selection
+    fun setThemePreset(presetId: String?) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(themePresetId = presetId)
+            userPreferences.setThemePreset(presetId)
+        }
+    }
+    
+    // NEW: Font preset selection
+    fun setFontPreset(presetId: String?) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(fontPresetId = presetId)
+            userPreferences.setFontPreset(presetId)
+        }
+    }
+    
+    // NEW: Font size selection
+    fun setFontSize(sizePreset: com.reon.music.ui.theme.FontSizePreset) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(fontSizePreset = sizePreset)
+            userPreferences.setFontSizePreset(sizePreset.name)
+        }
+    }
+    
+    // NEW: Auto-update settings
+    fun setAutoUpdateEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(autoUpdateEnabled = enabled)
+            userPreferences.setAutoUpdateEnabled(enabled)
+            
+            if (enabled) {
+                // Schedule periodic sync
+                com.reon.music.workers.ContentSyncScheduler.scheduleSync(
+                    context = context,
+                    frequencyMinutes = _uiState.value.autoUpdateFrequency,
+                    wifiOnly = _uiState.value.autoUpdateWifiOnly
+                )
+            } else {
+                // Cancel scheduled sync
+                com.reon.music.workers.ContentSyncScheduler.cancelSync(context)
+            }
+        }
+    }
+    
+    fun setAutoUpdateFrequency(minutes: Int) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(autoUpdateFrequency = minutes)
+            userPreferences.setAutoUpdateFrequency(minutes)
+            
+            // Reschedule if auto-update is enabled
+            if (_uiState.value.autoUpdateEnabled) {
+                com.reon.music.workers.ContentSyncScheduler.scheduleSync(
+                    context = context,
+                    frequencyMinutes = minutes,
+                    wifiOnly = _uiState.value.autoUpdateWifiOnly
+                )
+            }
+        }
+    }
+    
+    fun setAutoUpdateWifiOnly(enabled: Boolean) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(autoUpdateWifiOnly = enabled)
+            userPreferences.setAutoUpdateWifiOnly(enabled)
+            
+            // Reschedule if auto-update is enabled
+            if (_uiState.value.autoUpdateEnabled) {
+                com.reon.music.workers.ContentSyncScheduler.scheduleSync(
+                    context = context,
+                    frequencyMinutes = _uiState.value.autoUpdateFrequency,
+                    wifiOnly = enabled
+                )
+            }
+        }
+    }
+    
     // Download settings
     fun setDownloadQuality(quality: AudioQuality) {
         viewModelScope.launch { userPreferences.setDownloadQuality(quality) }
@@ -181,16 +300,41 @@ class SettingsViewModel @Inject constructor(
     fun syncNow() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSyncing = true)
+            
             try {
-                // Initialize tables if needed
-                neonSyncClient.initializeTables()
+                // Trigger immediate sync via WorkManager
+                val workInfo = com.reon.music.workers.ContentSyncScheduler.syncNow(
+                    context = context,
+                    wifiOnly = false // Allow sync on any connection for manual sync
+                )
                 
-                // Sync data here...
-                
-                userPreferences.setLastSyncTime(System.currentTimeMillis())
+                // Observe work status
+                workInfo.observeForever { info ->
+                    when (info?.state) {
+                        androidx.work.WorkInfo.State.SUCCEEDED -> {
+                            // Update last sync time
+                            viewModelScope.launch {
+                                val syncTime = info.outputData.getLong(
+                                    com.reon.music.workers.ContentSyncWorker.KEY_SYNC_TIME,
+                                    System.currentTimeMillis()
+                                )
+                                userPreferences.setLastSyncTime(syncTime)
+                                _uiState.value = _uiState.value.copy(
+                                    isSyncing = false,
+                                    lastSyncTime = syncTime
+                                )
+                            }
+                        }
+                        androidx.work.WorkInfo.State.FAILED,
+                        androidx.work.WorkInfo.State.CANCELLED -> {
+                            _uiState.value = _uiState.value.copy(isSyncing = false)
+                        }
+                        else -> {
+                            // Still running or enqueued
+                        }
+                    }
+                }
             } catch (e: Exception) {
-                // Handle error
-            } finally {
                 _uiState.value = _uiState.value.copy(isSyncing = false)
             }
         }
@@ -202,6 +346,71 @@ class SettingsViewModel @Inject constructor(
             // - Image cache
             // - Stream cache
             // - Old lyrics
+        }
+    }
+    
+    // Smart Offline Cache
+    fun setAutoCacheEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(autoCacheEnabled = enabled)
+        }
+    }
+    
+    fun setCacheWifiOnly(enabled: Boolean) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(cacheWifiOnly = enabled)
+        }
+    }
+    
+    // Advanced Playback
+    fun setAutoPlaySimilar(enabled: Boolean) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(autoPlaySimilar = enabled)
+        }
+    }
+    
+    fun setSkipSilence(enabled: Boolean) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(skipSilence = enabled)
+        }
+    }
+    
+    // Social & Sharing
+    fun setShareActivity(enabled: Boolean) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(shareActivity = enabled)
+        }
+    }
+    
+    fun setDiscordRichPresence(enabled: Boolean) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(discordRichPresence = enabled)
+        }
+    }
+    
+    fun setArtistNotifications(enabled: Boolean) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(artistNotifications = enabled)
+        }
+    }
+    
+    // AI & Recommendations
+    fun setAIRecommendations(enabled: Boolean) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(aiRecommendations = enabled)
+        }
+    }
+    
+    // Car Mode
+    fun setCarMode(enabled: Boolean) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(carMode = enabled)
+        }
+    }
+    
+    fun setVoiceCommands(enabled: Boolean) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(voiceCommands = enabled)
         }
     }
 }

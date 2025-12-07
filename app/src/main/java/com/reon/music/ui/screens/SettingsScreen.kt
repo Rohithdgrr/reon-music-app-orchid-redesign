@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -40,6 +41,7 @@ private val TextSecondary = Color(0xFF666666)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
+    onBackClick: () -> Unit = {},
     settingsViewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by settingsViewModel.uiState.collectAsState()
@@ -47,6 +49,10 @@ fun SettingsScreen(
     var showAboutDialog by remember { mutableStateOf(false) }
     var showQualityDialog by remember { mutableStateOf(false) }
     var showCacheDialog by remember { mutableStateOf(false) }
+    var showThemeDialog by remember { mutableStateOf(false) }
+    var showThemePresetDialog by remember { mutableStateOf(false) }
+    var showFontDialog by remember { mutableStateOf(false) }
+    var showFontSizeDialog by remember { mutableStateOf(false) }
     
     Scaffold(
         topBar = {
@@ -57,6 +63,14 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold
                     )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = LightBackground
@@ -154,10 +168,38 @@ fun SettingsScreen(
                 }
             }
             
-            // Appearance Section
+            // Theme & Appearance Section
             item {
-                SettingsSection(title = "Appearance") {
+                SettingsSection(title = "Theme & Appearance") {
                     SettingsCard {
+                        SettingsItem(
+                            icon = Icons.Outlined.Palette,
+                            title = "Theme",
+                            subtitle = when (uiState.theme) {
+                                com.reon.music.core.preferences.AppTheme.LIGHT -> "Light"
+                                com.reon.music.core.preferences.AppTheme.DARK -> "Dark"
+                                com.reon.music.core.preferences.AppTheme.SYSTEM -> "System Default"
+                                com.reon.music.core.preferences.AppTheme.AMOLED -> "AMOLED Black"
+                            },
+                            onClick = { showThemeDialog = true }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        // NEW: Theme Preset Selector
+                        SettingsItem(
+                            icon = Icons.Outlined.ColorLens,
+                            title = "Theme Preset",
+                            subtitle = uiState.themePresetId?.let { 
+                                com.reon.music.ui.theme.ThemePresets.getPresetById(it)?.let { preset ->
+                                    "${preset.emoji} ${preset.name}"
+                                }
+                            } ?: "System Default",
+                            onClick = { showThemePresetDialog = true }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
                         SettingsSwitchItem(
                             icon = Icons.Outlined.Palette,
                             title = "Dynamic Colors",
@@ -168,12 +210,204 @@ fun SettingsScreen(
                         
                         HorizontalDivider(color = CardColor)
                         
+                        // NEW: Font Family Selector
+                        SettingsItem(
+                            icon = Icons.Outlined.FontDownload,
+                            title = "Font Family",
+                            subtitle = uiState.fontPresetId?.let { 
+                                com.reon.music.ui.theme.FontPresets.getPresetById(it)?.name
+                            } ?: "System Default",
+                            onClick = { showFontDialog = true }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        // NEW: Font Size Selector
+                        SettingsItem(
+                            icon = Icons.Outlined.FormatSize,
+                            title = "Font Size",
+                            subtitle = uiState.fontSizePreset.displayName,
+                            onClick = { showFontSizeDialog = true }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
                         SettingsSwitchItem(
                             icon = Icons.Outlined.Lyrics,
                             title = "Show Lyrics",
                             subtitle = "Display lyrics when available",
                             checked = uiState.showLyricsDefault,
                             onCheckedChange = { settingsViewModel.setShowLyricsDefault(it) }
+                        )
+                    }
+                }
+            }
+            
+            // Smart Offline Cache Section (NEW)
+            item {
+                SettingsSection(title = "Smart Offline Cache") {
+                    SettingsCard {
+                        SettingsSwitchItem(
+                            icon = Icons.Outlined.CloudDownload,
+                            title = "Auto-Cache Completed Songs",
+                            subtitle = "Automatically cache songs you've listened to",
+                            checked = uiState.autoCacheEnabled,
+                            onCheckedChange = { settingsViewModel.setAutoCacheEnabled(it) }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsItem(
+                            icon = Icons.Outlined.Storage,
+                            title = "Offline Songs",
+                            subtitle = "${uiState.offlineSongCount} songs available offline",
+                            onClick = { /* Show offline songs */ }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsSwitchItem(
+                            icon = Icons.Outlined.Wifi,
+                            title = "Cache on Wi-Fi Only",
+                            subtitle = "Save mobile data",
+                            checked = uiState.cacheWifiOnly,
+                            onCheckedChange = { settingsViewModel.setCacheWifiOnly(it) }
+                        )
+                    }
+                }
+            }
+            
+            // NEW: Auto-Update Section
+            item {
+                SettingsSection(title = "Auto-Update") {
+                    SettingsCard {
+                        SettingsSwitchItem(
+                            icon = Icons.Outlined.Sync,
+                            title = "Enable Auto-Update",
+                            subtitle = "Automatically update charts and playlists",
+                            checked = uiState.autoUpdateEnabled,
+                            onCheckedChange = { settingsViewModel.setAutoUpdateEnabled(it) }
+                        )
+                        
+                        if (uiState.autoUpdateEnabled) {
+                            HorizontalDivider(color = CardColor)
+                            
+                            SettingsItem(
+                                icon = Icons.Outlined.Schedule,
+                                title = "Update Frequency",
+                                subtitle = when (uiState.autoUpdateFrequency) {
+                                    15 -> "Every 15 minutes"
+                                    30 -> "Every 30 minutes"
+                                    60 -> "Every hour"
+                                    120 -> "Every 2 hours"
+                                    360 -> "Every 6 hours"
+                                    720 -> "Every 12 hours"
+                                    1440 -> "Once daily"
+                                    else -> "${uiState.autoUpdateFrequency} minutes"
+                                },
+                                onClick = { /* Show frequency picker */ }
+                            )
+                            
+                            HorizontalDivider(color = CardColor)
+                            
+                            SettingsSwitchItem(
+                                icon = Icons.Outlined.Wifi,
+                                title = "WiFi Only",
+                                subtitle = "Update only on WiFi connection",
+                                checked = uiState.autoUpdateWifiOnly,
+                                onCheckedChange = { settingsViewModel.setAutoUpdateWifiOnly(it) }
+                            )
+                            
+                            HorizontalDivider(color = CardColor)
+                            
+                            SettingsItem(
+                                icon = Icons.Outlined.CloudSync,
+                                title = "Sync Now",
+                                subtitle = if (uiState.isSyncing) "Syncing..." 
+                                          else if (uiState.lastSyncTime > 0) 
+                                              "Last synced: ${formatLastSync(uiState.lastSyncTime)}"
+                                          else "Never synced",
+                                onClick = { settingsViewModel.syncNow() }
+                            )
+                        }
+                    }
+                }
+            }
+            
+            // Playback Features Section (NEW - Advanced)
+            item {
+                SettingsSection(title = "Advanced Playback") {
+                    SettingsCard {
+                        SettingsSwitchItem(
+                            icon = Icons.Outlined.PlayCircle,
+                            title = "Auto-Play Similar Songs",
+                            subtitle = "Automatically play related songs",
+                            checked = uiState.autoPlaySimilar,
+                            onCheckedChange = { settingsViewModel.setAutoPlaySimilar(it) }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsSwitchItem(
+                            icon = Icons.Outlined.VolumeUp,
+                            title = "Normalize Volume",
+                            subtitle = "Equalize volume across songs",
+                            checked = uiState.normalizeAudio,
+                            onCheckedChange = { settingsViewModel.setNormalizeAudio(it) }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsSwitchItem(
+                            icon = Icons.Outlined.SkipNext,
+                            title = "Skip Silence",
+                            subtitle = "Automatically skip silent parts",
+                            checked = uiState.skipSilence,
+                            onCheckedChange = { settingsViewModel.setSkipSilence(it) }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsItem(
+                            icon = Icons.Outlined.Speed,
+                            title = "Default Playback Speed",
+                            subtitle = "${uiState.playbackSpeed}x",
+                            onClick = { /* Speed picker */ }
+                        )
+                    }
+                }
+            }
+            
+            // Social & Sharing Section (NEW - Spotify/YouTube Music)
+            item {
+                SettingsSection(title = "Social & Sharing") {
+                    SettingsCard {
+                        SettingsSwitchItem(
+                            icon = Icons.Outlined.Share,
+                            title = "Share Listening Activity",
+                            subtitle = "Share what you're listening to",
+                            checked = uiState.shareActivity,
+                            onCheckedChange = { settingsViewModel.setShareActivity(it) }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsSwitchItem(
+                            icon = Icons.Outlined.Public,
+                            title = "Discord Rich Presence",
+                            subtitle = "Show playing song on Discord",
+                            checked = uiState.discordRichPresence,
+                            onCheckedChange = { settingsViewModel.setDiscordRichPresence(it) }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsSwitchItem(
+                            icon = Icons.Outlined.Notifications,
+                            title = "Artist Notifications",
+                            subtitle = "Get notified about new releases",
+                            checked = uiState.artistNotifications,
+                            onCheckedChange = { settingsViewModel.setArtistNotifications(it) }
                         )
                     }
                 }
@@ -198,6 +432,56 @@ fun SettingsScreen(
                             subtitle = "Don't save listening history",
                             checked = uiState.incognitoMode,
                             onCheckedChange = { settingsViewModel.setIncognitoMode(it) }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsSwitchItem(
+                            icon = Icons.Outlined.AutoAwesome,
+                            title = "AI Recommendations",
+                            subtitle = "Get personalized song suggestions",
+                            checked = uiState.aiRecommendations,
+                            onCheckedChange = { settingsViewModel.setAIRecommendations(it) }
+                        )
+                    }
+                }
+            }
+            
+            // Car Mode Section (NEW - Gaana/Wynk)
+            item {
+                SettingsSection(title = "Car Mode") {
+                    SettingsCard {
+                        SettingsSwitchItem(
+                            icon = Icons.Outlined.DirectionsCar,
+                            title = "Enable Car Mode",
+                            subtitle = "Large buttons for easy control",
+                            checked = uiState.carMode,
+                            onCheckedChange = { settingsViewModel.setCarMode(it) }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsSwitchItem(
+                            icon = Icons.Outlined.Mic,
+                            title = "Voice Commands",
+                            subtitle = "Control with voice",
+                            checked = uiState.voiceCommands,
+                            onCheckedChange = { settingsViewModel.setVoiceCommands(it) }
+                        )
+                    }
+                }
+            }
+            
+            // Sleep Timer Section (NEW - All apps)
+            item {
+                SettingsSection(title = "Sleep Timer") {
+                    SettingsCard {
+                        SettingsItem(
+                            icon = Icons.Outlined.Bedtime,
+                            title = "Sleep Timer",
+                            subtitle = if (uiState.sleepTimerMinutes > 0) 
+                                "${uiState.sleepTimerMinutes} minutes" else "Off",
+                            onClick = { /* Sleep timer picker */ }
                         )
                     }
                 }
@@ -425,6 +709,134 @@ fun SettingsScreen(
             }
         )
     }
+    
+    // Theme Dialog
+    if (showThemeDialog) {
+        AlertDialog(
+            onDismissRequest = { showThemeDialog = false },
+            title = { Text("Choose Theme", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    ThemeOption(
+                        title = "Light",
+                        subtitle = "Light theme",
+                        selected = uiState.theme == com.reon.music.core.preferences.AppTheme.LIGHT,
+                        onClick = {
+                            settingsViewModel.setTheme(com.reon.music.core.preferences.AppTheme.LIGHT)
+                            showThemeDialog = false
+                        }
+                    )
+                    ThemeOption(
+                        title = "Dark",
+                        subtitle = "Dark theme",
+                        selected = uiState.theme == com.reon.music.core.preferences.AppTheme.DARK,
+                        onClick = {
+                            settingsViewModel.setTheme(com.reon.music.core.preferences.AppTheme.DARK)
+                            showThemeDialog = false
+                        }
+                    )
+                    ThemeOption(
+                        title = "System Default",
+                        subtitle = "Follow system theme",
+                        selected = uiState.theme == com.reon.music.core.preferences.AppTheme.SYSTEM,
+                        onClick = {
+                            settingsViewModel.setTheme(com.reon.music.core.preferences.AppTheme.SYSTEM)
+                            showThemeDialog = false
+                        }
+                    )
+                    ThemeOption(
+                        title = "AMOLED Black",
+                        subtitle = "Pure black for OLED displays",
+                        selected = uiState.theme == com.reon.music.core.preferences.AppTheme.AMOLED,
+                        onClick = {
+                            settingsViewModel.setTheme(com.reon.music.core.preferences.AppTheme.AMOLED)
+                            showThemeDialog = false
+                        }
+                    )
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showThemeDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+    
+    // NEW: Theme Preset Dialog
+    if (showThemePresetDialog) {
+        com.reon.music.ui.components.ThemePresetSelector(
+            selectedPresetId = uiState.themePresetId,
+            onPresetSelected = { presetId ->
+                settingsViewModel.setThemePreset(presetId)
+                showThemePresetDialog = false
+            },
+            onDismiss = { showThemePresetDialog = false }
+        )
+    }
+    
+    // NEW: Font Dialog
+    if (showFontDialog) {
+        com.reon.music.ui.components.FontPresetSelector(
+            selectedFontId = uiState.fontPresetId,
+            onFontSelected = { fontId ->
+                settingsViewModel.setFontPreset(fontId)
+                showFontDialog = false
+            },
+            onDismiss = { showFontDialog = false }
+        )
+    }
+    
+    // NEW: Font Size Dialog
+    if (showFontSizeDialog) {
+        com.reon.music.ui.components.FontSizeSelector(
+            selectedSize = uiState.fontSizePreset,
+            onSizeSelected = { size ->
+                settingsViewModel.setFontSize(size)
+                showFontSizeDialog = false
+            },
+            onDismiss = { showFontSizeDialog = false }
+        )
+    }
+}
+
+@Composable
+private fun ThemeOption(
+    title: String,
+    subtitle: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .background(if (selected) AccentRed.copy(alpha = 0.1f) else Color.Transparent)
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = onClick,
+            colors = RadioButtonDefaults.colors(selectedColor = AccentRed)
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (selected) AccentRed else TextPrimary
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary
+            )
+        }
+    }
 }
 
 @Composable
@@ -586,5 +998,27 @@ private fun SettingsSwitchItem(
                 uncheckedTrackColor = CardColor
             )
         )
+    }
+}
+
+/**
+ * Format last sync timestamp to human-readable string
+ */
+private fun formatLastSync(timestamp: Long): String {
+    if (timestamp == 0L) return "Never"
+    
+    val now = System.currentTimeMillis()
+    val diff = now - timestamp
+    
+    return when {
+        diff < 60_000 -> "Just now"
+        diff < 3600_000 -> "${diff / 60_000} minutes ago"
+        diff < 86400_000 -> "${diff / 3600_000} hours ago"
+        diff < 604800_000 -> "${diff / 86400_000} days ago"
+        else -> {
+            val date = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault())
+                .format(java.util.Date(timestamp))
+            date
+        }
     }
 }

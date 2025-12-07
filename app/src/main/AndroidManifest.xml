@@ -37,12 +37,14 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
-            android:theme="@style/Theme.REON">
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.REON.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
 
         <!-- Music Playback Service -->
         <service

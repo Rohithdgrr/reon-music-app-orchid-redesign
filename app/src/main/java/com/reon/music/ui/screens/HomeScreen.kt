@@ -1,7 +1,7 @@
 /*
- * REON Music App - Enhanced Home Screen
+ * REON Music App - SimpMusic-Inspired Home Screen
  * Copyright (c) 2024 REON
- * Modern, Minimalistic Design - YouTube Music Backend
+ * Modern, Clean Design with Red Palette Light Theme
  */
 
 package com.reon.music.ui.screens
@@ -15,7 +15,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,10 +26,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -36,21 +38,32 @@ import com.reon.music.core.model.Album
 import com.reon.music.core.model.Artist
 import com.reon.music.core.model.Playlist
 import com.reon.music.core.model.Song
+import com.reon.music.ui.components.*
+import com.reon.music.ui.theme.*
 import com.reon.music.ui.viewmodels.ChartSection
-import com.reon.music.ui.viewmodels.Genre
 import com.reon.music.ui.viewmodels.HomeViewModel
 import com.reon.music.ui.viewmodels.PlayerViewModel
 import java.util.*
 
-// Modern Color Palette
-private val AccentGreen = Color(0xFF1DB954)
-private val AccentPurple = Color(0xFF8B5CF6)
-private val AccentBlue = Color(0xFF3B82F6)
-private val AccentPink = Color(0xFFEC4899)
-private val AccentOrange = Color(0xFFF97316)
-private val AccentRed = Color(0xFFEF4444)
-private val AccentYellow = Color(0xFFF59E0B)
-private val AccentTeal = Color(0xFF14B8A6)
+// SimpMusic Color Palette
+private val BackgroundWhite = Color(0xFFFFFFFF)
+private val SurfaceLight = Color(0xFFFAFAFA)
+private val TextPrimary = Color(0xFF1C1C1C)
+private val TextSecondary = Color(0xFF757575)
+private val AccentRed = Color(0xFFE53935)
+private val AccentRedSecondary = Color(0xFFFF6B6B)
+private val ChipSelectedBg = Color(0xFFE53935)
+private val ChipUnselectedBg = Color(0xFFF1F3F4)
+
+// Category colors for gradient bars
+private val GradientColors = listOf(
+    Color(0xFFFFB3D9), // Pink
+    Color(0xFFFFD54F), // Yellow
+    Color(0xFF4DD0E1), // Cyan
+    Color(0xFF81C784), // Green
+    Color(0xFFBA68C8), // Purple
+    Color(0xFFFF9800)  // Orange
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,208 +75,544 @@ fun HomeScreen(
     onArtistClick: (Artist) -> Unit = {},
     onPlaylistClick: (Playlist) -> Unit = {},
     onSeeAllClick: (String) -> Unit = {},
+    onChartClick: (String, String) -> Unit = { _, _ -> },
     onSettingsClick: () -> Unit = {}
 ) {
     val uiState by homeViewModel.uiState.collectAsState()
     val scrollState = rememberLazyListState()
+    val pullToRefreshState = rememberPullToRefreshState()
+    
+    // Category filter state
+    var selectedCategory by remember { mutableStateOf("All") }
+    val categories = listOf("All", "Relax", "Sleep", "Energize", "Focus", "Workout")
+    
+    LaunchedEffect(pullToRefreshState.isRefreshing) {
+        if (pullToRefreshState.isRefreshing) {
+            homeViewModel.refresh()
+            pullToRefreshState.endRefresh()
+        }
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(BackgroundWhite)
+            .nestedScroll(pullToRefreshState.nestedScrollConnection)
     ) {
-        LazyColumn(
-            state = scrollState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 100.dp)
-        ) {
-            // Header with Greeting
-            item {
-                ModernHeader(
-                    greeting = getGreeting(),
-                    onRefresh = { homeViewModel.refresh() },
-                    onSettings = onSettingsClick
-                )
-            }
-            
-            // Quick Picks Section
-            if (uiState.quickPicksSongs.isNotEmpty()) {
-                item {
-                    QuickPicksSection(
-                        songs = uiState.quickPicksSongs,
-                        onSongClick = onSongClick
+        if (uiState.isLoading && !pullToRefreshState.isRefreshing) {
+            // Skeleton loaders
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 100.dp)
+            ) {
+                item { Spacer(modifier = Modifier.height(16.dp)) }
+                items(5) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(100.dp)
+                            .padding(horizontal = 20.dp, vertical = 8.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(SurfaceLight)
                     )
                 }
             }
-            
-            // ST Banjara / Lambadi Songs - Special Section
-            if (uiState.banjaraSongs.isNotEmpty()) {
+        } else {
+            LazyColumn(
+                state = scrollState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 100.dp)
+            ) {
+                // Modern Header
                 item {
-                    BanjaraSongsSection(
-                        songs = uiState.banjaraSongs,
-                        onSongClick = onSongClick,
-                        onSeeAllClick = { onSeeAllClick("banjara") }
+                    SimpMusicHeader(
+                        greeting = getGreeting(),
+                        onNotificationsClick = { /* TODO */ },
+                        onHistoryClick = { /* TODO */ },
+                        onSettingsClick = onSettingsClick
                     )
                 }
-            }
-            
-            // Charts Section - Modern Gradient Cards
-            if (uiState.charts.isNotEmpty()) {
+                
+                // Category Chips
                 item {
-                    ModernChartsSection(
-                        charts = uiState.charts,
-                        onChartClick = { /* Navigate to chart */ }
+                    CategoryChipsRow(
+                        categories = categories,
+                        selectedCategory = selectedCategory,
+                        onCategorySelected = { selectedCategory = it }
                     )
                 }
-            }
-            
-            // Genre Selection - Large, Modern Chips
-            item {
-                ModernGenreSection(
-                    genres = uiState.genres,
-                    selectedGenre = uiState.selectedGenre,
-                    onGenreSelect = { homeViewModel.selectGenre(it) }
-                )
-            }
-            
-            // Genre Songs
-            if (uiState.genreSongs.isNotEmpty() && uiState.selectedGenre != null) {
+                
+                // Welcome Back Card with Radio
                 item {
-                    GenreSongsSection(
-                        genre = uiState.selectedGenre!!,
-                        songs = uiState.genreSongs,
-                        onSongClick = onSongClick
+                    WelcomeRadioCard(
+                        onRadioClick = {
+                            // Enable radio mode with quick picks
+                            if (uiState.quickPicksSongs.isNotEmpty()) {
+                                playerViewModel.enableRadioMode(uiState.quickPicksSongs)
+                            }
+                        }
                     )
                 }
-            }
-            
-            // Featured Playlists
-            if (uiState.featuredPlaylists.isNotEmpty()) {
-                item {
-                    ModernPlaylistSection(
-                        title = "Featured Playlists",
-                        emoji = "🔥",
-                        playlists = uiState.featuredPlaylists,
-                        onPlaylistClick = onPlaylistClick,
-                        onSeeAllClick = { onSeeAllClick("featured") }
-                    )
+                
+                // Quick Picks Section
+                if (uiState.quickPicksSongs.isNotEmpty()) {
+                    item {
+                        QuickPicksSection(
+                            songs = uiState.quickPicksSongs,
+                            onSongClick = onSongClick
+                        )
+                    }
                 }
-            }
-            
-            // Mood Playlists
-            if (uiState.moodPlaylists.isNotEmpty()) {
-                item {
-                    ModernPlaylistSection(
-                        title = "Mood & Vibes",
-                        emoji = "🎭",
-                        playlists = uiState.moodPlaylists,
-                        onPlaylistClick = onPlaylistClick,
-                        onSeeAllClick = { onSeeAllClick("mood") }
-                    )
+                
+                // Featured Banner (if available)
+                if (uiState.featuredPlaylists.isNotEmpty()) {
+                    item {
+                        FeaturedBannerSection(
+                            playlists = uiState.featuredPlaylists,
+                            onPlaylistClick = onPlaylistClick
+                        )
+                    }
                 }
-            }
-            
-            // Top Artists
-            if (uiState.recommendedArtists.isNotEmpty()) {
-                item {
-                    TopArtistsSection(
-                        artists = uiState.recommendedArtists,
-                        onArtistClick = onArtistClick,
-                        onSeeAllClick = { onSeeAllClick("artists") }
-                    )
+                
+                // Trending Charts
+                if (uiState.charts.isNotEmpty()) {
+                    item {
+                        TrendingChartsSection(
+                            charts = uiState.charts,
+                            onChartClick = { chart ->
+                                onChartClick(chart.id, chart.title)
+                            }
+                        )
+                    }
                 }
-            }
-            
-            // Telugu Hits
-            if (uiState.teluguSongs.isNotEmpty()) {
-                item {
-                    ModernSongSection(
-                        title = "Telugu Hits",
-                        emoji = "🎬",
-                        subtitle = "Latest from Tollywood",
-                        songs = uiState.teluguSongs,
-                        onSongClick = onSongClick,
-                        onSeeAllClick = { onSeeAllClick("telugu") }
-                    )
+                
+                // ===== LANGUAGE SECTIONS =====
+                
+                // Telugu Songs
+                if (uiState.teluguSongs.isNotEmpty()) {
+                    item {
+                        LanguageSection(
+                            title = "🎬 Telugu Hits",
+                            songs = uiState.teluguSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("telugu") }
+                        )
+                    }
                 }
-            }
-            
-            // New Releases
-            if (uiState.newReleases.isNotEmpty()) {
-                item {
-                    ModernSongSection(
-                        title = "New Releases",
-                        emoji = "✨",
-                        subtitle = "Fresh music for you",
-                        songs = uiState.newReleases,
-                        onSongClick = onSongClick,
-                        onSeeAllClick = { onSeeAllClick("new") }
-                    )
+                
+                // Hindi Songs
+                if (uiState.hindiSongs.isNotEmpty()) {
+                    item {
+                        LanguageSection(
+                            title = "🇮🇳 Hindi Hits",
+                            songs = uiState.hindiSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("hindi") }
+                        )
+                    }
                 }
-            }
-            
-            // Hindi Hits
-            if (uiState.hindiSongs.isNotEmpty()) {
-                item {
-                    ModernSongSection(
-                        title = "Hindi Hits",
-                        emoji = "🇮🇳",
-                        subtitle = "Bollywood's finest",
-                        songs = uiState.hindiSongs,
-                        onSongClick = onSongClick,
-                        onSeeAllClick = { onSeeAllClick("hindi") }
-                    )
+                
+                // Tamil Songs
+                if (uiState.tamilSongs.isNotEmpty()) {
+                    item {
+                        LanguageSection(
+                            title = "🎵 Tamil Hits",
+                            songs = uiState.tamilSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("tamil") }
+                        )
+                    }
                 }
-            }
-            
-            // English Hits
-            if (uiState.englishSongs.isNotEmpty()) {
-                item {
-                    ModernSongSection(
-                        title = "English Hits",
-                        emoji = "🌍",
-                        subtitle = "Global chart-toppers",
-                        songs = uiState.englishSongs,
-                        onSongClick = onSongClick,
-                        onSeeAllClick = { onSeeAllClick("english") }
-                    )
+                
+                // Punjabi Songs
+                if (uiState.punjabiSongs.isNotEmpty()) {
+                    item {
+                        LanguageSection(
+                            title = "🎧 Punjabi Hits",
+                            songs = uiState.punjabiSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("punjabi") }
+                        )
+                    }
                 }
-            }
-            
-            // Trending Albums
-            if (uiState.trendingAlbums.isNotEmpty()) {
-                item {
-                    ModernAlbumSection(
-                        title = "Trending Albums",
-                        emoji = "💿",
-                        albums = uiState.trendingAlbums,
-                        onAlbumClick = onAlbumClick,
-                        onSeeAllClick = { onSeeAllClick("albums") }
-                    )
+                
+                // ST Banjara Songs
+                if (uiState.banjaraSongs.isNotEmpty()) {
+                    item {
+                        LanguageSection(
+                            title = "🪘 ST Banjara/Lambadi",
+                            songs = uiState.banjaraSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("banjara") }
+                        )
+                    }
+                }
+                
+                // ===== INTERNATIONAL SECTION =====
+                
+                // International Hits
+                if (uiState.internationalHits.isNotEmpty()) {
+                    item {
+                        LanguageSection(
+                            title = "🌍 International Hits",
+                            songs = uiState.internationalHits,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("international") }
+                        )
+                    }
+                }
+                
+                // English Songs
+                if (uiState.englishSongs.isNotEmpty()) {
+                    item {
+                        LanguageSection(
+                            title = "🎤 English Songs",
+                            songs = uiState.englishSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("english") }
+                        )
+                    }
+                }
+                
+                // ===== CURATED COLLECTIONS =====
+                
+                // All Time Favorites
+                if (uiState.allTimeFavorites.isNotEmpty()) {
+                    item {
+                        ContentSection(
+                            title = "❤️ All Time Favorites",
+                            songs = uiState.allTimeFavorites,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("alltimefavorite") }
+                        )
+                    }
+                }
+                
+                // Most Listening Songs
+                if (uiState.mostListeningSongs.isNotEmpty()) {
+                    item {
+                        ContentSection(
+                            title = "🔥 Most Listening",
+                            songs = uiState.mostListeningSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("mostlistening") }
+                        )
+                    }
+                }
+                
+                // Trending Now
+                if (uiState.trendingNowSongs.isNotEmpty()) {
+                    item {
+                        ContentSection(
+                            title = "📈 Trending Now",
+                            songs = uiState.trendingNowSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("trending") }
+                        )
+                    }
+                }
+                
+                // ===== TOP ARTISTS =====
+                
+                if (uiState.topArtists.isNotEmpty()) {
+                    item {
+                        TopArtistsSection(
+                            artists = uiState.topArtists,
+                            onArtistClick = onArtistClick,
+                            onSeeAllClick = { onSeeAllClick("artists") }
+                        )
+                    }
+                }
+                
+                // ===== GENRE SECTIONS =====
+                
+                // Romantic Songs
+                if (uiState.romanticSongs.isNotEmpty()) {
+                    item {
+                        ContentSection(
+                            title = "💕 Romantic Songs",
+                            songs = uiState.romanticSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("romantic") }
+                        )
+                    }
+                }
+                
+                // Party Songs
+                if (uiState.partySongs.isNotEmpty()) {
+                    item {
+                        ContentSection(
+                            title = "🎉 Party Hits",
+                            songs = uiState.partySongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("party") }
+                        )
+                    }
+                }
+                
+                // Sad Songs
+                if (uiState.sadSongs.isNotEmpty()) {
+                    item {
+                        ContentSection(
+                            title = "😢 Sad Songs",
+                            songs = uiState.sadSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("sad") }
+                        )
+                    }
+                }
+                
+                // LoFi Songs
+                if (uiState.lofiSongs.isNotEmpty()) {
+                    item {
+                        ContentSection(
+                            title = "🌙 Lo-Fi & Chill",
+                            songs = uiState.lofiSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("lofi") }
+                        )
+                    }
+                }
+                
+                // Devotional Songs
+                if (uiState.devotionalSongs.isNotEmpty()) {
+                    item {
+                        ContentSection(
+                            title = "🙏 Devotional",
+                            songs = uiState.devotionalSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("devotional") }
+                        )
+                    }
+                }
+                
+                // ===== ARTIST SPOTLIGHTS =====
+                
+                // Arijit Singh
+                if (uiState.arijitSinghSongs.isNotEmpty()) {
+                    item {
+                        ContentSection(
+                            title = "🎤 Arijit Singh",
+                            songs = uiState.arijitSinghSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("arijitsingh") }
+                        )
+                    }
+                }
+                
+                // AR Rahman
+                if (uiState.arRahmanSongs.isNotEmpty()) {
+                    item {
+                        ContentSection(
+                            title = "🎹 A.R. Rahman",
+                            songs = uiState.arRahmanSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("arrahman") }
+                        )
+                    }
+                }
+                
+                // SPB
+                if (uiState.spbSongs.isNotEmpty()) {
+                    item {
+                        ContentSection(
+                            title = "🎶 S.P. Balasubrahmanyam",
+                            songs = uiState.spbSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("spb") }
+                        )
+                    }
+                }
+                
+                // DSP
+                if (uiState.dspSongs.isNotEmpty()) {
+                    item {
+                        ContentSection(
+                            title = "🎧 Devi Sri Prasad",
+                            songs = uiState.dspSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("dsp") }
+                        )
+                    }
+                }
+                
+                // Thaman
+                if (uiState.thamanSongs.isNotEmpty()) {
+                    item {
+                        ContentSection(
+                            title = "🔊 Thaman S",
+                            songs = uiState.thamanSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("thaman") }
+                        )
+                    }
+                }
+                
+                // ===== NEW RELEASES =====
+                
+                if (uiState.newReleases.isNotEmpty()) {
+                    item {
+                        ContentSection(
+                            title = "🆕 New Releases",
+                            songs = uiState.newReleases,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("new") }
+                        )
+                    }
+                }
+                
+                // ===== PLAYLISTS =====
+                
+                // Featured Playlists
+                if (uiState.featuredPlaylists.isNotEmpty()) {
+                    item {
+                        PlaylistSection(
+                            title = "📀 Featured Playlists",
+                            playlists = uiState.featuredPlaylists,
+                            onPlaylistClick = onPlaylistClick,
+                            onSeeAllClick = { onSeeAllClick("featured") }
+                        )
+                    }
+                }
+                
+                // Telugu Playlists
+                if (uiState.teluguPlaylistCollection.isNotEmpty()) {
+                    item {
+                        PlaylistSection(
+                            title = "🎬 Telugu Playlists",
+                            playlists = uiState.teluguPlaylistCollection,
+                            onPlaylistClick = onPlaylistClick,
+                            onSeeAllClick = { onSeeAllClick("teluguplaylists") }
+                        )
+                    }
+                }
+                
+                // Hindi Playlists
+                if (uiState.hindiPlaylistCollection.isNotEmpty()) {
+                    item {
+                        PlaylistSection(
+                            title = "🇮🇳 Hindi Playlists",
+                            playlists = uiState.hindiPlaylistCollection,
+                            onPlaylistClick = onPlaylistClick,
+                            onSeeAllClick = { onSeeAllClick("hindiplaylists") }
+                        )
+                    }
+                }
+                
+                // Tamil Playlists
+                if (uiState.tamilPlaylistCollection.isNotEmpty()) {
+                    item {
+                        PlaylistSection(
+                            title = "🎵 Tamil Playlists",
+                            playlists = uiState.tamilPlaylistCollection,
+                            onPlaylistClick = onPlaylistClick,
+                            onSeeAllClick = { onSeeAllClick("tamilplaylists") }
+                        )
+                    }
+                }
+                
+                // ===== MORE REGIONAL SONGS =====
+                
+                // Kannada
+                if (uiState.kannadaSongs.isNotEmpty()) {
+                    item {
+                        LanguageSection(
+                            title = "🏔️ Kannada Songs",
+                            songs = uiState.kannadaSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("kannada") }
+                        )
+                    }
+                }
+                
+                // Malayalam
+                if (uiState.malayalamSongs.isNotEmpty()) {
+                    item {
+                        LanguageSection(
+                            title = "🌴 Malayalam Songs",
+                            songs = uiState.malayalamSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("malayalam") }
+                        )
+                    }
+                }
+                
+                // Marathi
+                if (uiState.marathiSongs.isNotEmpty()) {
+                    item {
+                        LanguageSection(
+                            title = "🏯 Marathi Songs",
+                            songs = uiState.marathiSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("marathi") }
+                        )
+                    }
+                }
+                
+                // Bengali
+                if (uiState.bengaliSongs.isNotEmpty()) {
+                    item {
+                        LanguageSection(
+                            title = "🎭 Bengali Songs",
+                            songs = uiState.bengaliSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("bengali") }
+                        )
+                    }
+                }
+                
+                // Bhojpuri
+                if (uiState.bhojpuriSongs.isNotEmpty()) {
+                    item {
+                        LanguageSection(
+                            title = "🪘 Bhojpuri Songs",
+                            songs = uiState.bhojpuriSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("bhojpuri") }
+                        )
+                    }
+                }
+                
+                // Gujarati
+                if (uiState.gujaratiSongs.isNotEmpty()) {
+                    item {
+                        LanguageSection(
+                            title = "🦚 Gujarati Songs",
+                            songs = uiState.gujaratiSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("gujarati") }
+                        )
+                    }
+                }
+                
+                // Rajasthani
+                if (uiState.rajasthaniSongs.isNotEmpty()) {
+                    item {
+                        LanguageSection(
+                            title = "🏜️ Rajasthani Folk",
+                            songs = uiState.rajasthaniSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("rajasthani") }
+                        )
+                    }
                 }
             }
         }
         
-        // Loading Indicator
-        if (uiState.isLoading) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(
-                    color = AccentRed,
-                    strokeWidth = 3.dp
-                )
-            }
-        }
+        // Pull to refresh indicator
+        PullToRefreshContainer(
+            state = pullToRefreshState,
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
     }
 }
 
 @Composable
-private fun ModernHeader(
+private fun SimpMusicHeader(
     greeting: String,
-    onRefresh: () -> Unit,
-    onSettings: () -> Unit
+    onNotificationsClick: () -> Unit,
+    onHistoryClick: () -> Unit,
+    onSettingsClick: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -277,75 +626,137 @@ private fun ModernHeader(
         ) {
             Column {
                 Text(
-                    text = greeting,
+                    text = "REON MUSIC",
                     style = MaterialTheme.typography.headlineMedium.copy(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = (-0.5).sp
                     ),
-                    color = MaterialTheme.colorScheme.onBackground
+                    color = TextPrimary
                 )
                 Text(
-                    text = "What do you want to listen to?",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                    text = greeting,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = TextSecondary
                 )
             }
             
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Refresh Button
-                IconButton(
-                    onClick = onRefresh,
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                ) {
+                IconButton(onClick = onNotificationsClick) {
                     Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Refresh",
-                        tint = MaterialTheme.colorScheme.onBackground
+                        imageVector = Icons.Outlined.Notifications,
+                        contentDescription = "Notifications",
+                        tint = TextPrimary
                     )
                 }
-                
-                // Settings Button
-                IconButton(
-                    onClick = onSettings,
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                ) {
+                IconButton(onClick = onHistoryClick) {
+                    Icon(
+                        imageVector = Icons.Outlined.History,
+                        contentDescription = "Recent Activity",
+                        tint = TextPrimary
+                    )
+                }
+                IconButton(onClick = onSettingsClick) {
                     Icon(
                         imageVector = Icons.Default.Settings,
                         contentDescription = "Settings",
-                        tint = MaterialTheme.colorScheme.onBackground
+                        tint = TextPrimary
                     )
                 }
             }
         }
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        // YouTube Music Badge
+    }
+}
+
+@Composable
+private fun CategoryChipsRow(
+    categories: List<String>,
+    selectedCategory: String,
+    onCategorySelected: (String) -> Unit
+) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(categories) { category ->
+            FilterChip(
+                selected = category == selectedCategory,
+                onClick = { onCategorySelected(category) },
+                label = {
+                    Text(
+                        text = category,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (category == selectedCategory) FontWeight.Bold else FontWeight.Normal
+                    )
+                },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = ChipSelectedBg,
+                    selectedLabelColor = Color.White,
+                    containerColor = ChipUnselectedBg,
+                    labelColor = TextPrimary
+                ),
+                shape = RoundedCornerShape(20.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun WelcomeRadioCard(
+    onRadioClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .clickable(onClick = onRadioClick)
+            .shadow(4.dp, RoundedCornerShape(16.dp)),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = SurfaceLight
+        )
+    ) {
         Row(
-            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .clip(RoundedCornerShape(20.dp))
-                .background(Color.Red.copy(alpha = 0.1f))
-                .padding(horizontal = 12.dp, vertical = 6.dp)
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Icon(
-                imageVector = Icons.Default.PlayCircle,
-                contentDescription = null,
-                tint = Color.Red,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = "YouTube Music",
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = Color.Red
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Welcome back,",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextSecondary
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "MUSIC TO GET YOU STARTED",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    ),
+                    color = TextPrimary
+                )
+            }
+            
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(AccentRed, AccentRedSecondary)
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Radio,
+                    contentDescription = "Radio",
+                    tint = Color.White,
+                    modifier = Modifier.size(32.dp)
+                )
+            }
         }
     }
 }
@@ -355,87 +766,36 @@ private fun QuickPicksSection(
     songs: List<Song>,
     onSongClick: (Song) -> Unit
 ) {
-    Column(modifier = Modifier.padding(vertical = 8.dp)) {
-        Text(
-            text = "Quick Picks",
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-        )
-        
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(songs.take(6)) { song ->
-                QuickPickCard(song = song, onClick = { onSongClick(song) })
-            }
-        }
-    }
-}
-
-@Composable
-private fun QuickPickCard(
-    song: Song,
-    onClick: () -> Unit
-) {
-    Card(
+    Column(
         modifier = Modifier
-            .width(160.dp)
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        ),
-        shape = RoundedCornerShape(12.dp)
+            .fillMaxWidth()
+            .padding(vertical = 16.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp),
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AsyncImage(
-                model = song.getHighQualityArtwork(),
-                contentDescription = song.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp))
-            )
-            
             Text(
-                text = song.title,
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 10.dp)
+                text = "Quick picks",
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold
+                ),
+                color = TextPrimary
             )
         }
-    }
-}
-
-@Composable
-private fun BanjaraSongsSection(
-    songs: List<Song>,
-    onSongClick: (Song) -> Unit,
-    onSeeAllClick: () -> Unit
-) {
-    Column(modifier = Modifier.padding(vertical = 16.dp)) {
-        SectionHeader(
-            emoji = "🪕",
-            title = "ST Banjara Lambadi",
-            subtitle = "Traditional tribal music",
-            onSeeAllClick = onSeeAllClick
-        )
         
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        LazyColumn(
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(songs.take(10)) { song ->
-                ModernSongCard(
+                QuickPickItem(
                     song = song,
-                    onClick = { onSongClick(song) },
-                    accentColor = AccentOrange
+                    gradientColor = GradientColors[songs.indexOf(song) % GradientColors.size],
+                    onClick = { onSongClick(song) }
                 )
             }
         }
@@ -443,35 +803,178 @@ private fun BanjaraSongsSection(
 }
 
 @Composable
-private fun ModernChartsSection(
+private fun QuickPickItem(
+    song: Song,
+    gradientColor: Color,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Album art thumbnail
+        AsyncImage(
+            model = song.getHighQualityArtwork(),
+            contentDescription = song.title,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(8.dp))
+        )
+        
+        Spacer(modifier = Modifier.width(12.dp))
+        
+        // Song info
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = song.title,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontWeight = FontWeight.Medium
+                ),
+                color = TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = song.artist,
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            // Show album/movie name if available
+            if (song.album.isNotBlank()) {
+                Text(
+                    text = "🎬 ${song.album}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AccentRed.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.width(8.dp))
+        
+        // Gradient color bar
+        Box(
+            modifier = Modifier
+                .width(4.dp)
+                .height(40.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(gradientColor)
+        )
+    }
+}
+
+@Composable
+private fun FeaturedBannerSection(
+    playlists: List<Playlist>,
+    onPlaylistClick: (Playlist) -> Unit
+) {
+    if (playlists.isEmpty()) return
+    
+    val featured = playlists.firstOrNull() ?: return
+    
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .clickable { onPlaylistClick(featured) }
+            .shadow(8.dp, RoundedCornerShape(16.dp)),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            if (featured.artworkUrl != null) {
+                AsyncImage(
+                    model = featured.artworkUrl,
+                    contentDescription = featured.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(AccentRed, AccentRedSecondary)
+                            )
+                        )
+                )
+            }
+            
+            // Gradient overlay
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.7f)
+                            )
+                        )
+                    )
+            )
+            
+            // Content
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(20.dp)
+            ) {
+                Text(
+                    text = featured.name,
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "${featured.songCount} tracks",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.9f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrendingChartsSection(
     charts: List<ChartSection>,
     onChartClick: (ChartSection) -> Unit
 ) {
-    Column(modifier = Modifier.padding(vertical = 16.dp)) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "📊",
-                fontSize = 24.sp
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Charts",
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(12.dp))
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp)
+    ) {
+        Text(
+            text = "Trending",
+            style = MaterialTheme.typography.titleLarge.copy(
+                fontWeight = FontWeight.Bold
+            ),
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+            color = TextPrimary
+        )
         
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            items(charts) { chart ->
+            items(charts.take(2)) { chart ->
                 ChartCard(
                     chart = chart,
                     onClick = { onChartClick(chart) }
@@ -486,398 +989,35 @@ private fun ChartCard(
     chart: ChartSection,
     onClick: () -> Unit
 ) {
-    val gradientColors = when {
-        chart.title.contains("Hindi") -> listOf(AccentOrange, AccentRed)
-        chart.title.contains("Telugu") -> listOf(AccentPurple, AccentPink)
-        chart.title.contains("English") -> listOf(AccentBlue, AccentTeal)
-        chart.title.contains("Tamil") -> listOf(AccentPink, AccentPurple)
-        else -> listOf(AccentGreen, AccentBlue)
-    }
-    
-    val emoji = when {
-        chart.title.contains("Hindi") -> "🇮🇳"
-        chart.title.contains("Telugu") -> "🎬"
-        chart.title.contains("English") -> "🌍"
-        chart.title.contains("Tamil") -> "🎭"
-        else -> "📊"
-    }
-    
     Card(
         modifier = Modifier
             .width(280.dp)
-            .height(160.dp)
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Brush.linearGradient(gradientColors))
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Column {
-                        Text(
-                            text = emoji,
-                            fontSize = 28.sp
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = chart.title.replace(Regex("^[^A-Za-z]+"), "").trim(),
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = Color.White
-                        )
-                        Text(
-                            text = "${chart.songs.size} tracks",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.8f)
-                        )
-                    }
-                    
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.2f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "Play",
-                            tint = Color.White
-                        )
-                    }
-                }
-                
-                Spacer(modifier = Modifier.weight(1f))
-                
-                // Top songs preview
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy((-12).dp)
-                ) {
-                    chart.songs.take(4).forEach { song ->
-                        AsyncImage(
-                            model = song.getHighQualityArtwork(),
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .border(2.dp, Color.White, CircleShape)
-                        )
-                    }
-                    if (chart.songs.size > 4) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.3f))
-                                .border(2.dp, Color.White, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "+${chart.songs.size - 4}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ModernGenreSection(
-    genres: List<Genre>,
-    selectedGenre: Genre?,
-    onGenreSelect: (Genre) -> Unit
-) {
-    Column(modifier = Modifier.padding(vertical = 16.dp)) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "🎵",
-                fontSize = 24.sp
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Browse Genres",
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(12.dp))
-        
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(genres) { genre ->
-                GenreChip(
-                    genre = genre,
-                    isSelected = selectedGenre?.id == genre.id,
-                    onClick = { onGenreSelect(genre) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun GenreChip(
-    genre: Genre,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    val animatedScale by animateFloatAsState(
-        targetValue = if (isSelected) 1.05f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessMedium),
-        label = "scale"
-    )
-    
-    val genreColor = Color(genre.color)
-    
-    Card(
-        modifier = Modifier
-            .graphicsLayer {
-                scaleX = animatedScale
-                scaleY = animatedScale
-            }
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (isSelected) 8.dp else 2.dp
-        )
-    ) {
-        Box(
-            modifier = Modifier
-                .background(
-                    if (isSelected) {
-                        Brush.linearGradient(
-                            listOf(genreColor, genreColor.copy(alpha = 0.7f))
-                        )
-                    } else {
-                        Brush.linearGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.surfaceVariant,
-                                MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        )
-                    }
-                )
-                .padding(horizontal = 20.dp, vertical = 14.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = genre.emoji,
-                    fontSize = 20.sp
-                )
-                Text(
-                    text = genre.name,
-                    style = MaterialTheme.typography.labelLarge.copy(
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                    ),
-                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun GenreSongsSection(
-    genre: Genre,
-    songs: List<Song>,
-    onSongClick: (Song) -> Unit
-) {
-    Column(modifier = Modifier.padding(vertical = 8.dp)) {
-        Text(
-            text = "${genre.emoji} ${genre.name} Songs",
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-        )
-        
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            items(songs.take(10)) { song ->
-                ModernSongCard(
-                    song = song,
-                    onClick = { onSongClick(song) },
-                    accentColor = Color(genre.color)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ModernSongSection(
-    title: String,
-    emoji: String,
-    subtitle: String,
-    songs: List<Song>,
-    onSongClick: (Song) -> Unit,
-    onSeeAllClick: () -> Unit
-) {
-    Column(modifier = Modifier.padding(vertical = 16.dp)) {
-        SectionHeader(
-            emoji = emoji,
-            title = title,
-            subtitle = subtitle,
-            onSeeAllClick = onSeeAllClick
-        )
-        
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            items(songs.take(10)) { song ->
-                ModernSongCard(
-                    song = song,
-                    onClick = { onSongClick(song) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ModernSongCard(
-    song: Song,
-    onClick: () -> Unit,
-    accentColor: Color = AccentGreen
-) {
-    Column(
-        modifier = Modifier
-            .width(150.dp)
+            .height(200.dp)
             .clickable(onClick = onClick)
+            .shadow(8.dp, RoundedCornerShape(16.dp)),
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .clip(RoundedCornerShape(16.dp))
-        ) {
-            AsyncImage(
-                model = song.getHighQualityArtwork(),
-                contentDescription = song.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
+        Box(modifier = Modifier.fillMaxSize()) {
+            val thumbnailUrl = chart.songs.firstOrNull()?.getHighQualityArtwork()
             
-            // Play button overlay
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(8.dp)
-                    .size(40.dp)
-                    .shadow(8.dp, CircleShape)
-                    .clip(CircleShape)
-                    .background(accentColor),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "Play",
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
+            if (thumbnailUrl != null) {
+                AsyncImage(
+                    model = thumbnailUrl,
+                    contentDescription = chart.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(AccentRed, AccentRedSecondary)
+                            )
+                        )
                 )
             }
-        }
-        
-        Spacer(modifier = Modifier.height(10.dp))
-        
-        Text(
-            text = song.title,
-            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        
-        Text(
-            text = song.artist,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-@Composable
-private fun ModernPlaylistSection(
-    title: String,
-    emoji: String,
-    playlists: List<Playlist>,
-    onPlaylistClick: (Playlist) -> Unit,
-    onSeeAllClick: () -> Unit
-) {
-    Column(modifier = Modifier.padding(vertical = 16.dp)) {
-        SectionHeader(
-            emoji = emoji,
-            title = title,
-            onSeeAllClick = onSeeAllClick
-        )
-        
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            items(playlists.take(8)) { playlist ->
-                PlaylistCard(
-                    playlist = playlist,
-                    onClick = { onPlaylistClick(playlist) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PlaylistCard(
-    playlist: Playlist,
-    onClick: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .width(150.dp)
-            .clickable(onClick = onClick)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .clip(RoundedCornerShape(16.dp))
-        ) {
-            AsyncImage(
-                model = playlist.artworkUrl,
-                contentDescription = playlist.name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
             
             // Gradient overlay
             Box(
@@ -888,40 +1028,135 @@ private fun PlaylistCard(
                             colors = listOf(
                                 Color.Transparent,
                                 Color.Black.copy(alpha = 0.6f)
-                            ),
-                            startY = 150f
+                            )
                         )
                     )
             )
             
-            // Song count badge
-            Box(
+            // Content
+            Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(10.dp)
+                    .padding(16.dp)
             ) {
                 Text(
-                    text = "${playlist.songCount} songs",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                    color = Color.White
+                    text = chart.title,
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Chart • YouTube Music",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.9f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LanguageSection(
+    title: String,
+    songs: List<Song>,
+    onSongClick: (Song) -> Unit,
+    onSeeAllClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold
+                ),
+                color = TextPrimary
+            )
+            TextButton(onClick = onSeeAllClick) {
+                Text(
+                    text = "See All",
+                    color = AccentRed,
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = FontWeight.SemiBold
+                    )
                 )
             }
         }
         
-        Spacer(modifier = Modifier.height(10.dp))
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            items(songs.take(5)) { song ->
+                SongCard(
+                    song = song,
+                    onClick = { onSongClick(song) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SongCard(
+    song: Song,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .width(150.dp)
+            .clickable(onClick = onClick)
+    ) {
+        AsyncImage(
+            model = song.getHighQualityArtwork(),
+            contentDescription = song.title,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(RoundedCornerShape(12.dp))
+        )
+        
+        Spacer(modifier = Modifier.height(8.dp))
         
         Text(
-            text = playlist.name,
-            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+            text = song.title,
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontWeight = FontWeight.Medium
+            ),
+            color = TextPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
         
-        if (playlist.description.isNotEmpty()) {
+        // Show artist name
+        Text(
+            text = song.artist,
+            style = MaterialTheme.typography.bodySmall,
+            color = TextSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        
+        // Show album/movie name if available
+        if (song.album.isNotBlank()) {
             Text(
-                text = playlist.description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                text = "🎬 ${song.album}",
+                style = MaterialTheme.typography.labelSmall,
+                color = AccentRed.copy(alpha = 0.8f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -935,16 +1170,38 @@ private fun TopArtistsSection(
     onArtistClick: (Artist) -> Unit,
     onSeeAllClick: () -> Unit
 ) {
-    Column(modifier = Modifier.padding(vertical = 16.dp)) {
-        SectionHeader(
-            emoji = "🎤",
-            title = "Top Artists",
-            subtitle = "Popular artists for you",
-            onSeeAllClick = onSeeAllClick
-        )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Top artists",
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold
+                ),
+                color = TextPrimary
+            )
+            TextButton(onClick = onSeeAllClick) {
+                Text(
+                    text = "See All",
+                    color = AccentRed,
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = FontWeight.SemiBold
+                    )
+                )
+            }
+        }
         
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
+            contentPadding = PaddingValues(horizontal = 20.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             items(artists.take(10)) { artist ->
@@ -968,67 +1225,75 @@ private fun ArtistCard(
             .clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
+        AsyncImage(
+            model = artist.artworkUrl,
+            contentDescription = artist.name,
+            contentScale = ContentScale.Crop,
             modifier = Modifier
                 .size(100.dp)
                 .clip(CircleShape)
-        ) {
-            AsyncImage(
-                model = artist.artworkUrl,
-                contentDescription = artist.name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-            
-            // Gradient border effect
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .border(
-                        width = 3.dp,
-                        brush = Brush.linearGradient(
-                            listOf(AccentPink, AccentPurple)
-                        ),
-                        shape = CircleShape
-                    )
-            )
-        }
+        )
         
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         
         Text(
             text = artist.name,
-            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontWeight = FontWeight.Medium
+            ),
+            color = TextPrimary,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
     }
 }
 
 @Composable
-private fun ModernAlbumSection(
+private fun ContentSection(
     title: String,
-    emoji: String,
-    albums: List<Album>,
-    onAlbumClick: (Album) -> Unit,
+    songs: List<Song>,
+    onSongClick: (Song) -> Unit,
     onSeeAllClick: () -> Unit
 ) {
-    Column(modifier = Modifier.padding(vertical = 16.dp)) {
-        SectionHeader(
-            emoji = emoji,
-            title = title,
-            onSeeAllClick = onSeeAllClick
-        )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold
+                ),
+                color = TextPrimary
+            )
+            TextButton(onClick = onSeeAllClick) {
+                Text(
+                    text = "See All",
+                    color = AccentRed,
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = FontWeight.SemiBold
+                    )
+                )
+            }
+        }
         
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            items(albums.take(8)) { album ->
-                AlbumCard(
-                    album = album,
-                    onClick = { onAlbumClick(album) }
+            items(songs.take(10)) { song ->
+                SongCard(
+                    song = song,
+                    onClick = { onSongClick(song) }
                 )
             }
         }
@@ -1036,101 +1301,87 @@ private fun ModernAlbumSection(
 }
 
 @Composable
-private fun AlbumCard(
-    album: Album,
+private fun PlaylistSection(
+    title: String,
+    playlists: List<Playlist>,
+    onPlaylistClick: (Playlist) -> Unit,
+    onSeeAllClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold
+                ),
+                color = TextPrimary
+            )
+            TextButton(onClick = onSeeAllClick) {
+                Text(
+                    text = "See All",
+                    color = AccentRed,
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = FontWeight.SemiBold
+                    )
+                )
+            }
+        }
+        
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            items(playlists.take(8)) { playlist ->
+                PlaylistCard(
+                    playlist = playlist,
+                    onClick = { onPlaylistClick(playlist) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaylistCard(
+    playlist: Playlist,
     onClick: () -> Unit
 ) {
     Column(
         modifier = Modifier
-            .width(150.dp)
+            .width(170.dp)
             .clickable(onClick = onClick)
     ) {
-        Box(
+        AsyncImage(
+            model = playlist.artworkUrl,
+            contentDescription = playlist.name,
+            contentScale = ContentScale.Crop,
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .clip(RoundedCornerShape(12.dp))
-                .shadow(6.dp, RoundedCornerShape(12.dp))
-        ) {
-            AsyncImage(
-                model = album.artworkUrl,
-                contentDescription = album.name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(10.dp))
-        
-        Text(
-            text = album.name,
-            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
         )
         
+        Spacer(modifier = Modifier.height(8.dp))
+        
         Text(
-            text = album.artist,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-            maxLines = 1,
+            text = playlist.name,
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontWeight = FontWeight.Medium
+            ),
+            color = TextPrimary,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
-    }
-}
-
-@Composable
-private fun SectionHeader(
-    emoji: String,
-    title: String,
-    subtitle: String? = null,
-    onSeeAllClick: (() -> Unit)? = null
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = emoji,
-                fontSize = 24.sp
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Column {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
-                if (subtitle != null) {
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                    )
-                }
-            }
-        }
-        
-        if (onSeeAllClick != null) {
-            TextButton(onClick = onSeeAllClick) {
-                Text(
-                    text = "See All",
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = AccentRed
-                )
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = AccentRed,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-        }
     }
 }
 

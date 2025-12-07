@@ -176,6 +176,34 @@ class LibraryViewModel @Inject constructor(
         }
     }
     
+    /**
+     * Remove a downloaded song (state: 0=not downloaded, 1=downloading, 2=downloaded)
+     */
+    fun removeDownload(song: Song) {
+        viewModelScope.launch {
+            songDao.updateDownloadState(song.id, 0, null)
+            // Note: Actual file deletion would happen in a download manager
+        }
+    }
+    
+    /**
+     * Remove song from library
+     */
+    fun removeSongFromLibrary(song: Song) {
+        viewModelScope.launch {
+            songDao.setLiked(song.id, false)
+        }
+    }
+    
+    /**
+     * Delete playlist by entity
+     */
+    fun deletePlaylist(playlist: PlaylistEntity) {
+        viewModelScope.launch {
+            playlistDao.deleteById(playlist.id)
+        }
+    }
+    
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
     }

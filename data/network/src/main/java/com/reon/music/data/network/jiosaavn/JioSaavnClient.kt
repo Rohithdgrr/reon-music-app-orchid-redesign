@@ -272,11 +272,24 @@ class JioSaavnClient @Inject constructor(
             
             val streamUrl = encryptedUrl?.let { JioSaavnDecryptor.decrypt(it) }
             
+            // Extract metadata fields
+            val genre = (moreInfo?.get("genre")?.jsonPrimitive?.content 
+                ?: json["genre"]?.jsonPrimitive?.content 
+                ?: moreInfo?.get("primary_genres")?.jsonPrimitive?.content)?.decodeHtml() ?: ""
+            
+            val description = (moreInfo?.get("description")?.jsonPrimitive?.content
+                ?: json["description"]?.jsonPrimitive?.content)?.decodeHtml() ?: ""
+            
+            val type = (moreInfo?.get("music")?.jsonPrimitive?.content
+                ?: moreInfo?.get("song_type")?.jsonPrimitive?.content
+                ?: json["type"]?.jsonPrimitive?.content)?.decodeHtml() ?: "Single"
+            
             Song(
                 id = id,
                 title = title,
                 artist = artist,
                 album = (json["album"] ?: moreInfo?.get("album"))?.jsonPrimitive?.content?.decodeHtml() ?: "",
+                albumId = (json["album_id"] ?: moreInfo?.get("album_id"))?.jsonPrimitive?.content,
                 duration = (json["duration"] ?: moreInfo?.get("duration"))?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
                 artworkUrl = json["image"]?.jsonPrimitive?.content?.toHighQualityImage(),
                 streamUrl = streamUrl,
@@ -286,7 +299,10 @@ class JioSaavnClient @Inject constructor(
                 year = json["year"]?.jsonPrimitive?.content ?: "",
                 releaseDate = (json["release_date"] ?: moreInfo?.get("release_date"))?.jsonPrimitive?.content ?: "",
                 is320kbps = (json["320kbps"] ?: moreInfo?.get("320kbps"))?.jsonPrimitive?.content == "true",
-                permaUrl = json["perma_url"]?.jsonPrimitive?.content
+                permaUrl = json["perma_url"]?.jsonPrimitive?.content,
+                genre = genre,
+                description = description,
+                type = type
             )
         } catch (e: Exception) {
             null
@@ -295,16 +311,25 @@ class JioSaavnClient @Inject constructor(
     
     private fun parseAlbumFromJson(json: JsonObject): Album? {
         return try {
+            val moreInfo = json["more_info"]?.jsonObject
+            val description = (moreInfo?.get("description")?.jsonPrimitive?.content
+                ?: json["description"]?.jsonPrimitive?.content)?.decodeHtml() ?: ""
+            val genre = (moreInfo?.get("genre")?.jsonPrimitive?.content
+                ?: json["genre"]?.jsonPrimitive?.content
+                ?: moreInfo?.get("primary_genres")?.jsonPrimitive?.content)?.decodeHtml() ?: ""
+            
             Album(
                 id = json["id"]?.jsonPrimitive?.content ?: return null,
                 name = json["title"]?.jsonPrimitive?.content?.decodeHtml() ?: "",
                 artist = json["subtitle"]?.jsonPrimitive?.content?.decodeHtml() ?: "",
                 artworkUrl = json["image"]?.jsonPrimitive?.content?.toHighQualityImage(),
-                year = json["year"]?.jsonPrimitive?.content ?: json["more_info"]?.jsonObject?.get("year")?.jsonPrimitive?.content ?: "",
+                year = json["year"]?.jsonPrimitive?.content ?: moreInfo?.get("year")?.jsonPrimitive?.content ?: "",
                 songCount = json["list"]?.jsonArray?.size ?: 0,
                 songs = json["list"]?.jsonArray?.mapNotNull { parseSongFromJson(it.jsonObject) } ?: emptyList(),
                 permaUrl = json["perma_url"]?.jsonPrimitive?.content,
-                language = json["more_info"]?.jsonObject?.get("language")?.jsonPrimitive?.content?.capitalize() ?: ""
+                language = moreInfo?.get("language")?.jsonPrimitive?.content?.capitalize() ?: "",
+                description = description,
+                genre = genre
             )
         } catch (e: Exception) {
             null
@@ -361,6 +386,22 @@ class JioSaavnClient @Inject constructor(
     
     private fun parseArtistFromJson(json: JsonObject): Artist? {
         return try {
+            val moreInfo = json["more_info"]?.jsonObject
+            val description = (moreInfo?.get("description")?.jsonPrimitive?.content
+                ?: json["description"]?.jsonPrimitive?.content)?.decodeHtml() ?: ""
+            
+            // Extract genres from various possible fields
+            val genres = mutableListOf<String>()
+            moreInfo?.get("genres")?.jsonArray?.forEach { genre ->
+                genre.jsonPrimitive.content?.let { genres.add(it.decodeHtml()) }
+            }
+            moreInfo?.get("primary_genres")?.jsonPrimitive?.content?.let { 
+                genres.add(it.decodeHtml()) 
+            }
+            json["genre"]?.jsonPrimitive?.content?.let { 
+                genres.add(it.decodeHtml()) 
+            }
+            
             Artist(
                 id = json["id"]?.jsonPrimitive?.content ?: json["artistId"]?.jsonPrimitive?.content ?: return null,
                 name = json["name"]?.jsonPrimitive?.content?.decodeHtml() 
@@ -369,7 +410,9 @@ class JioSaavnClient @Inject constructor(
                 followerCount = json["follower_count"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
                 topSongs = json["topSongs"]?.jsonArray?.mapNotNull { parseSongFromJson(it.jsonObject) } ?: emptyList(),
                 albums = json["topAlbums"]?.jsonArray?.mapNotNull { parseAlbumFromSearchJson(it.jsonObject) } ?: emptyList(),
-                permaUrl = json["perma_url"]?.jsonPrimitive?.content ?: json["url"]?.jsonPrimitive?.content
+                permaUrl = json["perma_url"]?.jsonPrimitive?.content ?: json["url"]?.jsonPrimitive?.content,
+                description = description,
+                genres = genres.distinct()
             )
         } catch (e: Exception) {
             null

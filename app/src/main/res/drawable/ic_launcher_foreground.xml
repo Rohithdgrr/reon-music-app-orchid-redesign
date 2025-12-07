@@ -1,15 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="48dp"
-    android:height="48dp"
-    android:viewportWidth="48"
-    android:viewportHeight="48">
-    <!-- Background circle -->
-    <path
-        android:fillColor="#1DB954"
-        android:pathData="M24,24m-24,0a24,24 0,1 1,48 0a24,24 0,1 1,-48 0"/>
-    <!-- Music note icon -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M24,8v18.55c-0.98,-0.56 -2.11,-0.92 -3.33,-0.92c-3.68,0 -6.67,2.99 -6.67,6.67s2.99,6.67 6.67,6.67s6.67,-2.99 6.67,-6.67V14.67h6.67V8H24z"/>
-</vector>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <bitmap
+            android:src="@drawable/reon_logo"
+            android:gravity="center" />
+    </item>
+</layer-list>
