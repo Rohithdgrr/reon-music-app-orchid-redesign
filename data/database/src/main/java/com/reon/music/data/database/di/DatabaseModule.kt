@@ -13,6 +13,7 @@ import com.reon.music.data.database.dao.HistoryDao
 import com.reon.music.data.database.dao.LyricsDao
 import com.reon.music.data.database.dao.PlaylistDao
 import com.reon.music.data.database.dao.SongDao
+import com.reon.music.data.database.dao.YouTubeStreamCacheDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -56,5 +57,10 @@ object DatabaseModule {
     @Provides
     fun provideLyricsDao(database: ReonDatabase): LyricsDao {
         return database.lyricsDao()
+    }
+    
+    @Provides
+    fun provideYouTubeStreamCacheDao(database: ReonDatabase): YouTubeStreamCacheDao {
+        return database.youtubeStreamCacheDao()
     }
 }

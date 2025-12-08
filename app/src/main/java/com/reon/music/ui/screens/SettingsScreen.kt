@@ -135,6 +135,59 @@ fun SettingsScreen(
                 }
             }
             
+            // Data Saver Section (NEW - for low data usage)
+            item {
+                SettingsSection(title = "Data Saver") {
+                    SettingsCard {
+                        SettingsSwitchItem(
+                            icon = Icons.Outlined.DataSaverOn,
+                            title = "Data Saver Mode",
+                            subtitle = "Stream in lower quality to save data",
+                            checked = uiState.dataSaverEnabled,
+                            onCheckedChange = { settingsViewModel.setDataSaverEnabled(it) }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsItem(
+                            icon = Icons.Outlined.SignalCellularAlt,
+                            title = "Streaming Quality (Mobile)",
+                            subtitle = when (uiState.mobileStreamingQuality) {
+                                "low" -> "Low (96 kbps) - ~0.5 MB/min"
+                                "medium" -> "Medium (160 kbps) - ~1 MB/min"
+                                "high" -> "High (320 kbps) - ~2 MB/min"
+                                else -> "Auto (based on network)"
+                            },
+                            onClick = { /* Quality picker for mobile */ }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsItem(
+                            icon = Icons.Outlined.Wifi,
+                            title = "Streaming Quality (Wi-Fi)",
+                            subtitle = when (uiState.wifiStreamingQuality) {
+                                "low" -> "Low (96 kbps)"
+                                "medium" -> "Medium (160 kbps)"
+                                "high" -> "High (320 kbps)"
+                                else -> "Auto (highest available)"
+                            },
+                            onClick = { /* Quality picker for WiFi */ }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsSwitchItem(
+                            icon = Icons.Outlined.AutoAwesome,
+                            title = "Auto Quality",
+                            subtitle = "Adjust quality based on network speed",
+                            checked = uiState.autoQualityEnabled,
+                            onCheckedChange = { settingsViewModel.setAutoQualityEnabled(it) }
+                        )
+                    }
+                }
+            }
+            
             // Downloads Section
             item {
                 SettingsSection(title = "Downloads") {
@@ -191,9 +244,7 @@ fun SettingsScreen(
                             icon = Icons.Outlined.ColorLens,
                             title = "Theme Preset",
                             subtitle = uiState.themePresetId?.let { 
-                                com.reon.music.ui.theme.ThemePresets.getPresetById(it)?.let { preset ->
-                                    "${preset.emoji} ${preset.name}"
-                                }
+                                com.reon.music.ui.theme.ThemePresets.getPresetById(it)?.name
                             } ?: "System Default",
                             onClick = { showThemePresetDialog = true }
                         )

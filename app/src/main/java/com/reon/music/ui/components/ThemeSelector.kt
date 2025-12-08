@@ -20,6 +20,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,11 +30,30 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.reon.music.ui.theme.ThemePreset
 import com.reon.music.ui.theme.ThemePresets
+
+/**
+ * Get Material Icon for theme based on iconName
+ */
+private fun getThemeIcon(iconName: String?): ImageVector {
+    return when (iconName) {
+        "forest" -> Icons.Outlined.Forest
+        "water" -> Icons.Outlined.WaterDrop
+        "sun" -> Icons.Outlined.WbSunny
+        "star" -> Icons.Outlined.Star
+        "flower" -> Icons.Outlined.LocalFlorist
+        "park" -> Icons.Outlined.Park
+        "night" -> Icons.Outlined.NightsStay
+        "heart" -> Icons.Outlined.Favorite
+        else -> Icons.Outlined.Palette
+    }
+}
+
 
 /**
  * Theme Selector Dialog
@@ -170,10 +191,12 @@ private fun ThemePresetCard(
             
             Spacer(modifier = Modifier.height(12.dp))
             
-            // Emoji
-            Text(
-                text = preset?.emoji ?: "🎨",
-                style = MaterialTheme.typography.headlineMedium
+            // Theme Icon
+            Icon(
+                imageVector = getThemeIcon(preset?.iconName),
+                contentDescription = preset?.name ?: "Default",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(32.dp)
             )
             
             Spacer(modifier = Modifier.height(4.dp))

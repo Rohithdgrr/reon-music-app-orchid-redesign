@@ -36,7 +36,10 @@ object NetworkModule {
     
     @Provides
     @Singleton
-    fun provideHttpClient(json: Json): HttpClient = HttpClient(OkHttp) {
+    fun provideHttpClient(
+        json: Json,
+        @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context
+    ): HttpClient = HttpClient(OkHttp) {
         expectSuccess = false
         
         engine {
@@ -44,6 +47,11 @@ object NetworkModule {
                 connectTimeout(30, TimeUnit.SECONDS)
                 readTimeout(30, TimeUnit.SECONDS)
                 writeTimeout(30, TimeUnit.SECONDS)
+                
+                // Add cache for API responses (50MB)
+                val cacheDir = java.io.File(context.cacheDir, "http_cache")
+                val cacheSize = 50L * 1024L * 1024L // 50 MB
+                cache(okhttp3.Cache(cacheDir, cacheSize))
             }
         }
         
@@ -64,6 +72,8 @@ object NetworkModule {
         
         defaultRequest {
             headers.append("Accept", "application/json")
+            // Add cache control headers for better caching
+            headers.append("Cache-Control", "max-age=300, stale-while-revalidate=600")
         }
     }
 }

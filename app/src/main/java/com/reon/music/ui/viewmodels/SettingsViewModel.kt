@@ -43,6 +43,7 @@ data class SettingsUiState(
     // Downloads
     val downloadQuality: AudioQuality = AudioQuality.HIGH,
     val downloadWifiOnly: Boolean = true,
+    val offlineModeEnabled: Boolean = false,
     
     // Smart Offline Cache
     val autoCacheEnabled: Boolean = true,
@@ -82,7 +83,13 @@ data class SettingsUiState(
     // Auto-Update (NEW)
     val autoUpdateEnabled: Boolean = true,
     val autoUpdateFrequency: Int = 60, // minutes
-    val autoUpdateWifiOnly: Boolean = true
+    val autoUpdateWifiOnly: Boolean = true,
+    
+    // Data Saver (NEW)
+    val dataSaverEnabled: Boolean = false,
+    val mobileStreamingQuality: String = "medium", // "low", "medium", "high", "auto"
+    val wifiStreamingQuality: String = "high",
+    val autoQualityEnabled: Boolean = true
 )
 
 @HiltViewModel
@@ -271,6 +278,13 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { userPreferences.setDownloadWifiOnly(enabled) }
     }
     
+    fun setOfflineModeEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(offlineModeEnabled = enabled)
+            userPreferences.setOfflineModeEnabled(enabled)
+        }
+    }
+    
     // Content settings
     fun setPreferredSource(source: com.reon.music.core.preferences.MusicSource) {
         viewModelScope.launch { userPreferences.setPreferredSource(source) }
@@ -411,6 +425,31 @@ class SettingsViewModel @Inject constructor(
     fun setVoiceCommands(enabled: Boolean) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(voiceCommands = enabled)
+        }
+    }
+    
+    // Data Saver
+    fun setDataSaverEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(dataSaverEnabled = enabled)
+        }
+    }
+    
+    fun setMobileStreamingQuality(quality: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(mobileStreamingQuality = quality)
+        }
+    }
+    
+    fun setWifiStreamingQuality(quality: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(wifiStreamingQuality = quality)
+        }
+    }
+    
+    fun setAutoQualityEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(autoQualityEnabled = enabled)
         }
     }
 }

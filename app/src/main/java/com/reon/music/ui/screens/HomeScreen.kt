@@ -81,10 +81,18 @@ fun HomeScreen(
     val uiState by homeViewModel.uiState.collectAsState()
     val scrollState = rememberLazyListState()
     val pullToRefreshState = rememberPullToRefreshState()
+    val context = androidx.compose.ui.platform.LocalContext.current
     
-    // Category filter state
+    // Category filter state (vertical filters)
     var selectedCategory by remember { mutableStateOf("All") }
-    val categories = listOf("All", "Relax", "Sleep", "Energize", "Focus", "Workout")
+    val categories = listOf(
+        "All", "Telugu", "Hindi", "Tamil", "Indian", "International",
+        "Love", "Sad", "Party", "Happy", "Motivation", "Chill", "Random"
+    )
+    
+    // Song options sheet state
+    var showSongOptions by remember { mutableStateOf(false) }
+    var selectedSong by remember { mutableStateOf<Song?>(null) }
     
     LaunchedEffect(pullToRefreshState.isRefreshing) {
         if (pullToRefreshState.isRefreshing) {
@@ -100,23 +108,12 @@ fun HomeScreen(
             .nestedScroll(pullToRefreshState.nestedScrollConnection)
     ) {
         if (uiState.isLoading && !pullToRefreshState.isRefreshing) {
-            // Skeleton loaders
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 100.dp)
-            ) {
-                item { Spacer(modifier = Modifier.height(16.dp)) }
-                items(5) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(100.dp)
-                            .padding(horizontal = 20.dp, vertical = 8.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(SurfaceLight)
-                    )
-                }
-            }
+            // Enhanced skeleton loaders with shimmer effect
+            HomeScreenSkeleton(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = 16.dp)
+            )
         } else {
             LazyColumn(
                 state = scrollState,
@@ -128,17 +125,18 @@ fun HomeScreen(
                     SimpMusicHeader(
                         greeting = getGreeting(),
                         onNotificationsClick = { /* TODO */ },
-                        onHistoryClick = { /* TODO */ },
+                        onHistoryClick = { onSeeAllClick("recent") },
                         onSettingsClick = onSettingsClick
                     )
                 }
                 
-                // Category Chips
+                // History shortcut + vertical filters
                 item {
-                    CategoryChipsRow(
+                    CategoryListVertical(
                         categories = categories,
                         selectedCategory = selectedCategory,
-                        onCategorySelected = { selectedCategory = it }
+                        onCategorySelected = { selectedCategory = it },
+                        onHistoryClick = { onSeeAllClick("recent") }
                     )
                 }
                 
@@ -192,7 +190,7 @@ fun HomeScreen(
                 if (uiState.teluguSongs.isNotEmpty()) {
                     item {
                         LanguageSection(
-                            title = "🎬 Telugu Hits",
+                            title = "Telugu Hits",
                             songs = uiState.teluguSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("telugu") }
@@ -204,7 +202,7 @@ fun HomeScreen(
                 if (uiState.hindiSongs.isNotEmpty()) {
                     item {
                         LanguageSection(
-                            title = "🇮🇳 Hindi Hits",
+                            title = "Hindi Hits",
                             songs = uiState.hindiSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("hindi") }
@@ -216,7 +214,7 @@ fun HomeScreen(
                 if (uiState.tamilSongs.isNotEmpty()) {
                     item {
                         LanguageSection(
-                            title = "🎵 Tamil Hits",
+                            title = "Tamil Hits",
                             songs = uiState.tamilSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("tamil") }
@@ -228,7 +226,7 @@ fun HomeScreen(
                 if (uiState.punjabiSongs.isNotEmpty()) {
                     item {
                         LanguageSection(
-                            title = "🎧 Punjabi Hits",
+                            title = "Punjabi Hits",
                             songs = uiState.punjabiSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("punjabi") }
@@ -240,7 +238,7 @@ fun HomeScreen(
                 if (uiState.banjaraSongs.isNotEmpty()) {
                     item {
                         LanguageSection(
-                            title = "🪘 ST Banjara/Lambadi",
+                            title = "ST Banjara/Lambadi",
                             songs = uiState.banjaraSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("banjara") }
@@ -254,7 +252,7 @@ fun HomeScreen(
                 if (uiState.internationalHits.isNotEmpty()) {
                     item {
                         LanguageSection(
-                            title = "🌍 International Hits",
+                            title = "International Hits",
                             songs = uiState.internationalHits,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("international") }
@@ -266,7 +264,7 @@ fun HomeScreen(
                 if (uiState.englishSongs.isNotEmpty()) {
                     item {
                         LanguageSection(
-                            title = "🎤 English Songs",
+                            title = "English Songs",
                             songs = uiState.englishSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("english") }
@@ -280,7 +278,7 @@ fun HomeScreen(
                 if (uiState.allTimeFavorites.isNotEmpty()) {
                     item {
                         ContentSection(
-                            title = "❤️ All Time Favorites",
+                            title = "All Time Favorites",
                             songs = uiState.allTimeFavorites,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("alltimefavorite") }
@@ -292,7 +290,7 @@ fun HomeScreen(
                 if (uiState.mostListeningSongs.isNotEmpty()) {
                     item {
                         ContentSection(
-                            title = "🔥 Most Listening",
+                            title = "Most Listening",
                             songs = uiState.mostListeningSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("mostlistening") }
@@ -300,12 +298,18 @@ fun HomeScreen(
                     }
                 }
                 
-                // Trending Now
+                // Trending Now (prioritize Banjara ST songs first)
                 if (uiState.trendingNowSongs.isNotEmpty()) {
                     item {
+                        val trendingSongs = remember(uiState.trendingNowSongs) {
+                            uiState.trendingNowSongs.sortedByDescending { song ->
+                                song.title.contains("banjara", ignoreCase = true) ||
+                                        song.album.contains("banjara", ignoreCase = true)
+                            }
+                        }
                         ContentSection(
-                            title = "📈 Trending Now",
-                            songs = uiState.trendingNowSongs,
+                            title = "Trending Now",
+                            songs = trendingSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("trending") }
                         )
@@ -330,7 +334,7 @@ fun HomeScreen(
                 if (uiState.romanticSongs.isNotEmpty()) {
                     item {
                         ContentSection(
-                            title = "💕 Romantic Songs",
+                            title = "Romantic Songs",
                             songs = uiState.romanticSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("romantic") }
@@ -342,7 +346,7 @@ fun HomeScreen(
                 if (uiState.partySongs.isNotEmpty()) {
                     item {
                         ContentSection(
-                            title = "🎉 Party Hits",
+                            title = "Party Hits",
                             songs = uiState.partySongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("party") }
@@ -354,7 +358,7 @@ fun HomeScreen(
                 if (uiState.sadSongs.isNotEmpty()) {
                     item {
                         ContentSection(
-                            title = "😢 Sad Songs",
+                            title = "Sad Songs",
                             songs = uiState.sadSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("sad") }
@@ -366,7 +370,7 @@ fun HomeScreen(
                 if (uiState.lofiSongs.isNotEmpty()) {
                     item {
                         ContentSection(
-                            title = "🌙 Lo-Fi & Chill",
+                            title = "Lo-Fi & Chill",
                             songs = uiState.lofiSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("lofi") }
@@ -378,7 +382,7 @@ fun HomeScreen(
                 if (uiState.devotionalSongs.isNotEmpty()) {
                     item {
                         ContentSection(
-                            title = "🙏 Devotional",
+                            title = "Devotional",
                             songs = uiState.devotionalSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("devotional") }
@@ -392,7 +396,7 @@ fun HomeScreen(
                 if (uiState.arijitSinghSongs.isNotEmpty()) {
                     item {
                         ContentSection(
-                            title = "🎤 Arijit Singh",
+                            title = "Arijit Singh",
                             songs = uiState.arijitSinghSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("arijitsingh") }
@@ -404,7 +408,7 @@ fun HomeScreen(
                 if (uiState.arRahmanSongs.isNotEmpty()) {
                     item {
                         ContentSection(
-                            title = "🎹 A.R. Rahman",
+                            title = "A.R. Rahman",
                             songs = uiState.arRahmanSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("arrahman") }
@@ -416,7 +420,7 @@ fun HomeScreen(
                 if (uiState.spbSongs.isNotEmpty()) {
                     item {
                         ContentSection(
-                            title = "🎶 S.P. Balasubrahmanyam",
+                            title = "S.P. Balasubrahmanyam",
                             songs = uiState.spbSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("spb") }
@@ -428,7 +432,7 @@ fun HomeScreen(
                 if (uiState.dspSongs.isNotEmpty()) {
                     item {
                         ContentSection(
-                            title = "🎧 Devi Sri Prasad",
+                            title = "Devi Sri Prasad",
                             songs = uiState.dspSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("dsp") }
@@ -440,7 +444,7 @@ fun HomeScreen(
                 if (uiState.thamanSongs.isNotEmpty()) {
                     item {
                         ContentSection(
-                            title = "🔊 Thaman S",
+                            title = "Thaman S",
                             songs = uiState.thamanSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("thaman") }
@@ -453,7 +457,7 @@ fun HomeScreen(
                 if (uiState.newReleases.isNotEmpty()) {
                     item {
                         ContentSection(
-                            title = "🆕 New Releases",
+                            title = "New Releases",
                             songs = uiState.newReleases,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("new") }
@@ -467,7 +471,7 @@ fun HomeScreen(
                 if (uiState.featuredPlaylists.isNotEmpty()) {
                     item {
                         PlaylistSection(
-                            title = "📀 Featured Playlists",
+                            title = "Featured Playlists",
                             playlists = uiState.featuredPlaylists,
                             onPlaylistClick = onPlaylistClick,
                             onSeeAllClick = { onSeeAllClick("featured") }
@@ -479,7 +483,7 @@ fun HomeScreen(
                 if (uiState.teluguPlaylistCollection.isNotEmpty()) {
                     item {
                         PlaylistSection(
-                            title = "🎬 Telugu Playlists",
+                            title = "Telugu Playlists",
                             playlists = uiState.teluguPlaylistCollection,
                             onPlaylistClick = onPlaylistClick,
                             onSeeAllClick = { onSeeAllClick("teluguplaylists") }
@@ -491,7 +495,7 @@ fun HomeScreen(
                 if (uiState.hindiPlaylistCollection.isNotEmpty()) {
                     item {
                         PlaylistSection(
-                            title = "🇮🇳 Hindi Playlists",
+                            title = "Hindi Playlists",
                             playlists = uiState.hindiPlaylistCollection,
                             onPlaylistClick = onPlaylistClick,
                             onSeeAllClick = { onSeeAllClick("hindiplaylists") }
@@ -503,7 +507,7 @@ fun HomeScreen(
                 if (uiState.tamilPlaylistCollection.isNotEmpty()) {
                     item {
                         PlaylistSection(
-                            title = "🎵 Tamil Playlists",
+                            title = "Tamil Playlists",
                             playlists = uiState.tamilPlaylistCollection,
                             onPlaylistClick = onPlaylistClick,
                             onSeeAllClick = { onSeeAllClick("tamilplaylists") }
@@ -517,7 +521,7 @@ fun HomeScreen(
                 if (uiState.kannadaSongs.isNotEmpty()) {
                     item {
                         LanguageSection(
-                            title = "🏔️ Kannada Songs",
+                            title = "Kannada Songs",
                             songs = uiState.kannadaSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("kannada") }
@@ -529,7 +533,7 @@ fun HomeScreen(
                 if (uiState.malayalamSongs.isNotEmpty()) {
                     item {
                         LanguageSection(
-                            title = "🌴 Malayalam Songs",
+                            title = "Malayalam Songs",
                             songs = uiState.malayalamSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("malayalam") }
@@ -541,7 +545,7 @@ fun HomeScreen(
                 if (uiState.marathiSongs.isNotEmpty()) {
                     item {
                         LanguageSection(
-                            title = "🏯 Marathi Songs",
+                            title = "Marathi Songs",
                             songs = uiState.marathiSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("marathi") }
@@ -553,7 +557,7 @@ fun HomeScreen(
                 if (uiState.bengaliSongs.isNotEmpty()) {
                     item {
                         LanguageSection(
-                            title = "🎭 Bengali Songs",
+                            title = "Bengali Songs",
                             songs = uiState.bengaliSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("bengali") }
@@ -565,7 +569,7 @@ fun HomeScreen(
                 if (uiState.bhojpuriSongs.isNotEmpty()) {
                     item {
                         LanguageSection(
-                            title = "🪘 Bhojpuri Songs",
+                            title = "Bhojpuri Songs",
                             songs = uiState.bhojpuriSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("bhojpuri") }
@@ -577,7 +581,7 @@ fun HomeScreen(
                 if (uiState.gujaratiSongs.isNotEmpty()) {
                     item {
                         LanguageSection(
-                            title = "🦚 Gujarati Songs",
+                            title = "Gujarati Songs",
                             songs = uiState.gujaratiSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("gujarati") }
@@ -589,7 +593,7 @@ fun HomeScreen(
                 if (uiState.rajasthaniSongs.isNotEmpty()) {
                     item {
                         LanguageSection(
-                            title = "🏜️ Rajasthani Folk",
+                            title = "Rajasthani Folk",
                             songs = uiState.rajasthaniSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("rajasthani") }
@@ -603,6 +607,46 @@ fun HomeScreen(
         PullToRefreshContainer(
             state = pullToRefreshState,
             modifier = Modifier.align(Alignment.TopCenter)
+        )
+    }
+    
+    // Song Options Bottom Sheet
+    if (showSongOptions && selectedSong != null) {
+        SongOptionsSheet(
+            song = selectedSong!!,
+            isDownloaded = false,
+            isLiked = false,
+            onDismiss = { showSongOptions = false },
+            onPlay = {
+                playerViewModel.playSong(selectedSong!!)
+                showSongOptions = false
+            },
+            onPlayNext = {
+                playerViewModel.addToQueue(selectedSong!!, playNext = true)
+                showSongOptions = false
+            },
+            onAddToQueue = {
+                playerViewModel.addToQueue(selectedSong!!)
+                showSongOptions = false
+            },
+            onAddToPlaylist = {
+                // TODO: Show playlist picker
+                showSongOptions = false
+            },
+            onDownload = {
+                // TODO: Start download
+                showSongOptions = false
+            },
+            onShare = {
+                val sendIntent = android.content.Intent().apply {
+                    action = android.content.Intent.ACTION_SEND
+                    putExtra(android.content.Intent.EXTRA_TEXT, 
+                        "Listen to ${selectedSong!!.title} by ${selectedSong!!.artist}")
+                    type = "text/plain"
+                }
+                context.startActivity(android.content.Intent.createChooser(sendIntent, "Share Song"))
+                showSongOptions = false
+            }
         )
     }
 }
@@ -668,34 +712,63 @@ private fun SimpMusicHeader(
 }
 
 @Composable
-private fun CategoryChipsRow(
+private fun CategoryListVertical(
     categories: List<String>,
     selectedCategory: String,
-    onCategorySelected: (String) -> Unit
+    onCategorySelected: (String) -> Unit,
+    onHistoryClick: () -> Unit
 ) {
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 12.dp)
     ) {
-        items(categories) { category ->
-            FilterChip(
-                selected = category == selectedCategory,
-                onClick = { onCategorySelected(category) },
-                label = {
-                    Text(
-                        text = category,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = if (category == selectedCategory) FontWeight.Bold else FontWeight.Normal
-                    )
-                },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = ChipSelectedBg,
-                    selectedLabelColor = Color.White,
-                    containerColor = ChipUnselectedBg,
-                    labelColor = TextPrimary
-                ),
-                shape = RoundedCornerShape(20.dp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Filters",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = TextPrimary
             )
+            TextButton(onClick = onHistoryClick) {
+                Icon(Icons.Default.History, contentDescription = null, tint = AccentRed)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("History", color = AccentRed, fontWeight = FontWeight.SemiBold)
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 140.dp, max = 240.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(categories) { category ->
+                FilterChip(
+                    selected = category == selectedCategory,
+                    onClick = { onCategorySelected(category) },
+                    label = {
+                        Text(
+                            text = category,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (category == selectedCategory) FontWeight.Bold else FontWeight.Normal
+                        )
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = ChipSelectedBg,
+                        selectedLabelColor = Color.White,
+                        containerColor = ChipUnselectedBg,
+                        labelColor = TextPrimary
+                    ),
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     }
 }
@@ -1113,22 +1186,70 @@ private fun LanguageSection(
 @Composable
 private fun SongCard(
     song: Song,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onMoreClick: (() -> Unit)? = null,
+    isRectangular: Boolean = false
 ) {
     Column(
         modifier = Modifier
-            .width(150.dp)
+            .width(if (isRectangular) 180.dp else 150.dp)
             .clickable(onClick = onClick)
     ) {
-        AsyncImage(
-            model = song.getHighQualityArtwork(),
-            contentDescription = song.title,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .clip(RoundedCornerShape(12.dp))
-        )
+        Box {
+            AsyncImage(
+                model = song.getHighQualityArtwork(),
+                contentDescription = song.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(if (isRectangular) 16f/9f else 1f)
+                    .clip(RoundedCornerShape(12.dp))
+            )
+            
+            // Duration badge
+            if (song.duration > 0) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                        .background(
+                            color = Color.Black.copy(alpha = 0.7f),
+                            shape = RoundedCornerShape(4.dp)
+                        )
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = formatDuration(song.duration),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        fontSize = 10.sp
+                    )
+                }
+            }
+            
+            // More options button
+            if (onMoreClick != null) {
+                IconButton(
+                    onClick = onMoreClick,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "More Options",
+                        tint = Color.White,
+                        modifier = Modifier
+                            .background(
+                                color = Color.Black.copy(alpha = 0.4f),
+                                shape = CircleShape
+                            )
+                            .padding(4.dp)
+                            .size(16.dp)
+                    )
+                }
+            }
+        }
         
         Spacer(modifier = Modifier.height(8.dp))
         
@@ -1151,10 +1272,10 @@ private fun SongCard(
             overflow = TextOverflow.Ellipsis
         )
         
-        // Show album/movie name if available
+        // Show album/movie name if available (without emoji)
         if (song.album.isNotBlank()) {
             Text(
-                text = "🎬 ${song.album}",
+                text = song.album,
                 style = MaterialTheme.typography.labelSmall,
                 color = AccentRed.copy(alpha = 0.8f),
                 maxLines = 1,
@@ -1162,6 +1283,13 @@ private fun SongCard(
             )
         }
     }
+}
+
+// Helper function to format duration
+private fun formatDuration(seconds: Int): String {
+    val minutes = seconds / 60
+    val secs = seconds % 60
+    return String.format("%d:%02d", minutes, secs)
 }
 
 @Composable
@@ -1219,6 +1347,9 @@ private fun ArtistCard(
     artist: Artist,
     onClick: () -> Unit
 ) {
+    val displayArt = artist.artworkUrl ?: artist.topSongs.firstOrNull()?.getHighQualityArtwork()
+        ?: artist.topSongs.firstOrNull()?.artworkUrl
+    
     Column(
         modifier = Modifier
             .width(100.dp)
@@ -1226,7 +1357,7 @@ private fun ArtistCard(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         AsyncImage(
-            model = artist.artworkUrl,
+            model = displayArt,
             contentDescription = artist.name,
             contentScale = ContentScale.Crop,
             modifier = Modifier

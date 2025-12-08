@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import java.util.Calendar
 
 data class SearchUiState(
     val query: String = "",
@@ -66,7 +67,8 @@ class SearchViewModel @Inject constructor(
         private const val TAG = "SearchViewModel"
         private const val DEBOUNCE_MS = 400L
         private const val SUGGESTION_DEBOUNCE_MS = 300L
-        private const val INITIAL_SEARCH_LIMIT = 50
+        private const val INITIAL_SEARCH_LIMIT = 120
+        private const val MAX_RESULTS = 400
         private const val PAGE_SIZE = 30
     }
     
@@ -225,6 +227,7 @@ class SearchViewModel @Inject constructor(
                 .sortedByDescending { song ->
                     calculateRelevanceScore(query, song)
                 }
+                .take(MAX_RESULTS)
             
             allSearchResults.addAll(uniqueSongs)
             
@@ -321,6 +324,7 @@ class SearchViewModel @Inject constructor(
     
     /**
      * Calculate relevance score for sorting results
+     * Enhanced algorithm for better ranking
      */
     private fun calculateRelevanceScore(query: String, song: Song): Int {
         var score = 0
@@ -329,27 +333,71 @@ class SearchViewModel @Inject constructor(
         val lowerArtist = song.artist.lowercase()
         val lowerAlbum = song.album.lowercase()
         
-        // Exact title match
-        if (lowerTitle == lowerQuery) score += 100
-        else if (lowerTitle.contains(lowerQuery)) score += 50
+        // === TITLE MATCHING (Highest Priority) ===
+        when {
+            lowerTitle == lowerQuery -> score += 200 // Exact match
+            lowerTitle.startsWith(lowerQuery) -> score += 150 // Starts with query
+            lowerTitle.contains(" $lowerQuery ") -> score += 120 // Word boundary match
+            lowerTitle.contains(lowerQuery) -> score += 80 // Contains query
+        }
         
-        // Artist match
-        if (lowerArtist == lowerQuery) score += 80
-        else if (lowerArtist.contains(lowerQuery)) score += 40
+        // === ARTIST MATCHING ===
+        when {
+            lowerArtist == lowerQuery -> score += 160 // Exact artist match
+            lowerArtist.startsWith(lowerQuery) -> score += 110 // Artist starts with query
+            lowerArtist.contains(lowerQuery) -> score += 60 // Artist contains query
+        }
         
-        // Album/Movie match
-        if (lowerAlbum == lowerQuery) score += 70
-        else if (lowerAlbum.contains(lowerQuery)) score += 35
+        // === ALBUM/MOVIE MATCHING ===
+        when {
+            lowerAlbum == lowerQuery -> score += 140 // Exact album match
+            lowerAlbum.startsWith(lowerQuery) -> score += 90 // Album starts with query
+            lowerAlbum.contains(lowerQuery) -> score += 50 // Album contains query
+        }
         
-        // Boost for high view count
-        score += (song.viewCount / 1000000).toInt().coerceAtMost(30)
+        // === POPULARITY SCORING ===
+        // View count (normalized, max 50 points)
+        val viewScore = (song.viewCount / 1000000).toInt().coerceAtMost(50)
+        score += viewScore
         
-        // Boost for high quality
-        if (song.is320kbps) score += 10
+        // Like count (normalized, max 30 points)
+        val likeScore = (song.likeCount / 100000).toInt().coerceAtMost(30)
+        score += likeScore
         
-        // Boost for Indian languages
+        // Channel subscriber count (max 25 points)
+        val channelScore = (song.channelSubscriberCount / 1000000).toInt().coerceAtMost(25)
+        score += channelScore
+        
+        // === QUALITY SCORING ===
+        if (song.is320kbps) score += 20 // High quality audio
+        if (song.quality.contains("HD", ignoreCase = true)) score += 15
+        if (song.quality.contains("4K", ignoreCase = true)) score += 25
+        
+        // === LANGUAGE PREFERENCE ===
         val language = song.language.lowercase()
-        if (INDIAN_LANGUAGES.contains(language)) score += 15
+        when {
+            language.contains("telugu") -> score += 25 // Telugu highest priority
+            language.contains("hindi") -> score += 20 // Hindi second
+            language.contains("tamil") -> score += 18 // Tamil third
+            INDIAN_LANGUAGES.contains(language) -> score += 15 // Other Indian languages
+        }
+        
+        // Prefer songs with richer metadata (album + artist present)
+        if (song.album.isNotBlank()) score += 10
+        if (song.artist.isNotBlank()) score += 10
+        
+        // === RECENCY BONUS ===
+        // Newer uploads get slight boost
+        if (song.uploadDate.isNotBlank()) {
+            try {
+                // Boost recent uploads (within last 6 months)
+                val uploadYear = song.uploadDate.takeLast(4).toIntOrNull() ?: 0
+                val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+                if (uploadYear >= currentYear - 1) score += 10
+            } catch (e: Exception) {
+                // Ignore parsing errors
+            }
+        }
         
         return score
     }

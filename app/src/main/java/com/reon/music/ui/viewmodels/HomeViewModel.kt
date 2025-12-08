@@ -18,6 +18,7 @@ import com.reon.music.core.preferences.UserPreferences
 import com.reon.music.data.database.dao.HistoryDao
 import com.reon.music.data.database.dao.SongDao
 import com.reon.music.data.repository.MusicRepository
+import com.reon.music.data.database.entities.SongEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,7 +43,7 @@ data class ChartSection(
 data class Genre(
     val id: String,
     val name: String,
-    val emoji: String,
+    val iconName: String,  // Icon identifier instead of emoji
     val color: Long
 )
 
@@ -221,18 +222,18 @@ data class HomeUiState(
 ) {
     companion object {
         val defaultGenres = listOf(
-            Genre("pop", "Pop", "🎵", 0xFFE91E63),
-            Genre("rock", "Rock", "🎸", 0xFF9C27B0),
-            Genre("hiphop", "Hip-Hop", "🎤", 0xFF673AB7),
-            Genre("classical", "Classical", "🎻", 0xFF3F51B5),
-            Genre("jazz", "Jazz", "🎷", 0xFF2196F3),
-            Genre("electronic", "Electronic", "🎧", 0xFF00BCD4),
-            Genre("folk", "Folk", "🪕", 0xFF4CAF50),
-            Genre("indie", "Indie", "🎹", 0xFFFF9800),
-            Genre("sufi", "Sufi", "🕌", 0xFF795548),
-            Genre("ghazal", "Ghazal", "💫", 0xFF607D8B),
-            Genre("devotional", "Devotional", "🙏", 0xFFCDDC39),
-            Genre("bollywood", "Bollywood", "🎬", 0xFFFF5722)
+            Genre("pop", "Pop", "music_note", 0xFFE91E63),
+            Genre("rock", "Rock", "guitar", 0xFF9C27B0),
+            Genre("hiphop", "Hip-Hop", "mic", 0xFF673AB7),
+            Genre("classical", "Classical", "piano", 0xFF3F51B5),
+            Genre("jazz", "Jazz", "saxophone", 0xFF2196F3),
+            Genre("electronic", "Electronic", "headphones", 0xFF00BCD4),
+            Genre("folk", "Folk", "acoustic", 0xFF4CAF50),
+            Genre("indie", "Indie", "keyboard", 0xFFFF9800),
+            Genre("sufi", "Sufi", "mosque", 0xFF795548),
+            Genre("ghazal", "Ghazal", "sparkle", 0xFF607D8B),
+            Genre("devotional", "Devotional", "prayer", 0xFFCDDC39),
+            Genre("bollywood", "Bollywood", "movie", 0xFFFF5722)
         )
     }
 }
@@ -320,6 +321,36 @@ class HomeViewModel @Inject constructor(
                     isLoading = false,
                     error = e.message ?: "Failed to load content"
                 )
+            }
+        }
+    }
+
+    /**
+     * Mark a playlist download in DB for offline availability
+     */
+    fun markPlaylistDownloaded(id: String, title: String, songs: List<Song>) {
+        viewModelScope.launch {
+            try {
+                val entities = songs.map { SongEntity.fromSong(it, isDownloaded = true) }
+                songDao.insertAll(entities)
+                Log.d(TAG, "Playlist '$title' marked downloaded (${entities.size} songs)")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to mark playlist downloaded", e)
+            }
+        }
+    }
+
+    /**
+     * Mark an artist collection download in DB
+     */
+    fun markArtistDownloaded(artist: Artist, songs: List<Song>) {
+        viewModelScope.launch {
+            try {
+                val entities = songs.map { SongEntity.fromSong(it, isDownloaded = true) }
+                songDao.insertAll(entities)
+                Log.d(TAG, "Artist '${artist.name}' download recorded (${entities.size} songs)")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to mark artist downloaded", e)
             }
         }
     }
@@ -511,19 +542,19 @@ class HomeViewModel @Inject constructor(
         val charts = mutableListOf<ChartSection>()
         
         if (state.top50Hindi.isNotEmpty()) {
-            charts.add(ChartSection("hindi", "🇮🇳 Top 50 Hindi", state.top50Hindi))
+            charts.add(ChartSection("hindi", "Top 50 Hindi", state.top50Hindi))
         }
         if (state.top50English.isNotEmpty()) {
-            charts.add(ChartSection("english", "🌍 Top 50 English", state.top50English))
+            charts.add(ChartSection("english", "Top 50 English", state.top50English))
         }
         if (state.top50Telugu.isNotEmpty()) {
-            charts.add(ChartSection("telugu", "🎬 Top 50 Telugu", state.top50Telugu))
+            charts.add(ChartSection("telugu", "Top 50 Telugu", state.top50Telugu))
         }
         if (state.top50Tamil.isNotEmpty()) {
-            charts.add(ChartSection("tamil", "🎵 Top 50 Tamil", state.top50Tamil))
+            charts.add(ChartSection("tamil", "Top 50 Tamil", state.top50Tamil))
         }
         if (state.top50Punjabi.isNotEmpty()) {
-            charts.add(ChartSection("punjabi", "🎧 Top 50 Punjabi", state.top50Punjabi))
+            charts.add(ChartSection("punjabi", "Top 50 Punjabi", state.top50Punjabi))
         }
         
         _uiState.value = state.copy(charts = charts)

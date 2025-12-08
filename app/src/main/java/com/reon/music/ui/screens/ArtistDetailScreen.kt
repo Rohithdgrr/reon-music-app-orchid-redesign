@@ -140,6 +140,12 @@ fun ArtistDetailScreen(
                         if (allArtistSongs.isNotEmpty()) {
                             playerViewModel.playQueue(allArtistSongs.shuffled())
                         }
+                    },
+                    onDownloadAllClick = {
+                        if (allArtistSongs.isNotEmpty()) {
+                            playerViewModel.downloadSongs(allArtistSongs)
+                            homeViewModel.markArtistDownloaded(artist, allArtistSongs)
+                        }
                     }
                 )
             }
@@ -278,21 +284,21 @@ private fun ArtistHeader(
     isFollowing: Boolean,
     onFollowClick: () -> Unit,
     onBackClick: () -> Unit,
-    onShuffleClick: () -> Unit
+    onShuffleClick: () -> Unit,
+    onDownloadAllClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(320.dp)
     ) {
-        // Background Image with Blur
+        // Background Image without blur for clarity
         AsyncImage(
             model = artist.artworkUrl,
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .fillMaxSize()
-                .blur(8.dp)
         )
         
         // Gradient Overlay
@@ -406,6 +412,23 @@ private fun ArtistHeader(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Shuffle")
+                }
+                
+                // Download All Button
+                Button(
+                    onClick = onDownloadAllClick,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AccentRed
+                    ),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Download,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Download All")
                 }
             }
         }

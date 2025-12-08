@@ -12,6 +12,7 @@ import com.reon.music.data.database.dao.HistoryDao
 import com.reon.music.data.database.dao.LyricsDao
 import com.reon.music.data.database.dao.PlaylistDao
 import com.reon.music.data.database.dao.SongDao
+import com.reon.music.data.database.dao.YouTubeStreamCacheDao
 import com.reon.music.data.database.entities.AlbumEntity
 import com.reon.music.data.database.entities.ArtistEntity
 import com.reon.music.data.database.entities.ListenHistoryEntity
@@ -19,6 +20,7 @@ import com.reon.music.data.database.entities.LyricsEntity
 import com.reon.music.data.database.entities.PlaylistEntity
 import com.reon.music.data.database.entities.PlaylistSongCrossRef
 import com.reon.music.data.database.entities.SongEntity
+import com.reon.music.data.database.entities.YouTubeStreamCacheEntity
 
 /**
  * Main Room Database for REON Music App
@@ -32,9 +34,10 @@ import com.reon.music.data.database.entities.SongEntity
         ArtistEntity::class,
         AlbumEntity::class,
         ListenHistoryEntity::class,
-        LyricsEntity::class
+        LyricsEntity::class,
+        YouTubeStreamCacheEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 abstract class ReonDatabase : RoomDatabase() {
@@ -43,6 +46,7 @@ abstract class ReonDatabase : RoomDatabase() {
     abstract fun playlistDao(): PlaylistDao
     abstract fun historyDao(): HistoryDao
     abstract fun lyricsDao(): LyricsDao
+    abstract fun youtubeStreamCacheDao(): YouTubeStreamCacheDao
     
     companion object {
         const val DATABASE_NAME = "reon_music.db"

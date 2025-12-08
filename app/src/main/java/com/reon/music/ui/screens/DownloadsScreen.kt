@@ -36,6 +36,8 @@ import java.io.File
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
 import com.reon.music.data.database.entities.PlaylistEntity
+import com.reon.music.ui.viewmodels.SettingsViewModel
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 
 // SimpMusic Color Palette
 private val BackgroundWhite = Color(0xFFFFFFFF)
@@ -57,12 +59,18 @@ enum class DownloadStatus {
 @Composable
 fun DownloadsScreen(
     libraryViewModel: LibraryViewModel = hiltViewModel(),
-    playerViewModel: PlayerViewModel = hiltViewModel()
+    playerViewModel: PlayerViewModel = hiltViewModel(),
+    settingsViewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by libraryViewModel.uiState.collectAsState()
     val playerState by playerViewModel.playerState.collectAsState()
+    val settingsState by settingsViewModel.uiState.collectAsState()
     
     val context = LocalContext.current
+    
+    // Tab state for grouping
+    var selectedTab by remember { mutableIntStateOf(0) }
+    val tabs = listOf("All Songs", "By Playlist", "By Artist")
     
     // Song options state
     var showSongOptions by remember { mutableStateOf(false) }
@@ -130,6 +138,68 @@ fun DownloadsScreen(
                     usedMB = calculateStorageUsed(uiState.downloadedSongs),
                     totalMB = 500 // Default or from settings
                 )
+                
+                // Offline Mode Toggle
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            text = "Offline Mode",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Play only downloaded songs",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                    }
+                    Switch(
+                        checked = settingsState.offlineModeEnabled,
+                        onCheckedChange = { settingsViewModel.setOfflineModeEnabled(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = AccentRed,
+                            uncheckedThumbColor = TextSecondary,
+                            uncheckedTrackColor = SurfaceLight
+                        )
+                    )
+                }
+                
+                // Tab Row for grouping
+                TabRow(
+                    selectedTabIndex = selectedTab,
+                    containerColor = BackgroundWhite,
+                    contentColor = AccentRed,
+                    indicator = { tabPositions ->
+                        TabRowDefaults.Indicator(
+                            modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                            color = AccentRed,
+                            height = 3.dp
+                        )
+                    }
+                ) {
+                    tabs.forEachIndexed { index, title ->
+                        Tab(
+                            selected = selectedTab == index,
+                            onClick = { selectedTab = index },
+                            text = {
+                                Text(
+                                    text = title,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (selectedTab == index) AccentRed else TextSecondary
+                                )
+                            }
+                        )
+                    }
+                }
                 
                 // Play All / Shuffle Buttons
                 Row(
@@ -337,7 +407,7 @@ private fun DownloadItem(
             // Show album/movie name if available
             if (song.album.isNotBlank()) {
                 Text(
-                    text = "🎬 ${song.album}",
+                    text = song.album,
                     style = MaterialTheme.typography.labelSmall,
                     color = AccentRed.copy(alpha = 0.7f),
                     maxLines = 1,
@@ -373,9 +443,9 @@ private fun DownloadStatusBadge(
     fileSize: String
 ) {
     val (text, color) = when (status) {
-        DownloadStatus.COMPLETED -> "✓ $fileSize" to AccentGreen
-        DownloadStatus.DOWNLOADING -> "⬇ 45%" to AccentOrange
-        DownloadStatus.FAILED -> "⚠ Failed" to AccentRed
+        DownloadStatus.COMPLETED -> "Done $fileSize" to AccentGreen
+        DownloadStatus.DOWNLOADING -> "Downloading 45%" to AccentOrange
+        DownloadStatus.FAILED -> "Failed" to AccentRed
     }
     
     Box(

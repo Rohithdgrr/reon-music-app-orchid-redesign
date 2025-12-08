@@ -8,6 +8,7 @@ package com.reon.music.services
 
 import android.content.Context
 import android.util.Log
+import androidx.room.Room
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
@@ -15,6 +16,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.URL
+import com.reon.music.data.database.ReonDatabase
+import com.reon.music.data.database.entities.DownloadState
 
 /**
  * Download Worker for downloading songs using WorkManager
@@ -83,6 +86,22 @@ class DownloadWorker(
             }
             
             Log.d(TAG, "Download completed: ${outputFile.absolutePath}")
+            
+            // Persist download state + path so offline playback works
+            try {
+                val db = Room.databaseBuilder(
+                    context.applicationContext,
+                    ReonDatabase::class.java,
+                    ReonDatabase.DATABASE_NAME
+                ).build()
+                db.songDao().updateDownloadState(
+                    songId = songId,
+                    state = DownloadState.DOWNLOADED,
+                    path = outputFile.absolutePath
+                )
+            } catch (dbError: Exception) {
+                Log.e(TAG, "Failed to update download state", dbError)
+            }
             
             // Return success with file path
             Result.success(

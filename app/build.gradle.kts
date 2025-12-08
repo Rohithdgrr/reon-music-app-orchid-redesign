@@ -156,6 +156,9 @@ dependencies {
     implementation(libs.hilt.work)
     ksp(libs.hilt.work.compiler)
     
+    // Room (for DownloadWorker direct database access)
+    implementation(libs.bundles.room)
+    
     // Palette for dynamic theming
     implementation(libs.palette)
     

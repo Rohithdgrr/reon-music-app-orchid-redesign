@@ -31,7 +31,14 @@ data class VideoMetadata(
     val likeCount: Long = 0L,
     val channelName: String = "",
     val channelId: String = "",
-    val uploadDate: String = ""
+    val uploadDate: String = "",
+    val description: String = "",
+    val composer: String? = null,
+    val lyricist: String? = null,
+    val producer: String? = null,
+    val musicLabel: String? = null,
+    val movieName: String? = null,
+    val releaseYear: Int? = null
 )
 
 /**
@@ -141,14 +148,79 @@ class YouTubeMusicClient @Inject constructor(
         val uploadDateRegex = """\"uploadDate\":\"([^\"]+)\"""".toRegex()
         val uploadDate = uploadDateRegex.find(html)?.groupValues?.get(1) ?: ""
         
+        // Extract description for metadata parsing
+        val descriptionRegex = """\"shortDescription\":\{\"simpleText\":\"([^\"]+)\"""".toRegex()
+        val description = descriptionRegex.find(html)?.groupValues?.get(1) ?: ""
+        
+        // Parse metadata from description
+        val metadata = parseMetadataFromDescription(description)
+        
         return VideoMetadata(
             videoId = videoId,
             viewCount = viewCount,
             likeCount = likeCount,
             channelName = channelName,
             channelId = channelId,
-            uploadDate = uploadDate
+            uploadDate = uploadDate,
+            description = description,
+            composer = metadata["composer"],
+            lyricist = metadata["lyricist"],
+            producer = metadata["producer"],
+            musicLabel = metadata["label"],
+            movieName = metadata["movie"],
+            releaseYear = metadata["year"]?.toIntOrNull()
         )
+    }
+    
+    /**
+     * Parse metadata from video description
+     * Extracts: Composer, Lyricist, Producer, Music Label, Movie Name, Year
+     */
+    private fun parseMetadataFromDescription(description: String): Map<String, String> {
+        if (description.isBlank()) return emptyMap()
+        
+        val metadata = mutableMapOf<String, String>()
+        
+        // Patterns for Indian music context (Bollywood, Regional)
+        val patterns = mapOf(
+            "composer" to listOf(
+                Regex("(?:Music|Composer|Composed by)[:\\s]+(.+?)(?:\\n|$)", RegexOption.IGNORE_CASE),
+                Regex("Music by[:\\s]+(.+?)(?:\\n|$)", RegexOption.IGNORE_CASE)
+            ),
+            "lyricist" to listOf(
+                Regex("(?:Lyrics|Lyricist|Lyrics by)[:\\s]+(.+?)(?:\\n|$)", RegexOption.IGNORE_CASE)
+            ),
+            "producer" to listOf(
+                Regex("(?:Producer|Produced by)[:\\s]+(.+?)(?:\\n|$)", RegexOption.IGNORE_CASE)
+            ),
+            "label" to listOf(
+                Regex("(?:Label|©)[:\\s]*(.+?(?:Records|Music|Entertainment))", RegexOption.IGNORE_CASE),
+                Regex("©.*?([A-Z][a-zA-Z ]+(?:Records|Music|Entertainment))", RegexOption.IGNORE_CASE)
+            ),
+            "singer" to listOf(
+                Regex("(?:Singer|Vocals|Voice)[:\\s]+(.+?)(?:\\n|$)", RegexOption.IGNORE_CASE)
+            ),
+            "movie" to listOf(
+                Regex("(?:Movie|Film)[:\\s]+(.+?)(?:\\n|$)", RegexOption.IGNORE_CASE)
+            ),
+            "album" to listOf(
+                Regex("(?:Album)[:\\s]+(.+?)(?:\\n|$)", RegexOption.IGNORE_CASE)
+            ),
+            "year" to listOf(
+                Regex("(?:Released|Release Date|Year)[:\\s]+(\\d{4})", RegexOption.IGNORE_CASE)
+            )
+        )
+        
+        patterns.forEach { (key, regexList) ->
+            for (regex in regexList) {
+                regex.find(description)?.let { match ->
+                    metadata[key] = match.groupValues[1].trim()
+                    return@forEach // Found match, move to next key
+                }
+            }
+        }
+        
+        return metadata
     }
     
     /**
@@ -296,6 +368,89 @@ class YouTubeMusicClient @Inject constructor(
     }
     
     /**
+     * Get enhanced song details with metadata from next endpoint
+     * Provides richer information including album, related content, etc.
+     */
+    suspend fun getEnhancedSongDetails(videoId: String): Result<Song?> = safeApiCall {
+        // Get basic song details from player endpoint
+        val baseSong = getSongDetails(videoId).getOrNull() ?: return@safeApiCall null
+        
+        // Get additional metadata from next endpoint
+        val nextRequestBody = buildJsonObject {
+            put("videoId", videoId)
+            put("context", CLIENT_CONTEXT)
+            put("isAudioOnly", true)
+            put("enablePersistentPlaylistPanel", true)
+        }
+        
+        val nextResponse: HttpResponse = httpClient.post("$INNERTUBE_API_URL/next?key=$API_KEY") {
+            contentType(ContentType.Application.Json)
+            header("User-Agent", USER_AGENT)
+            header("Origin", "https://music.youtube.com")
+            setBody(nextRequestBody.toString())
+        }
+        
+        val nextJson = Json.parseToJsonElement(nextResponse.bodyAsText()).jsonObject
+        
+        // Parse additional metadata from next response
+        val enhancedMetadata = parseNextMetadata(nextJson)
+        
+        // Merge metadata
+        baseSong.copy(
+            album = enhancedMetadata["album"] ?: baseSong.album,
+            artist = enhancedMetadata["artist"] ?: baseSong.artist,
+            year = enhancedMetadata["year"] ?: baseSong.year,
+            description = (enhancedMetadata["description"] ?: baseSong.description).ifEmpty { baseSong.description },
+            extras = baseSong.extras + enhancedMetadata.filterKeys { 
+                it !in setOf("album", "artist", "year", "description") 
+            }
+        )
+    }
+    
+    /**
+     * Parse additional metadata from next endpoint response
+     */
+    private fun parseNextMetadata(json: JsonObject): Map<String, String> {
+        val metadata = mutableMapOf<String, String>()
+        
+        try {
+            // Try to extract description from structured metadata
+            val tabs = json["contents"]?.jsonObject
+                ?.get("singleColumnMusicWatchNextResultsRenderer")?.jsonObject
+                ?.get("tabbedRenderer")?.jsonObject
+                ?.get("watchNextTabbedResultsRenderer")?.jsonObject
+                ?.get("tabs")?.jsonArray
+            
+            tabs?.forEach { tab ->
+                val tabContent = tab.jsonObject["tabRenderer"]?.jsonObject
+                    ?.get("content")?.jsonObject
+                    ?.get("sectionListRenderer")?.jsonObject
+                    ?.get("contents")?.jsonArray
+                
+                tabContent?.forEach { section ->
+                    // Look for description shelf
+                    val descShelf = section.jsonObject["musicDescriptionShelfRenderer"]?.jsonObject
+                    val description = descShelf?.get("description")?.jsonObject
+                        ?.get("runs")?.jsonArray?.joinToString("") {
+                            it.jsonObject["text"]?.jsonPrimitive?.content ?: ""
+                        }
+                    
+                    if (!description.isNullOrBlank()) {
+                        metadata["description"] = description
+                        // Parse metadata from description
+                        val parsedMeta = parseMetadataFromDescription(description)
+                        metadata.putAll(parsedMeta)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // Ignore parsing errors
+        }
+        
+        return metadata
+    }
+    
+    /**
      * Get next/related songs
      */
     suspend fun getRelatedSongs(videoId: String, playlistId: String? = null): Result<List<Song>> = safeApiCall {
@@ -395,7 +550,7 @@ class YouTubeMusicClient @Inject constructor(
                 ?.get("runs")?.jsonArray?.firstOrNull()?.jsonObject
                 ?.get("text")?.jsonPrimitive?.content
             
-            // Try to extract view count from subtitle or metadata
+            // Try to extract view count and additional metadata from subtitle
             val subtitle = flexColumns?.getOrNull(2)?.jsonObject
                 ?.get("musicResponsiveListItemFlexColumnRenderer")?.jsonObject
                 ?.get("text")?.jsonObject
@@ -405,15 +560,28 @@ class YouTubeMusicClient @Inject constructor(
             // Parse view count from subtitle (e.g., "1.2M views")
             val viewCount = parseViewCount(subtitle)
             
+            // Try to extract album/movie name from second column
+            val albumOrMovie = flexColumns?.getOrNull(1)?.jsonObject
+                ?.get("musicResponsiveListItemFlexColumnRenderer")?.jsonObject
+                ?.get("text")?.jsonObject
+                ?.get("runs")?.jsonArray?.getOrNull(2)?.jsonObject
+                ?.get("text")?.jsonPrimitive?.content
+            
+            // Extract year if present
+            val yearMatch = Regex("\\d{4}").find(subtitle)
+            val year = yearMatch?.value ?: ""
+            
             Song(
                 id = videoId,
                 title = title,
                 artist = artist,
+                album = albumOrMovie ?: "",
                 artworkUrl = thumbnail?.replace("w60-h60", "w500-h500"),
                 duration = parseDuration(durationText),
                 source = "youtube",
                 channelName = channelName,
-                viewCount = viewCount
+                viewCount = viewCount,
+                year = year
             )
         } catch (e: Exception) {
             null
@@ -444,25 +612,49 @@ class YouTubeMusicClient @Inject constructor(
             val title = videoDetails["title"]?.jsonPrimitive?.content ?: "Unknown"
             val author = videoDetails["author"]?.jsonPrimitive?.content ?: "Unknown Artist"
             val lengthSeconds = videoDetails["lengthSeconds"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+            val channelId = videoDetails["channelId"]?.jsonPrimitive?.content ?: ""
+            val viewCount = videoDetails["viewCount"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
             
             val thumbnail = videoDetails["thumbnail"]?.jsonObject
                 ?.get("thumbnails")?.jsonArray?.lastOrNull()?.jsonObject
                 ?.get("url")?.jsonPrimitive?.content
             
+            // Extract description for metadata
+            val description = videoDetails["shortDescription"]?.jsonPrimitive?.content ?: ""
+            val metadata = parseMetadataFromDescription(description)
+            
             Song(
                 id = videoId,
                 title = title,
                 artist = author,
+                album = metadata["album"] ?: metadata["movie"] ?: "",
                 artworkUrl = thumbnail,
                 duration = lengthSeconds,
-                source = "youtube"
+                source = "youtube",
+                channelName = author,
+                channelId = channelId,
+                viewCount = viewCount,
+                description = description,
+                year = metadata["year"] ?: ""
             )
         } catch (e: Exception) {
             null
         }
     }
     
-    private fun extractAudioUrl(json: JsonObject): String? {
+    /**
+     * Audio quality mode for streaming
+     */
+    enum class AudioQualityMode {
+        LOW,      // ~48-96 kbps - Maximum data savings
+        MEDIUM,   // ~128-160 kbps - Balanced
+        HIGH      // ~256-320 kbps - Best quality
+    }
+    
+    // Default quality mode (can be changed via settings)
+    var currentQualityMode: AudioQualityMode = AudioQualityMode.MEDIUM
+    
+    private fun extractAudioUrl(json: JsonObject, quality: AudioQualityMode = currentQualityMode): String? {
         return try {
             val streamingData = json["streamingData"]?.jsonObject
             if (streamingData == null) return null
@@ -470,26 +662,40 @@ class YouTubeMusicClient @Inject constructor(
             // Try adaptive formats first (audio only)
             val adaptiveFormats = streamingData["adaptiveFormats"]?.jsonArray
             
-            // Find best audio format (prefer opus/m4a for quality)
-            var audioFormat = adaptiveFormats?.filter { format ->
+            // Filter to audio-only formats
+            val audioFormats = adaptiveFormats?.filter { format ->
                 val mimeType = format.jsonObject["mimeType"]?.jsonPrimitive?.content ?: ""
                 mimeType.contains("audio")
-            }?.maxByOrNull { format ->
+            }?.sortedByDescending { format ->
                 format.jsonObject["bitrate"]?.jsonPrimitive?.long ?: 0L
             }
+            
+            // Select format based on quality preference
+            val targetBitrate = when (quality) {
+                AudioQualityMode.LOW -> 96_000L     // ~96 kbps
+                AudioQualityMode.MEDIUM -> 160_000L // ~160 kbps
+                AudioQualityMode.HIGH -> 320_000L   // ~320 kbps
+            }
+            
+            // Find format closest to target bitrate (prefer lower to save data)
+            val audioFormat = audioFormats?.minByOrNull { format ->
+                val bitrate = format.jsonObject["bitrate"]?.jsonPrimitive?.long ?: Long.MAX_VALUE
+                kotlin.math.abs(bitrate - targetBitrate)
+            } ?: audioFormats?.firstOrNull()
             
             var url = audioFormat?.jsonObject?.get("url")?.jsonPrimitive?.content
             
             // If no direct URL found in adaptive formats, try regular formats
             if (url == null) {
                 val formats = streamingData["formats"]?.jsonArray
-                audioFormat = formats?.filter { format ->
+                val fallbackFormat = formats?.filter { format ->
                     val mimeType = format.jsonObject["mimeType"]?.jsonPrimitive?.content ?: ""
                     mimeType.contains("audio") || mimeType.contains("mp4")
-                }?.maxByOrNull { format ->
-                    format.jsonObject["bitrate"]?.jsonPrimitive?.long ?: 0L
+                }?.minByOrNull { format ->
+                    val bitrate = format.jsonObject["bitrate"]?.jsonPrimitive?.long ?: Long.MAX_VALUE
+                    kotlin.math.abs(bitrate - targetBitrate)
                 }
-                url = audioFormat?.jsonObject?.get("url")?.jsonPrimitive?.content
+                url = fallbackFormat?.jsonObject?.get("url")?.jsonPrimitive?.content
             }
             
             // Check for HLS or DASH if still no URL

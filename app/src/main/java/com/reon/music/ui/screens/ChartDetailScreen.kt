@@ -64,6 +64,10 @@ fun ChartDetailScreen(
     var sortOption by remember { mutableStateOf(com.reon.music.core.model.SongSortOption.DEFAULT) }
     var showSortDialog by remember { mutableStateOf(false) }
     
+    // Song options state
+    var showSongOptions by remember { mutableStateOf(false) }
+    var selectedSong by remember { mutableStateOf<Song?>(null) }
+    
     // Endless scrolling state
     var currentPage by remember { mutableStateOf(1) }
     var isLoadingMore by remember { mutableStateOf(false) }
@@ -258,6 +262,12 @@ fun ChartDetailScreen(
                         if (allSongs.isNotEmpty()) {
                             playerViewModel.playQueue(allSongs.shuffled())
                         }
+                    },
+                    onDownloadAllClick = {
+                        if (allSongs.isNotEmpty()) {
+                            playerViewModel.downloadSongs(allSongs)
+                            homeViewModel.markPlaylistDownloaded(chartType, chartTitle, allSongs)
+                        }
                     }
                 )
             }
@@ -393,7 +403,10 @@ fun ChartDetailScreen(
                         song = song,
                         isTopThree = index < 3,
                         onClick = { onSongClick(song) },
-                        onMoreClick = { /* Show options */ }
+                        onMoreClick = { 
+                            selectedSong = song
+                            showSongOptions = true
+                        }
                     )
                     
                     if (index < sortedSongs.size - 1) {
@@ -463,6 +476,31 @@ fun ChartDetailScreen(
                 onDismiss = { showSortDialog = false }
             )
         }
+        
+        // Song Options Bottom Sheet
+        if (showSongOptions && selectedSong != null) {
+            ChartSongOptionsSheet(
+                song = selectedSong!!,
+                onDismiss = { showSongOptions = false },
+                onPlay = { 
+                    playerViewModel.playSong(selectedSong!!)
+                    showSongOptions = false
+                },
+                onPlayNext = { 
+                    playerViewModel.addToQueue(selectedSong!!, playNext = true)
+                    showSongOptions = false
+                },
+                onAddToQueue = { 
+                    playerViewModel.addToQueue(selectedSong!!)
+                    showSongOptions = false
+                },
+                onDownload = { 
+                    playerViewModel.downloadSong(selectedSong!!)
+                    showSongOptions = false
+                },
+                onShare = { showSongOptions = false }
+            )
+        }
     }
 }
 
@@ -473,33 +511,23 @@ private fun ChartHeader(
     songCount: Int,
     onBackClick: () -> Unit,
     onPlayClick: () -> Unit,
-    onShuffleClick: () -> Unit
+    onShuffleClick: () -> Unit,
+    onDownloadAllClick: () -> Unit = {}
 ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(280.dp)
+            .height(320.dp)
     ) {
-        // Background with blur
-        AsyncImage(
-            model = coverImage,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxSize()
-                .blur(12.dp)
-        )
-        
-        // Gradient Overlay
+        // Background gradient (no blur)
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Black.copy(alpha = 0.3f),
-                            Color.Black.copy(alpha = 0.7f),
-                            BackgroundLight
+                            Color.Black.copy(alpha = 0.2f),
+                            Color.Black.copy(alpha = 0.5f)
                         )
                     )
                 )
@@ -528,11 +556,11 @@ private fun ChartHeader(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Chart Cover
+            // Chart Cover - Enlarged
             Card(
-                modifier = Modifier.size(140.dp),
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(12.dp)
+                modifier = Modifier.size(180.dp),
+                shape = RoundedCornerShape(20.dp),
+                elevation = CardDefaults.cardElevation(16.dp)
             ) {
                 AsyncImage(
                     model = coverImage,
@@ -542,7 +570,7 @@ private fun ChartHeader(
                 )
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             
             // Chart Title
             Text(
@@ -560,12 +588,13 @@ private fun ChartHeader(
                 color = TextSecondary
             )
             
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             
             // Action Buttons
             Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
             ) {
                 // Shuffle Button
                 OutlinedButton(
@@ -575,15 +604,17 @@ private fun ChartHeader(
                     ),
                     border = BorderStroke(1.5.dp, AccentBlue),
                     shape = RoundedCornerShape(24.dp),
-                    modifier = Modifier.height(44.dp)
+                    modifier = Modifier
+                        .height(44.dp)
+                        .weight(1f)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Shuffle,
                         contentDescription = null,
                         modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Shuffle", fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Shuffle", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                 }
                 
                 // Play All Button
@@ -593,15 +624,37 @@ private fun ChartHeader(
                         containerColor = AccentBlue
                     ),
                     shape = RoundedCornerShape(24.dp),
-                    modifier = Modifier.height(44.dp)
+                    modifier = Modifier
+                        .height(44.dp)
+                        .weight(1f)
                 ) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = null,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Play All", fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Play", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                }
+                
+                // Download All Button
+                Button(
+                    onClick = onDownloadAllClick,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF43A047)
+                    ),
+                    shape = RoundedCornerShape(24.dp),
+                    modifier = Modifier
+                        .height(44.dp)
+                        .weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Download,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Download", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                 }
             }
         }
@@ -824,6 +877,104 @@ fun PlaylistDetailScreen(
         homeViewModel = homeViewModel,
         playerViewModel = playerViewModel
     )
+}
+
+/**
+ * Song Options Sheet for Chart/Playlist
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChartSongOptionsSheet(
+    song: Song,
+    onDismiss: () -> Unit,
+    onPlay: () -> Unit,
+    onPlayNext: () -> Unit,
+    onAddToQueue: () -> Unit,
+    onDownload: () -> Unit,
+    onShare: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = CardWhite
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 32.dp)
+        ) {
+            // Song header
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AsyncImage(
+                    model = song.getHighQualityArtwork(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = song.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = song.artist,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            
+            HorizontalDivider(color = Color.LightGray.copy(alpha = 0.2f))
+            
+            // Options
+            ChartOptionMenuItem(icon = Icons.Default.PlayArrow, title = "Play", onClick = onPlay)
+            ChartOptionMenuItem(icon = Icons.Default.SkipNext, title = "Play Next", onClick = onPlayNext)
+            ChartOptionMenuItem(icon = Icons.Default.QueueMusic, title = "Add to Queue", onClick = onAddToQueue)
+            ChartOptionMenuItem(icon = Icons.Default.Download, title = "Download", onClick = onDownload)
+            ChartOptionMenuItem(icon = Icons.Default.Share, title = "Share", onClick = onShare)
+        }
+    }
+}
+
+@Composable
+private fun ChartOptionMenuItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = title,
+            tint = TextPrimary,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            color = TextPrimary
+        )
+    }
 }
 
 /**

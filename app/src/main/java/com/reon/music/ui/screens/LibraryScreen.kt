@@ -22,6 +22,8 @@ import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.rememberNavController
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -40,6 +42,8 @@ import com.reon.music.ui.viewmodels.PlayerViewModel
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
 import com.reon.music.ui.theme.*
+import com.reon.music.ui.navigation.ReonDestination
+import androidx.navigation.NavOptions
 
 // SimpMusic Color Palette
 private val BackgroundWhite = Color(0xFFFFFFFF)
@@ -58,7 +62,8 @@ private val CategoryDownloaded = Color(0xFF81C784)   // Green
 @Composable
 fun LibraryScreen(
     libraryViewModel: LibraryViewModel = hiltViewModel(),
-    playerViewModel: PlayerViewModel = hiltViewModel()
+    playerViewModel: PlayerViewModel = hiltViewModel(),
+    navController: NavHostController = rememberNavController()
 ) {
     val uiState by libraryViewModel.uiState.collectAsState()
     val playerState by playerViewModel.playerState.collectAsState()
@@ -162,10 +167,25 @@ fun LibraryScreen(
                         selectedSong = song
                         showSongOptions = true
                     },
-                    onFavoriteClick = { libraryViewModel.selectTab(LibraryTab.LIKED) },
-                    onFollowedClick = { /* Navigate to followed */ },
-                    onMostPlayedClick = { libraryViewModel.selectTab(LibraryTab.HISTORY) },
-                    onDownloadedClick = { libraryViewModel.selectTab(LibraryTab.DOWNLOADS) },
+                    onFavoriteClick = { 
+                        navController.navigate(
+                            route = ReonDestination.ChartDetail.createRoute("alltimefavorite", "Favorites"),
+                            navOptions = NavOptions.Builder().setLaunchSingleTop(true).build()
+                        )
+                    },
+                    onFollowedClick = { selectedTab = 1 }, // Switch to YouTube Playlists tab (safe, no crash)
+                    onMostPlayedClick = { 
+                        navController.navigate(
+                            route = ReonDestination.ChartDetail.createRoute("mostlistening", "Most Played"),
+                            navOptions = NavOptions.Builder().setLaunchSingleTop(true).build()
+                        )
+                    },
+                    onDownloadedClick = { 
+                        navController.navigate(
+                            route = ReonDestination.Downloads.route,
+                            navOptions = NavOptions.Builder().setLaunchSingleTop(true).build()
+                        )
+                    },
                     onPlaylistClick = { libraryViewModel.selectTab(LibraryTab.PLAYLISTS) }
                 )
                 1 -> YouTubePlaylistsContent(
@@ -474,7 +494,7 @@ private fun RecentlyAddedItem(
                     // Show album/movie name if available
                     if ((item as Song).album.isNotBlank()) {
                         Text(
-                            text = "🎬 ${(item as Song).album}",
+                            text = "Album: ${(item as Song).album}",
                             style = MaterialTheme.typography.labelSmall,
                             color = AccentRed.copy(alpha = 0.7f),
                             maxLines = 1,
@@ -737,7 +757,7 @@ private fun SongListItem(
             // Show album/movie name if available
             if (song.album.isNotBlank()) {
                 Text(
-                    text = "🎬 ${song.album}",
+                    text = "Album: ${song.album}",
                     style = MaterialTheme.typography.labelSmall,
                     color = AccentRed.copy(alpha = 0.7f),
                     maxLines = 1,

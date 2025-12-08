@@ -17,7 +17,7 @@ import androidx.compose.ui.graphics.Color
 data class ThemePreset(
     val id: String,
     val name: String,
-    val emoji: String,
+    val iconName: String,  // Icon identifier instead of emoji
     val lightScheme: ColorScheme,
     val darkScheme: ColorScheme,
     val description: String
@@ -32,7 +32,7 @@ object ThemePresets {
     val ClassicGreen = ThemePreset(
         id = "classic_green",
         name = "Classic Green",
-        emoji = "🌿",
+        iconName = "forest",
         description = "Original REON theme with vibrant green",
         lightScheme = lightColorScheme(
             primary = Color(0xFF1DB954),
@@ -70,7 +70,7 @@ object ThemePresets {
     val OceanBlue = ThemePreset(
         id = "ocean_blue",
         name = "Ocean Blue",
-        emoji = "🌊",
+        iconName = "water",
         description = "Calm and professional blue tones",
         lightScheme = lightColorScheme(
             primary = Color(0xFF0077BE),
@@ -108,7 +108,7 @@ object ThemePresets {
     val SunsetOrange = ThemePreset(
         id = "sunset_orange",
         name = "Sunset Orange",
-        emoji = "🌅",
+        iconName = "sun",
         description = "Warm and energetic orange hues",
         lightScheme = lightColorScheme(
             primary = Color(0xFFFF6B35),
@@ -146,7 +146,7 @@ object ThemePresets {
     val PurpleHaze = ThemePreset(
         id = "purple_haze",
         name = "Purple Haze",
-        emoji = "💜",
+        iconName = "star",
         description = "Rich and creative purple shades",
         lightScheme = lightColorScheme(
             primary = Color(0xFF7C4DFF),
@@ -184,7 +184,7 @@ object ThemePresets {
     val RoseGold = ThemePreset(
         id = "rose_gold",
         name = "Rose Gold",
-        emoji = "🌹",
+        iconName = "flower",
         description = "Elegant and sophisticated pink tones",
         lightScheme = lightColorScheme(
             primary = Color(0xFFE91E63),
@@ -222,7 +222,7 @@ object ThemePresets {
     val ForestGreen = ThemePreset(
         id = "forest_green",
         name = "Forest Green",
-        emoji = "🌲",
+        iconName = "park",
         description = "Natural and calming green tones",
         lightScheme = lightColorScheme(
             primary = Color(0xFF2E7D32),
@@ -260,7 +260,7 @@ object ThemePresets {
     val MidnightBlack = ThemePreset(
         id = "midnight_black",
         name = "Midnight Black",
-        emoji = "🌙",
+        iconName = "night",
         description = "Pure black for AMOLED displays",
         lightScheme = lightColorScheme(
             primary = Color(0xFF424242),
@@ -298,7 +298,7 @@ object ThemePresets {
     val CrimsonRed = ThemePreset(
         id = "crimson_red",
         name = "Crimson Red",
-        emoji = "❤️",
+        iconName = "heart",
         description = "Bold and passionate red theme",
         lightScheme = lightColorScheme(
             primary = Color(0xFFD32F2F),

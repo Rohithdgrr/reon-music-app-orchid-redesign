@@ -384,6 +384,20 @@ class PlayerViewModel @Inject constructor(
         downloadSong(song)
     }
     
+    fun downloadSongs(songs: List<Song>) {
+        if (songs.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                downloadManager.downloadSongs(songs)
+                // Pre-cache entries in DB so offline playback can resolve local path once worker finishes
+                val entities = songs.map { com.reon.music.data.database.entities.SongEntity.fromSong(it, isDownloaded = true) }
+                songDao.insertAll(entities)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error starting bulk download", e)
+            }
+        }
+    }
+    
     fun downloadSong(song: Song) {
         viewModelScope.launch {
             try {

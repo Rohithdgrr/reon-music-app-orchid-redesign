@@ -51,6 +51,7 @@ class UserPreferences @Inject constructor(
         private val DOWNLOAD_QUALITY = stringPreferencesKey("download_quality")
         private val DOWNLOAD_WIFI_ONLY = booleanPreferencesKey("download_wifi_only")
         private val AUTO_DOWNLOAD_LIKED = booleanPreferencesKey("auto_download_liked")
+        private val OFFLINE_MODE_ENABLED = booleanPreferencesKey("offline_mode_enabled")
         
         // Lyrics
         private val SHOW_LYRICS_DEFAULT = booleanPreferencesKey("show_lyrics_default")
@@ -132,6 +133,11 @@ class UserPreferences @Inject constructor(
     
     val autoDownloadLiked: Flow<Boolean> = dataStore.data.map { prefs ->
         prefs[AUTO_DOWNLOAD_LIKED] ?: false
+    }
+    
+    // Offline mode - when enabled, only downloaded songs can be played
+    val offlineModeEnabled: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[OFFLINE_MODE_ENABLED] ?: false
     }
     
     // Lyrics settings
@@ -222,6 +228,10 @@ class UserPreferences @Inject constructor(
     
     suspend fun setDownloadWifiOnly(enabled: Boolean) {
         dataStore.edit { it[DOWNLOAD_WIFI_ONLY] = enabled }
+    }
+    
+    suspend fun setOfflineModeEnabled(enabled: Boolean) {
+        dataStore.edit { it[OFFLINE_MODE_ENABLED] = enabled }
     }
     
     suspend fun setSaveHistory(enabled: Boolean) {

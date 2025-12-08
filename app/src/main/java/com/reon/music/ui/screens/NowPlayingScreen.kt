@@ -83,7 +83,7 @@ fun NowPlayingScreen(
     var dragOffset by remember { mutableStateOf(0f) }
     var isDragging by remember { mutableStateOf(false) }
     
-    // Pure white background without any blur or overlay
+    // Pure white background - modern clean design
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -116,7 +116,7 @@ fun NowPlayingScreen(
                     alpha = 1f - (dragOffset / 1000f).coerceIn(0f, 0.5f)
                 }
         ) {
-            // Top Bar - Clean design
+            // Top Bar - Dark text on white background
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -159,49 +159,22 @@ fun NowPlayingScreen(
                 }
             }
             
-            Spacer(modifier = Modifier.weight(0.2f))
+            Spacer(modifier = Modifier.weight(0.1f))
             
-            // Album Art with shadow - Large and centered
-            Box(
+            // Album Artwork - Prominent display
+            AsyncImage(
+                model = currentSong?.artworkUrl ?: currentSong?.getHighQualityArtwork(),
+                contentDescription = "Album Art",
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 40.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f)
-                        .shadow(24.dp, RoundedCornerShape(16.dp)),
-                    shape = RoundedCornerShape(16.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-                ) {
-                    if (currentSong?.artworkUrl != null) {
-                        AsyncImage(
-                            model = currentSong.getHighQualityArtwork(),
-                            contentDescription = "Album Art",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(CardColor),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MusicNote,
-                                contentDescription = null,
-                                modifier = Modifier.size(100.dp),
-                                tint = TextSecondary
-                            )
-                        }
-                    }
-                }
-            }
+                    .fillMaxWidth(0.85f)
+                    .aspectRatio(1f)
+                    .padding(horizontal = 32.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .shadow(12.dp, RoundedCornerShape(20.dp)),
+                contentScale = ContentScale.Crop
+            )
             
-            Spacer(modifier = Modifier.weight(0.15f))
+            Spacer(modifier = Modifier.weight(0.1f))
             
             // Song Info with Like Button
             Row(

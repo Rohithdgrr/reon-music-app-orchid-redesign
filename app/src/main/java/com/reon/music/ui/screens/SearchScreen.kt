@@ -490,7 +490,7 @@ private fun SearchResultsSection(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "🎵 Songs (${songs.size}${if (hasMore) "+" else ""})",
+                        text = "Songs (${songs.size}${if (hasMore) "+" else ""})",
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold
                         ),
@@ -551,7 +551,7 @@ private fun SearchResultsSection(
         if ((filter == SearchFilter.ALL || filter == SearchFilter.ARTISTS) && artists.isNotEmpty()) {
             item {
                 Text(
-                    text = "🎤 Artists",
+                    text = "Artists",
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold
                     ),
@@ -572,7 +572,7 @@ private fun SearchResultsSection(
         if ((filter == SearchFilter.ALL || filter == SearchFilter.ALBUMS || filter == SearchFilter.MOVIES) && albums.isNotEmpty()) {
             item {
                 Text(
-                    text = "🎬 Albums / Movies",
+                    text = "Albums / Movies",
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold
                     ),
@@ -639,7 +639,7 @@ private fun SongResultItem(
             // Show album/movie name if available
             if (song.album.isNotBlank()) {
                 Text(
-                    text = "🎬 ${song.album}",
+                    text = song.album,
                     style = MaterialTheme.typography.labelSmall,
                     color = AccentRed.copy(alpha = 0.7f),
                     maxLines = 1,
@@ -806,7 +806,7 @@ private fun SongOptionsSheet(
                     )
                     if (song.album.isNotBlank()) {
                         Text(
-                            text = "🎬 ${song.album}",
+                            text = song.album,
                             style = MaterialTheme.typography.labelSmall,
                             color = AccentRed.copy(alpha = 0.7f)
                         )

@@ -250,3 +250,111 @@ fun SectionHeaderSkeleton(
     }
 }
 
+/**
+ * Skeleton for a row of song cards
+ */
+@Composable
+fun SongRowSkeleton(
+    modifier: Modifier = Modifier,
+    itemCount: Int = 5
+) {
+    Column(modifier = modifier.padding(vertical = 8.dp)) {
+        // Section title skeleton
+        SectionHeaderSkeleton()
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        // Song cards row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            repeat(itemCount.coerceAtMost(4)) {
+                SongCardSkeleton()
+            }
+        }
+    }
+}
+
+/**
+ * Full home screen skeleton
+ */
+@Composable
+fun HomeScreenSkeleton(
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        // Header skeleton
+        Box(
+            modifier = Modifier
+                .padding(20.dp)
+                .width(150.dp)
+                .height(28.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(ShimmerBrush())
+        )
+        
+        // Categories skeleton
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            repeat(5) {
+                Box(
+                    modifier = Modifier
+                        .width(80.dp)
+                        .height(36.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(ShimmerBrush())
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Quick picks skeleton
+        SongRowSkeleton(itemCount = 3)
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        // Charts skeleton
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            repeat(2) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(100.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(ShimmerBrush())
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Another song row
+        SongRowSkeleton(itemCount = 3)
+    }
+}
+
+/**
+ * Search results skeleton
+ */
+@Composable
+fun SearchResultsSkeleton(
+    modifier: Modifier = Modifier,
+    itemCount: Int = 8
+) {
+    Column(modifier = modifier) {
+        repeat(itemCount) {
+            ListItemSkeleton()
+        }
+    }
+}

@@ -31,14 +31,15 @@ import javax.inject.Singleton
 class MusicRepository @Inject constructor(
     private val jiosaavnClient: JioSaavnClient,
     private val youtubeMusicClient: YouTubeMusicClient,
-    private val pipedClient: PipedClient
+    private val pipedClient: PipedClient,
+    private val youtubeStreamUrlManager: YouTubeStreamUrlManager
 ) {
     /**
-     * Search for songs from both sources - Enhanced to ensure all YouTube songs are accessible
+     * Search for songs - YouTube Music ONLY (JioSaavn temporarily disabled)
      */
     suspend fun searchSongs(query: String, page: Int = 1): Result<List<Song>> = coroutineScope {
-        // Search both sources in parallel with multiple attempts
-        val jiosaavnDeferred = async { jiosaavnClient.searchSongs(query, page) }
+        // JioSaavn DISABLED - Using YouTube Music only
+        // val jiosaavnDeferred = async { jiosaavnClient.searchSongs(query, page) }
         val youtubeDeferred = async { youtubeMusicClient.searchSongs(query) }
         
         // Also try alternative search strategies for YouTube
@@ -51,15 +52,15 @@ class MusicRepository @Inject constructor(
             youtubeMusicClient.searchSongs("$query music").getOrNull() ?: emptyList()
         }
         
-        val jiosaavnResult = jiosaavnDeferred.await()
+        // val jiosaavnResult = jiosaavnDeferred.await()
         val youtubeResult = youtubeDeferred.await()
         val youtubeAlt = youtubeAltDeferred.await()
         val youtubeMusic = youtubeMusicDeferred.await()
         
         val songs = mutableListOf<Song>()
         
-        // Add JioSaavn results first (higher quality available)
-        jiosaavnResult.getOrNull()?.let { songs.addAll(it) }
+        // JioSaavn DISABLED
+        // jiosaavnResult.getOrNull()?.let { songs.addAll(it) }
         
         // Add YouTube results - combine all YouTube searches
         youtubeResult.getOrNull()?.let { songs.addAll(it) }
@@ -70,9 +71,8 @@ class MusicRepository @Inject constructor(
         val uniqueSongs = songs.distinctBy { it.id }
         
         if (uniqueSongs.isEmpty()) {
-            // Return first error if no results
+            // Return error if no YouTube results
             when {
-                jiosaavnResult is Result.Error -> jiosaavnResult
                 youtubeResult is Result.Error -> youtubeResult
                 else -> Result.Success(emptyList())
             }
@@ -120,19 +120,24 @@ class MusicRepository @Inject constructor(
                 } ?: Result.Error(Exception("No stream URL"))
             }
             "youtube" -> {
-                // Try InnerTube first
-                val innerTubeUrl = youtubeMusicClient.getStreamUrl(song.id).getOrNull()
-                if (innerTubeUrl != null) {
-                    return Result.Success(innerTubeUrl)
-                }
+                // Use intelligent stream URL manager with automatic caching and refresh
+                val streamUrl = youtubeStreamUrlManager.getStreamUrl(
+                    videoId = song.id,
+                    title = song.title,
+                    channelName = song.channelName
+                )
                 
-                // Fallback to Piped
-                val pipedUrl = pipedClient.getStreamUrl(song.id).getOrNull()
-                if (pipedUrl != null) {
-                    return Result.Success(pipedUrl)
+                if (streamUrl != null) {
+                    Result.Success(streamUrl)
+                } else {
+                    // Fallback to Piped if manager fails
+                    val pipedUrl = pipedClient.getStreamUrl(song.id).getOrNull()
+                    if (pipedUrl != null) {
+                        Result.Success(pipedUrl)
+                    } else {
+                        Result.Error(Exception("Could not get stream URL"))
+                    }
                 }
-                
-                Result.Error(Exception("Could not get stream URL"))
             }
             else -> {
                 song.streamUrl?.let { Result.Success(it) }
@@ -512,13 +517,31 @@ class MusicRepository @Inject constructor(
                         likeCount = it.likeCount,
                         channelName = it.channelName.ifEmpty { song.channelName },
                         channelId = it.channelId.ifEmpty { song.channelId },
-                        uploadDate = it.uploadDate.ifEmpty { song.uploadDate }
+                        uploadDate = it.uploadDate.ifEmpty { song.uploadDate },
+                        description = it.description.ifEmpty { song.description },
+                        // Add rich metadata from description parsing
+                        year = it.releaseYear?.toString() ?: song.year,
+                        // Store additional metadata in extras map
+                        extras = song.extras + mapOfNotNull(
+                            it.composer?.let { c -> "composer" to c },
+                            it.lyricist?.let { l -> "lyricist" to l },
+                            it.producer?.let { p -> "producer" to p },
+                            it.musicLabel?.let { m -> "musicLabel" to m },
+                            it.movieName?.let { m -> "movieName" to m }
+                        ).toMap()
                     )
                 } ?: song
             } else {
                 song
             }
         }
+    }
+    
+    /**
+     * Helper function to create map from nullable pairs
+     */
+    private fun <K, V> mapOfNotNull(vararg pairs: Pair<K, V>?): Map<K, V> {
+        return pairs.filterNotNull().toMap()
     }
 
     
@@ -539,6 +562,40 @@ class MusicRepository @Inject constructor(
         } else {
             Result.Success(allPlaylists.distinctBy { it.id }.take(30))
         }
+    }
+    
+    /**
+     * Prefetch stream URLs for upcoming songs in queue
+     * Ensures smooth playback without loading delays
+     */
+    suspend fun prefetchQueueUrls(songs: List<Song>) {
+        val youtubeVideos = songs.filter { it.source == "youtube" }.map { it.id }
+        if (youtubeVideos.isNotEmpty()) {
+            youtubeStreamUrlManager.prefetchUrls(youtubeVideos)
+        }
+    }
+    
+    /**
+     * Refresh expiring stream URLs
+     * Should be called periodically (e.g., every hour)
+     */
+    suspend fun refreshExpiringUrls() {
+        youtubeStreamUrlManager.refreshExpiringSoon()
+    }
+    
+    /**
+     * Clean up expired cache entries
+     * Frees up storage space
+     */
+    suspend fun cleanupExpiredCache() {
+        youtubeStreamUrlManager.cleanupExpired()
+    }
+    
+    /**
+     * Get stream cache statistics
+     */
+    suspend fun getStreamCacheStats(): StreamCacheStats {
+        return youtubeStreamUrlManager.getCacheStats()
     }
     
     /**
