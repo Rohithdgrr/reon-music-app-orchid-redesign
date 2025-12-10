@@ -85,10 +85,22 @@ fun HomeScreen(
     
     // Category filter state (vertical filters)
     var selectedCategory by remember { mutableStateOf("All") }
-    val categories = listOf(
-        "All", "Telugu", "Hindi", "Tamil", "Indian", "International",
-        "Love", "Sad", "Party", "Happy", "Motivation", "Chill", "Random"
-    )
+    val categories = listOf("All", "Telugu", "Hindi")
+    val curatedArtists = remember {
+        listOf(
+            Artist(id = "mmkeeravani", name = "M.M. Keeravani", artworkUrl = "https://i.imgur.com/d1cXodq.jpg"),
+            Artist(id = "dsp", name = "Devi Sri Prasad", artworkUrl = "https://i.imgur.com/qp8c1oX.jpg"),
+            Artist(id = "sidsriram", name = "Sid Sriram", artworkUrl = "https://i.imgur.com/IO8YXpB.jpg"),
+            Artist(id = "arrahman", name = "A.R. Rahman", artworkUrl = "https://i.imgur.com/Jm2SIt8.jpg"),
+            Artist(id = "arijit", name = "Arijit Singh", artworkUrl = "https://i.imgur.com/6L8bDfn.jpg"),
+            Artist(id = "pritam", name = "Pritam", artworkUrl = "https://i.imgur.com/9XEXJMn.jpg"),
+            Artist(id = "ilaiyaraaja", name = "Ilaiyaraaja", artworkUrl = "https://i.imgur.com/bj3h6TU.jpg"),
+            Artist(id = "anirudh", name = "Anirudh", artworkUrl = "https://i.imgur.com/f8pAofk.jpg"),
+            Artist(id = "hanszimmer", name = "Hans Zimmer", artworkUrl = "https://i.imgur.com/AFaKz6E.jpg"),
+            Artist(id = "taylorswift", name = "Taylor Swift", artworkUrl = "https://i.imgur.com/6jXh1La.jpg"),
+            Artist(id = "edsheeran", name = "Ed Sheeran", artworkUrl = "https://i.imgur.com/6YkJAlm.jpg")
+        )
+    }
     
     // Song options sheet state
     var showSongOptions by remember { mutableStateOf(false) }
@@ -318,10 +330,10 @@ fun HomeScreen(
                 
                 // ===== TOP ARTISTS =====
                 
-                if (uiState.topArtists.isNotEmpty()) {
+                if (curatedArtists.isNotEmpty()) {
                     item {
                         TopArtistsSection(
-                            artists = uiState.topArtists,
+                            artists = curatedArtists,
                             onArtistClick = onArtistClick,
                             onSeeAllClick = { onSeeAllClick("artists") }
                         )
@@ -479,41 +491,7 @@ fun HomeScreen(
                     }
                 }
                 
-                // Telugu Playlists
-                if (uiState.teluguPlaylistCollection.isNotEmpty()) {
-                    item {
-                        PlaylistSection(
-                            title = "Telugu Playlists",
-                            playlists = uiState.teluguPlaylistCollection,
-                            onPlaylistClick = onPlaylistClick,
-                            onSeeAllClick = { onSeeAllClick("teluguplaylists") }
-                        )
-                    }
-                }
-                
-                // Hindi Playlists
-                if (uiState.hindiPlaylistCollection.isNotEmpty()) {
-                    item {
-                        PlaylistSection(
-                            title = "Hindi Playlists",
-                            playlists = uiState.hindiPlaylistCollection,
-                            onPlaylistClick = onPlaylistClick,
-                            onSeeAllClick = { onSeeAllClick("hindiplaylists") }
-                        )
-                    }
-                }
-                
-                // Tamil Playlists
-                if (uiState.tamilPlaylistCollection.isNotEmpty()) {
-                    item {
-                        PlaylistSection(
-                            title = "Tamil Playlists",
-                            playlists = uiState.tamilPlaylistCollection,
-                            onPlaylistClick = onPlaylistClick,
-                            onSeeAllClick = { onSeeAllClick("tamilplaylists") }
-                        )
-                    }
-                }
+                // Regional playlists hidden for YouTube-only mode
                 
                 // ===== MORE REGIONAL SONGS =====
                 

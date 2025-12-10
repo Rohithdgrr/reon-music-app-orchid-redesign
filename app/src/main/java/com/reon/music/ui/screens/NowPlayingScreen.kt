@@ -166,11 +166,11 @@ fun NowPlayingScreen(
                 model = currentSong?.artworkUrl ?: currentSong?.getHighQualityArtwork(),
                 contentDescription = "Album Art",
                 modifier = Modifier
-                    .fillMaxWidth(0.85f)
+                    .fillMaxWidth(0.92f)
                     .aspectRatio(1f)
-                    .padding(horizontal = 32.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .shadow(12.dp, RoundedCornerShape(20.dp)),
+                    .padding(horizontal = 20.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .shadow(16.dp, RoundedCornerShape(24.dp)),
                 contentScale = ContentScale.Crop
             )
             

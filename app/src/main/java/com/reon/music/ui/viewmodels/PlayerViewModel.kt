@@ -10,7 +10,6 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.reon.music.core.model.Song
-import com.reon.music.data.network.StreamResolver
 import com.reon.music.data.repository.MusicRepository
 import com.reon.music.playback.PlayerController
 import com.reon.music.playback.PlayerState
@@ -37,7 +36,6 @@ data class PlayerUiState(
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
     private val playerController: PlayerController,
-    private val streamResolver: StreamResolver,
     private val repository: MusicRepository,
     private val songDao: com.reon.music.data.database.dao.SongDao,
     private val playlistDao: com.reon.music.data.database.dao.PlaylistDao,
@@ -204,36 +202,54 @@ class PlayerViewModel @Inject constructor(
     
     /**
      * Play a song - resolves stream URL and plays with retry logic
+     * Uses repository.getStreamUrl() which properly handles YouTube streaming with caching
      */
     fun playSong(song: Song, retryCount: Int = 0) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             
             try {
-                Log.d(TAG, "Playing song: ${song.title} (${song.source}) - attempt ${retryCount + 1}")
-                Log.d(TAG, "Existing streamUrl: ${song.streamUrl?.take(100) ?: "null"}")
+                Log.d(TAG, "Playing song: ${song.title} (${song.id}) - attempt ${retryCount + 1}")
                 
-                val streamUrl = streamResolver.resolveStreamUrl(song)
+                // Use repository.getStreamUrl() which uses YouTubeStreamUrlManager with proper caching
+                val result = repository.getStreamUrl(song)
                 
-                if (streamUrl != null) {
-                    Log.d(TAG, "Resolved stream URL: ${streamUrl.take(100)}...")
-                    Log.d(TAG, "Starting playback...")
-                    playerController.playSong(song, streamUrl)
-                    _uiState.value = _uiState.value.copy(isLoading = false, showPlayer = true)
-                    Log.d(TAG, "Playback started successfully")
-                } else {
-                    Log.e(TAG, "Could not resolve stream URL")
-                    
-                    // Retry up to 2 times
-                    if (retryCount < 2) {
-                        Log.d(TAG, "Retrying...")
-                        delay(1000) // Wait 1 second before retry
-                        playSong(song, retryCount + 1)
-                    } else {
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            error = "Could not play: ${song.title}. Please try again."
-                        )
+                when (result) {
+                    is com.reon.music.core.common.Result.Success -> {
+                        val streamUrl = result.data
+                        Log.d(TAG, "Resolved stream URL: ${streamUrl.take(100)}...")
+                        Log.d(TAG, "Starting playback...")
+                        
+                        // Ensure song has source set to youtube
+                        val youtubeSong = if (song.source != "youtube") {
+                            song.copy(source = "youtube")
+                        } else {
+                            song
+                        }
+                        
+                        playerController.playSong(youtubeSong, streamUrl)
+                        _uiState.value = _uiState.value.copy(isLoading = false, showPlayer = true)
+                        Log.d(TAG, "Playback started successfully")
+                    }
+                    is com.reon.music.core.common.Result.Error -> {
+                        Log.e(TAG, "Could not get stream URL: ${result.exception.message}")
+                        
+                        // Retry up to 2 times
+                        if (retryCount < 2) {
+                            Log.d(TAG, "Retrying... (attempt ${retryCount + 2})")
+                            delay(1000) // Wait 1 second before retry
+                            playSong(song, retryCount + 1)
+                        } else {
+                            _uiState.value = _uiState.value.copy(
+                                isLoading = false,
+                                error = "Could not play: ${song.title}. ${result.exception.message ?: "Please try again."}"
+                            )
+                        }
+                    }
+                    is com.reon.music.core.common.Result.Loading -> {
+                        // Should not happen with synchronous call, but handle it
+                        delay(500)
+                        playSong(song, retryCount)
                     }
                 }
             } catch (e: Exception) {
@@ -241,13 +257,13 @@ class PlayerViewModel @Inject constructor(
                 
                 // Retry on exception
                 if (retryCount < 2) {
-                    Log.d(TAG, "Retrying after error...")
+                    Log.d(TAG, "Retrying after error... (attempt ${retryCount + 2})")
                     delay(1000)
                     playSong(song, retryCount + 1)
                 } else {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        error = "Error playing: ${e.message}"
+                        error = "Error playing: ${e.message ?: "Unknown error"}"
                     )
                 }
             }
@@ -264,35 +280,48 @@ class PlayerViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             
             try {
-                // First, resolve and play the current song
-                val currentSong = songs[startIndex]
-                val streamUrl = streamResolver.resolveStreamUrl(currentSong)
+                // Ensure all songs have youtube source
+                val youtubeSongs = songs.map { song ->
+                    if (song.source != "youtube") song.copy(source = "youtube") else song
+                }
                 
-                if (streamUrl != null) {
-                    val streamUrls = mutableMapOf(currentSong.id to streamUrl)
-                    playerController.playQueue(songs, startIndex, streamUrls)
-                    _uiState.value = _uiState.value.copy(isLoading = false, showPlayer = true)
-                    
-                    // Pre-resolve next songs in background
-                    songs.forEachIndexed { index, song ->
-                        if (index != startIndex && index < startIndex + 5) {
-                            launch {
-                                streamResolver.resolveStreamUrl(song)?.let { url ->
-                                    // Cache the URL for later
+                // Resolve stream URLs for first few songs
+                val streamUrls = mutableMapOf<String, String>()
+                val currentSong = youtubeSongs[startIndex]
+                
+                // Get stream URL for current song
+                val currentResult = repository.getStreamUrl(currentSong)
+                when (currentResult) {
+                    is com.reon.music.core.common.Result.Success -> {
+                        streamUrls[currentSong.id] = currentResult.data
+                        
+                        // Pre-resolve next songs in background (up to 5 ahead)
+                        youtubeSongs.forEachIndexed { index, song ->
+                            if (index != startIndex && index < startIndex + 5 && index < youtubeSongs.size) {
+                                launch {
+                                    repository.getStreamUrl(song).getOrNull()?.let { url ->
+                                        streamUrls[song.id] = url
+                                    }
                                 }
                             }
                         }
+                        
+                        // Start playback with current song
+                        playerController.playQueue(youtubeSongs, startIndex, streamUrls)
+                        _uiState.value = _uiState.value.copy(isLoading = false, showPlayer = true)
                     }
-                } else {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = "Could not play: ${currentSong.title}"
-                    )
+                    else -> {
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            error = "Could not play: ${currentSong.title}"
+                        )
+                    }
                 }
             } catch (e: Exception) {
+                Log.e(TAG, "Error playing queue", e)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = "Error: ${e.message}"
+                    error = "Error: ${e.message ?: "Unknown error"}"
                 )
             }
         }
@@ -318,9 +347,15 @@ class PlayerViewModel @Inject constructor(
             
             if (nextSong != null) {
                 // Resolve URL for next song if needed
-                val url = streamResolver.resolveStreamUrl(nextSong)
-                if (url != null) {
-                    playerController.skipToNext()
+                val result = repository.getStreamUrl(nextSong)
+                when (result) {
+                    is com.reon.music.core.common.Result.Success -> {
+                        playerController.skipToNext()
+                    }
+                    else -> {
+                        Log.e(TAG, "Could not resolve stream URL for next song")
+                        playerController.skipToNext()
+                    }
                 }
             } else {
                 playerController.skipToNext()
@@ -428,10 +463,16 @@ class PlayerViewModel @Inject constructor(
     fun addToQueue(song: Song, playNext: Boolean = false) {
         viewModelScope.launch {
             try {
-                val streamUrl = streamResolver.resolveStreamUrl(song)
-                if (streamUrl != null) {
-                    playerController.addToQueue(song, streamUrl)
-                    Log.d(TAG, if (playNext) "Added as next: ${song.title}" else "Added to queue: ${song.title}")
+                val result = repository.getStreamUrl(song)
+                when (result) {
+                    is com.reon.music.core.common.Result.Success -> {
+                        val streamUrl = result.data
+                        playerController.addToQueue(song, streamUrl)
+                        Log.d(TAG, if (playNext) "Added as next: ${song.title}" else "Added to queue: ${song.title}")
+                    }
+                    else -> {
+                        Log.e(TAG, "Could not resolve stream URL for: ${song.title}")
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error adding to queue", e)

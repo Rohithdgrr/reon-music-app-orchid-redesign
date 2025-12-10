@@ -685,6 +685,14 @@ class YouTubeMusicClient @Inject constructor(
             
             var url = audioFormat?.jsonObject?.get("url")?.jsonPrimitive?.content
             
+            // Check for signatureCipher (encrypted URL that needs decoding)
+            // If signatureCipher is present, we can't use it directly - return null to trigger Piped fallback
+            val signatureCipher = audioFormat?.jsonObject?.get("signatureCipher")?.jsonPrimitive?.content
+            if (url == null && signatureCipher != null) {
+                // YouTube is using encrypted URLs - we'll need Piped to handle this
+                return null
+            }
+            
             // If no direct URL found in adaptive formats, try regular formats
             if (url == null) {
                 val formats = streamingData["formats"]?.jsonArray
@@ -696,6 +704,12 @@ class YouTubeMusicClient @Inject constructor(
                     kotlin.math.abs(bitrate - targetBitrate)
                 }
                 url = fallbackFormat?.jsonObject?.get("url")?.jsonPrimitive?.content
+                
+                // Check for signatureCipher in regular formats too
+                val fallbackCipher = fallbackFormat?.jsonObject?.get("signatureCipher")?.jsonPrimitive?.content
+                if (url == null && fallbackCipher != null) {
+                    return null
+                }
             }
             
             // Check for HLS or DASH if still no URL

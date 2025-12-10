@@ -13,7 +13,6 @@ import com.reon.music.core.model.Playlist
 import com.reon.music.core.model.SearchResult
 import com.reon.music.core.model.Song
 import com.reon.music.core.model.SongSortOption
-import com.reon.music.data.network.jiosaavn.JioSaavnClient
 import com.reon.music.data.network.youtube.PipedClient
 import com.reon.music.data.network.youtube.YouTubeMusicClient
 import kotlinx.coroutines.async
@@ -29,7 +28,6 @@ import javax.inject.Singleton
  */
 @Singleton
 class MusicRepository @Inject constructor(
-    private val jiosaavnClient: JioSaavnClient,
     private val youtubeMusicClient: YouTubeMusicClient,
     private val pipedClient: PipedClient,
     private val youtubeStreamUrlManager: YouTubeStreamUrlManager
@@ -85,97 +83,72 @@ class MusicRepository @Inject constructor(
      * Search songs flow - emits results as they come in
      */
     fun searchSongsFlow(query: String): Flow<List<Song>> = flow {
-        val allSongs = mutableListOf<Song>()
-        
-        // Emit JioSaavn results first
-        jiosaavnClient.searchSongs(query).getOrNull()?.let { songs ->
-            allSongs.addAll(songs)
-            emit(allSongs.toList())
-        }
-        
-        // Then emit combined with YouTube
-        youtubeMusicClient.searchSongs(query).getOrNull()?.let { songs ->
-            allSongs.addAll(songs)
-            emit(allSongs.toList())
-        }
+        youtubeMusicClient.searchSongs(query).getOrNull()?.let { emit(it) }
     }
     
     /**
      * Get stream URL for a song
-     * Tries multiple sources
+     * Tries multiple sources with proper fallback chain
      */
     suspend fun getStreamUrl(song: Song): Result<String> {
-        return when (song.source) {
-            "jiosaavn" -> {
-                // JioSaavn: URL is usually already decoded
-                song.streamUrl?.let { url ->
-                    if (url.isNotBlank()) {
-                        Result.Success(url)
-                    } else {
-                        // Try to fetch fresh details
-                        val details = jiosaavnClient.getSongDetails(song.id).getOrNull()
-                        details?.streamUrl?.let { Result.Success(it) }
-                            ?: Result.Error(Exception("No stream URL available"))
-                    }
-                } ?: Result.Error(Exception("No stream URL"))
-            }
-            "youtube" -> {
-                // Use intelligent stream URL manager with automatic caching and refresh
-                val streamUrl = youtubeStreamUrlManager.getStreamUrl(
-                    videoId = song.id,
-                    title = song.title,
-                    channelName = song.channelName
-                )
-                
-                if (streamUrl != null) {
-                    Result.Success(streamUrl)
-                } else {
-                    // Fallback to Piped if manager fails
-                    val pipedUrl = pipedClient.getStreamUrl(song.id).getOrNull()
-                    if (pipedUrl != null) {
-                        Result.Success(pipedUrl)
-                    } else {
-                        Result.Error(Exception("Could not get stream URL"))
-                    }
-                }
-            }
-            else -> {
-                song.streamUrl?.let { Result.Success(it) }
-                    ?: Result.Error(Exception("Unknown source"))
-            }
+        // Step 1: Try YouTubeStreamUrlManager (uses InnerTube API with caching)
+        val youtubeUrl = youtubeStreamUrlManager.getStreamUrl(
+            videoId = song.id,
+            title = song.title,
+            channelName = song.channelName
+        )
+        
+        if (youtubeUrl != null && youtubeUrl.isNotBlank()) {
+            return Result.Success(youtubeUrl)
         }
+        
+        // Step 2: Fallback to Piped API (more reliable for streaming)
+        val pipedUrl = pipedClient.getStreamUrl(song.id).getOrNull()
+        if (pipedUrl != null && pipedUrl.isNotBlank()) {
+            return Result.Success(pipedUrl)
+        }
+        
+        // Step 3: Last resort - try YouTubeMusicClient directly (bypass cache)
+        val directUrl = youtubeMusicClient.getStreamUrl(song.id).getOrNull()
+        if (directUrl != null && directUrl.isNotBlank()) {
+            return Result.Success(directUrl)
+        }
+        
+        // All methods failed
+        return Result.Error(Exception("Could not get stream URL for: ${song.title}. Please check your internet connection and try again."))
     }
     
     /**
      * Get song details
      */
     suspend fun getSongDetails(songId: String, source: String): Result<Song?> {
-        return when (source) {
-            "jiosaavn" -> jiosaavnClient.getSongDetails(songId)
-            "youtube" -> youtubeMusicClient.getSongDetails(songId)
-            else -> Result.Error(Exception("Unknown source"))
-        }
+        return youtubeMusicClient.getSongDetails(songId)
     }
     
     /**
      * Get album details
      */
     suspend fun getAlbumDetails(token: String): Result<Album?> {
-        return jiosaavnClient.getAlbumDetails(token)
+        return Result.Success(null) // YouTube-only mode: no album endpoint
     }
     
     /**
      * Get playlist details
      */
     suspend fun getPlaylistDetails(token: String): Result<Playlist?> {
-        return jiosaavnClient.getPlaylistDetails(token)
+        val res = youtubeMusicClient.searchPlaylists(token, 1, 5)
+        return when (res) {
+            is Result.Success -> Result.Success(res.data.firstOrNull())
+            is Result.Error -> res
+            is Result.Loading -> Result.Success(null)
+        }
     }
     
     /**
      * Get artist details
      */
     suspend fun getArtistDetails(token: String): Result<Artist?> {
-        return jiosaavnClient.getArtistDetails(token)
+        return Result.Success(null) // YouTube-only mode: artist details not implemented
     }
     
     /**
@@ -185,15 +158,8 @@ class MusicRepository @Inject constructor(
         try {
             val allRelatedSongs = mutableListOf<Song>()
             
-            // Strategy 1: Get related songs from API
-            when (song.source) {
-                "jiosaavn" -> {
-                    jiosaavnClient.getRelatedSongs(song.id).getOrNull()?.let { allRelatedSongs.addAll(it) }
-                }
-                "youtube" -> {
-                    youtubeMusicClient.getRelatedSongs(song.id).getOrNull()?.let { allRelatedSongs.addAll(it) }
-                }
-            }
+            // Strategy 1: Get related songs from YouTube
+            youtubeMusicClient.getRelatedSongs(song.id).getOrNull()?.let { allRelatedSongs.addAll(it) }
             
             // Strategy 2: Get songs from same artist
             if (song.artist.isNotBlank()) {
@@ -237,186 +203,133 @@ class MusicRepository @Inject constructor(
      * Autocomplete search
      */
     suspend fun autocomplete(query: String): Result<SearchResult> {
-        return jiosaavnClient.autocomplete(query)
+        val songs = youtubeMusicClient.searchSongs(query).getOrNull().orEmpty()
+        return Result.Success(SearchResult(songs = songs))
     }
     
     /**
      * Get trending songs (from JioSaavn)
      */
-    suspend fun getTrendingSongs(): Result<List<Song>> {
-        return jiosaavnClient.searchSongs("trending songs 2024", 1, 20)
-    }
+    suspend fun getTrendingSongs(): Result<List<Song>> = youtubeSongs("trending songs 2024", 20)
     
     /**
      * Get new releases
      */
-    suspend fun getNewReleases(): Result<List<Song>> {
-        return jiosaavnClient.searchSongs("latest hindi songs 2024", 1, 20)
-    }
+    suspend fun getNewReleases(): Result<List<Song>> = youtubeSongs("latest songs 2024", 20)
     
     /**
      * Get Top 50 Hindi songs
      */
-    suspend fun getTop50Hindi(): Result<List<Song>> {
-        return jiosaavnClient.searchSongs("top 50 hindi songs", 1, 50)
-    }
+    suspend fun getTop50Hindi(): Result<List<Song>> = youtubeSongs("top 50 hindi songs", 50)
     
     /**
      * Get Top 100 songs
      */
-    suspend fun getTop100(): Result<List<Song>> {
-        return jiosaavnClient.searchSongs("top 100 bollywood songs", 1, 50)
-    }
+    suspend fun getTop100(): Result<List<Song>> = youtubeSongs("top 100 bollywood songs", 50)
     
     /**
      * Get Telugu songs
      */
-    suspend fun getTeluguSongs(): Result<List<Song>> {
-        return jiosaavnClient.searchSongs("telugu songs 2024", 1, 20)
-    }
+    suspend fun getTeluguSongs(): Result<List<Song>> = youtubeSongs("telugu songs 2024", 20)
     
     /**
      * Get Telugu Top songs
      */
-    suspend fun getTeluguTop(): Result<List<Song>> {
-        return jiosaavnClient.searchSongs("top telugu songs", 1, 20)
-    }
+    suspend fun getTeluguTop(): Result<List<Song>> = youtubeSongs("top telugu songs", 20)
     
     /**
      * Get Tamil songs
      */
-    suspend fun getTamilSongs(): Result<List<Song>> {
-        return jiosaavnClient.searchSongs("tamil songs 2024", 1, 20)
-    }
+    suspend fun getTamilSongs(): Result<List<Song>> = youtubeSongs("tamil songs 2024", 20)
     
     /**
      * Get Punjabi songs
      */
-    suspend fun getPunjabiSongs(): Result<List<Song>> {
-        return jiosaavnClient.searchSongs("punjabi songs 2024", 1, 20)
-    }
+    suspend fun getPunjabiSongs(): Result<List<Song>> = youtubeSongs("punjabi songs 2024", 20)
     
     /**
      * Get English Top songs
      */
-    suspend fun getEnglishSongs(): Result<List<Song>> {
-        return jiosaavnClient.searchSongs("english pop songs 2024", 1, 20)
-    }
+    suspend fun getEnglishSongs(): Result<List<Song>> = youtubeSongs("english pop songs 2024", 20)
     
     /**
      * Get Romantic songs
      */
-    suspend fun getRomanticSongs(): Result<List<Song>> {
-        return jiosaavnClient.searchSongs("romantic hindi songs", 1, 20)
-    }
+    suspend fun getRomanticSongs(): Result<List<Song>> = youtubeSongs("romantic songs", 20)
     
     /**
      * Get Party/Dance songs
      */
-    suspend fun getPartySongs(): Result<List<Song>> {
-        return jiosaavnClient.searchSongs("party bollywood songs dance", 1, 20)
-    }
+    suspend fun getPartySongs(): Result<List<Song>> = youtubeSongs("party songs", 20)
     
     /**
      * Get Sad songs
      */
-    suspend fun getSadSongs(): Result<List<Song>> {
-        return jiosaavnClient.searchSongs("sad hindi songs", 1, 20)
-    }
+    suspend fun getSadSongs(): Result<List<Song>> = youtubeSongs("sad songs", 20)
     
     /**
      * Get Devotional songs
      */
-    suspend fun getDevotionalSongs(): Result<List<Song>> {
-        return jiosaavnClient.searchSongs("devotional bhajan songs", 1, 20)
-    }
+    suspend fun getDevotionalSongs(): Result<List<Song>> = youtubeSongs("devotional songs", 20)
     
     /**
      * Get Lo-Fi/Chill songs
      */
-    suspend fun getLofiSongs(): Result<List<Song>> {
-        return jiosaavnClient.searchSongs("lofi hindi songs", 1, 20)
-    }
+    suspend fun getLofiSongs(): Result<List<Song>> = youtubeSongs("lofi songs", 20)
     
     /**
      * Get Workout songs
      */
-    suspend fun getWorkoutSongs(): Result<List<Song>> {
-        return jiosaavnClient.searchSongs("workout gym songs", 1, 20)
-    }
+    suspend fun getWorkoutSongs(): Result<List<Song>> = youtubeSongs("workout gym songs", 20)
     
     /**
      * Get 90s Retro songs
      */
-    suspend fun getRetroSongs(): Result<List<Song>> {
-        return jiosaavnClient.searchSongs("90s bollywood songs", 1, 20)
-    }
+    suspend fun getRetroSongs(): Result<List<Song>> = youtubeSongs("90s songs", 20)
     
     /**
      * Get Arijit Singh songs
      */
-    suspend fun getArijitSinghSongs(): Result<List<Song>> {
-        return jiosaavnClient.searchSongs("arijit singh songs", 1, 20)
-    }
+    suspend fun getArijitSinghSongs(): Result<List<Song>> = youtubeSongs("arijit singh songs", 20)
     
     /**
      * Get AR Rahman songs
      */
-    suspend fun getARRahmanSongs(): Result<List<Song>> {
-        return jiosaavnClient.searchSongs("ar rahman songs", 1, 20)
-    }
+    suspend fun getARRahmanSongs(): Result<List<Song>> = youtubeSongs("ar rahman songs", 20)
     
     /**
      * Get Atif Aslam songs
      */
-    suspend fun getAtifAslamSongs(): Result<List<Song>> {
-        return jiosaavnClient.searchSongs("atif aslam songs", 1, 20)
-    }
+    suspend fun getAtifAslamSongs(): Result<List<Song>> = youtubeSongs("atif aslam songs", 20)
     
     /**
      * Get Shreya Ghoshal songs
      */
-    suspend fun getShreyaGhoshalSongs(): Result<List<Song>> {
-        return jiosaavnClient.searchSongs("shreya ghoshal songs", 1, 20)
-    }
+    suspend fun getShreyaGhoshalSongs(): Result<List<Song>> = youtubeSongs("shreya ghoshal songs", 20)
     
     /**
      * Get songs by language
      */
-    suspend fun getSongsByLanguage(language: String): Result<List<Song>> {
-        return jiosaavnClient.searchSongs("$language songs 2024", 1, 30)
-    }
+    suspend fun getSongsByLanguage(language: String): Result<List<Song>> = youtubeSongs("$language songs 2024", 30)
     
     /**
      * Get songs by genre
      */
-    suspend fun getSongsByGenre(genre: String): Result<List<Song>> {
-        return jiosaavnClient.searchSongs("$genre songs", 1, 20)
-    }
+    suspend fun getSongsByGenre(genre: String): Result<List<Song>> = youtubeSongs("$genre songs", 20)
     
     /**
      * Get songs by mood
      */
-    suspend fun getSongsByMood(mood: String): Result<List<Song>> {
-        return jiosaavnClient.searchSongs("$mood mood songs", 1, 20)
-    }
+    suspend fun getSongsByMood(mood: String): Result<List<Song>> = youtubeSongs("$mood songs", 20)
     
     /**
      * Get featured playlists - Enhanced to fetch from both sources
      */
     suspend fun getFeaturedPlaylists(): Result<List<Playlist>> = coroutineScope {
         // Fetch playlists from multiple sources and queries
-        val jiosaavnFeaturedDeferred = async { jiosaavnClient.searchPlaylists("featured hindi", 1, 10) }
-        val jiosaavnTrendingDeferred = async { jiosaavnClient.searchPlaylists("trending", 1, 10) }
-        val jiosaavnPopularDeferred = async { jiosaavnClient.searchPlaylists("popular", 1, 10) }
-        val youtubeDeferred = async { youtubeMusicClient.searchPlaylists("trending playlists", 1, 10) }
+        val youtubeDeferred = async { youtubeMusicClient.searchPlaylists("trending playlists", 1, 20) }
         
         val allPlaylists = mutableListOf<Playlist>()
-        
-        // Add JioSaavn playlists
-        jiosaavnFeaturedDeferred.await().getOrNull()?.let { allPlaylists.addAll(it) }
-        jiosaavnTrendingDeferred.await().getOrNull()?.let { allPlaylists.addAll(it) }
-        jiosaavnPopularDeferred.await().getOrNull()?.let { allPlaylists.addAll(it) }
         
         // Add YouTube playlists
         youtubeDeferred.await().getOrNull()?.let { allPlaylists.addAll(it) }
@@ -425,8 +338,7 @@ class MusicRepository @Inject constructor(
         val uniquePlaylists = allPlaylists.distinctBy { it.id }
         
         if (uniquePlaylists.isEmpty()) {
-            // Fallback to single query
-            jiosaavnClient.searchPlaylists("bollywood playlists", 1, 20)
+            Result.Success(emptyList())
         } else {
             Result.Success(uniquePlaylists.take(30)) // Return more playlists
         }
@@ -436,30 +348,23 @@ class MusicRepository @Inject constructor(
      * Get top artists
      */
     suspend fun getTopArtists(): Result<List<Artist>> {
-        return jiosaavnClient.searchArtists("Arijit Singh", 1, 15) // Searching for a top artist often returns similar top artists
-        // Alternatively, searching for "artists" might work but "Arijit Singh" or generic "bollywood" is safer
+        return Result.Success(emptyList()) // YouTube-only mode: not yet implemented
     }
     
     /**
      * Search songs with custom limit - Enhanced to search both sources for endless results
      */
     suspend fun searchSongsWithLimit(query: String, limit: Int): Result<List<Song>> = coroutineScope {
-        // Search both sources in parallel
-        val jiosaavnDeferred = async { jiosaavnClient.searchSongs(query, 1, limit) }
         val youtubeDeferred = async { youtubeMusicClient.searchSongs(query) }
         
         val allSongs = mutableListOf<Song>()
         
-        // Add JioSaavn results first
-        jiosaavnDeferred.await().getOrNull()?.let { allSongs.addAll(it) }
-        
-        // Add YouTube results (they may have different limit, so we take what we need)
         youtubeDeferred.await().getOrNull()?.let { songs ->
             allSongs.addAll(songs.take(limit))
         }
         
         if (allSongs.isEmpty()) {
-            jiosaavnClient.searchSongs(query, 1, limit)
+            Result.Success(emptyList())
         } else {
             Result.Success(allSongs.distinctBy { it.id }.take(limit))
         }
@@ -549,16 +454,14 @@ class MusicRepository @Inject constructor(
      * Search playlists - Enhanced to search both sources
      */
     suspend fun searchPlaylists(query: String): Result<List<Playlist>> = coroutineScope {
-        val jiosaavnDeferred = async { jiosaavnClient.searchPlaylists(query, 1, 20) }
         val youtubeDeferred = async { youtubeMusicClient.searchPlaylists(query, 1, 20) }
         
         val allPlaylists = mutableListOf<Playlist>()
         
-        jiosaavnDeferred.await().getOrNull()?.let { allPlaylists.addAll(it) }
         youtubeDeferred.await().getOrNull()?.let { allPlaylists.addAll(it) }
         
         if (allPlaylists.isEmpty()) {
-            jiosaavnClient.searchPlaylists(query, 1, 15)
+            Result.Success(emptyList())
         } else {
             Result.Success(allPlaylists.distinctBy { it.id }.take(30))
         }
@@ -602,20 +505,28 @@ class MusicRepository @Inject constructor(
      * Search albums
      */
     suspend fun searchAlbums(query: String): Result<List<Album>> {
-        return jiosaavnClient.searchAlbums(query, 1, 15)
+        return Result.Success(emptyList()) // YouTube-only mode: albums not implemented
     }
     
     /**
      * Search artists
      */
     suspend fun searchArtists(query: String): Result<List<Artist>> {
-        return jiosaavnClient.searchArtists(query, 1, 15)
+        return Result.Success(emptyList()) // YouTube-only mode: artists not implemented
     }
     
     /**
      * Get trending albums
      */
     suspend fun getTrendingAlbums(): Result<List<Album>> {
-        return jiosaavnClient.searchAlbums("bollywood albums 2024", 1, 15)
+        return Result.Success(emptyList()) // YouTube-only mode: albums not implemented
+    }
+
+    private suspend fun youtubeSongs(query: String, limit: Int): Result<List<Song>> {
+        return when (val res = youtubeMusicClient.searchSongs(query)) {
+            is Result.Success -> Result.Success(res.data.take(limit))
+            is Result.Error -> res
+            is Result.Loading -> Result.Success(emptyList())
+        }
     }
 }
