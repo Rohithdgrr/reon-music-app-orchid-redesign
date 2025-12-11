@@ -15,6 +15,7 @@ import com.reon.music.data.repository.MusicRepository
 import com.reon.music.playback.PlayerController
 import com.reon.music.playback.PlayerState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.util.Locale
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -54,7 +55,11 @@ class PlayerViewModel @Inject constructor(
         private const val TAG = "PlayerViewModel"
     }
 
-    
+    // Regex for removing bracketed parts and non-alphanumeric characters
+    private val BRACKETS_REGEX = "\\[.*?\\]|\\(.*?\\)".toRegex()
+    private val NON_ALNUM_REGEX = "[^a-z0-9\\s]".toRegex()
+    private val MULTI_WHITESPACE_REGEX = "\\s+".toRegex()
+
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
     
@@ -72,6 +77,76 @@ class PlayerViewModel @Inject constructor(
         observeCurrentSong()
         loadPlaylists()
         observeDiscordPresence()
+    }
+
+    // ===== QUEUE DEDUP HELPERS =====
+
+    private fun normalizeTitle(raw: String): String {
+        if (raw.isBlank()) return ""
+        val lower = raw.lowercase(Locale.US)
+        val withoutBrackets = BRACKETS_REGEX.replace(lower, " ")
+        val cleaned = NON_ALNUM_REGEX.replace(withoutBrackets, " ")
+        return MULTI_WHITESPACE_REGEX.replace(cleaned, " ").trim()
+    }
+
+    private fun canonicalKey(song: Song): String {
+        val t = normalizeTitle(song.title)
+        val a = normalizeTitle(song.artist)
+        return "$t::$a"
+    }
+
+    private fun isBetterSource(candidate: Song, current: Song?): Boolean {
+        if (current == null) return true
+        fun score(s: Song): Int {
+            var score = 0
+            when (s.source.lowercase(Locale.US)) {
+                "local" -> score += 3
+                "youtube" -> score += 2
+                "jiosaavn" -> score += 1
+            }
+            if (s.is320kbps) score += 3
+            if (s.quality.contains("4k", ignoreCase = true)) score += 2
+            if (s.quality.contains("hd", ignoreCase = true)) score += 1
+            score += (s.viewCount / 1_000_000).toInt().coerceAtMost(3)
+            return score
+        }
+        return score(candidate) > score(current)
+    }
+
+    private fun mergeDuplicateSongs(songs: List<Song>): List<Song> {
+        val bestByKey = linkedMapOf<String, Song>()
+        songs.forEach { song ->
+            val key = canonicalKey(song)
+            val existing = bestByKey[key]
+            if (isBetterSource(song, existing)) {
+                bestByKey[key] = song
+            }
+        }
+        return bestByKey.values.toList()
+    }
+
+    private fun filterForQueueWindow(
+        existingQueue: List<Song>,
+        candidates: List<Song>,
+        windowSize: Int = 50
+    ): List<Song> {
+        if (candidates.isEmpty()) return emptyList()
+        val window = existingQueue.takeLast(windowSize)
+        val existingTitles = window
+            .map { normalizeTitle(it.title) }
+            .filter { it.isNotBlank() }
+            .toMutableSet()
+        val existingIds = existingQueue.map { it.id }.toMutableSet()
+        val result = mutableListOf<Song>()
+        candidates.forEach { song ->
+            val normTitle = normalizeTitle(song.title)
+            if (existingIds.contains(song.id)) return@forEach
+            if (normTitle.isNotBlank() && existingTitles.contains(normTitle)) return@forEach
+            result += song
+            existingIds += song.id
+            if (normTitle.isNotBlank()) existingTitles += normTitle
+        }
+        return result
     }
     
     /**
@@ -292,22 +367,26 @@ class PlayerViewModel @Inject constructor(
     fun playQueue(songs: List<Song>, startIndex: Int = 0) {
         viewModelScope.launch {
             if (songs.isEmpty()) return@launch
+            // Merge duplicates across sources before starting playback
+            val mergedSongs = mergeDuplicateSongs(songs)
+            if (mergedSongs.isEmpty()) return@launch
+            val safeStartIndex = startIndex.coerceIn(0, mergedSongs.lastIndex)
             
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             
             try {
                 // First, resolve and play the current song
-                val currentSong = songs[startIndex]
+                val currentSong = mergedSongs[safeStartIndex]
                 val streamUrl = streamResolver.resolveStreamUrl(currentSong)
                 
                 if (streamUrl != null) {
                     val streamUrls = mutableMapOf(currentSong.id to streamUrl)
-                    playerController.playQueue(songs, startIndex, streamUrls)
+                    playerController.playQueue(mergedSongs, safeStartIndex, streamUrls)
                     _uiState.value = _uiState.value.copy(isLoading = false, showPlayer = true)
                     
                     // Pre-resolve next songs in background
-                    songs.forEachIndexed { index, song ->
-                        if (index != startIndex && index < startIndex + 5) {
+                    mergedSongs.forEachIndexed { index, song ->
+                        if (index != safeStartIndex && index < safeStartIndex + 5) {
                             launch {
                                 streamResolver.resolveStreamUrl(song)?.let { url ->
                                     // Cache the URL for later
@@ -526,8 +605,12 @@ class PlayerViewModel @Inject constructor(
     fun addToQueue(song: Song, playNext: Boolean = false) {
         viewModelScope.launch {
             try {
-                // Prevent duplicates
-                if (playerState.value.queue.any { it.id == song.id }) {
+                val queue = playerState.value.queue
+                // Prevent duplicates by ID and by recent title window
+                val normTitle = normalizeTitle(song.title)
+                val recentWindow = queue.takeLast(50)
+                val titleClash = recentWindow.any { normalizeTitle(it.title) == normTitle && normTitle.isNotBlank() }
+                if (queue.any { it.id == song.id } || titleClash) {
                     Log.d(TAG, "Song already in queue: ${song.title}")
                     return@launch
                 }
@@ -626,10 +709,15 @@ class PlayerViewModel @Inject constructor(
                             } else emptyList()
                             
                             // Combine from all strategies and shuffle for maximum variety
-                            val allNewSongs = (relatedSongs + artistSongs + genreSongs + similarSongs)
-                                .distinctBy { it.id }
+                            val rawNewSongs = (relatedSongs + artistSongs + genreSongs + similarSongs)
                                 .filter { it.id != currentSong.id }
-                                .shuffled()  // Shuffle to mix YouTube and JioSaavn sources
+                            // 1) Merge duplicates across sources
+                            val mergedCandidates = mergeDuplicateSongs(rawNewSongs)
+                            // 2) Enforce 50-song no-repeat window on titles against current queue
+                            val currentQueue = playerState.value.queue
+                            val filtered = filterForQueueWindow(currentQueue, mergedCandidates, windowSize = 50)
+                            val allNewSongs = filtered
+                                .shuffled()
                                 .take(30) // Add 30 songs at a time for continuous playback
                             
                             // Add to queue
@@ -677,7 +765,8 @@ class PlayerViewModel @Inject constructor(
                             Log.w(TAG, "Downloaded file does not exist at: ${progress.filePath}")
                         }
                         
-                        // Clean up from tracking
+                        // Clean up from tracking after a delay to allow UI to show 100%
+                        delay(2000)
                         _downloadProgress.value = _downloadProgress.value - songId
                     }
                     

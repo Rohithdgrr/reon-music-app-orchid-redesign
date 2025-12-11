@@ -30,6 +30,7 @@ import java.io.File
 data class LibraryUiState(
     val likedSongs: List<Song> = emptyList(),
     val recentlyPlayed: List<Song> = emptyList(),
+    val mostPlayed: List<Song> = emptyList(),
     val playlists: List<PlaylistEntity> = emptyList(),
     val downloadedSongs: List<Song> = emptyList(),
     val likedCount: Int = 0,
@@ -66,9 +67,10 @@ class LibraryViewModel @Inject constructor(
             val songsFlow = combine(
                 songDao.getLikedSongs(),
                 songDao.getRecentlyPlayed(20),
+                historyDao.getMostPlayedFromHistory(25),
                 songDao.getDownloadedSongs()
-            ) { liked, recent, downloaded ->
-                Triple(liked, recent, downloaded)
+            ) { liked, recent, mostPlayed, downloaded ->
+                arrayOf(liked, recent, mostPlayed, downloaded)
             }
             
             val countsFlow = combine(
@@ -84,13 +86,17 @@ class LibraryViewModel @Inject constructor(
                 countsFlow,
                 playlistDao.getAllPlaylists()
             ) { songs, counts, playlists ->
-                val (liked, recent, downloaded) = songs
+                val liked = songs[0] as List<SongEntity>
+                val recent = songs[1] as List<SongEntity>
+                val mostPlayed = songs[2] as List<SongEntity>
+                val downloaded = songs[3] as List<SongEntity>
                 val (likedCount, downloadedCount, playlistCount) = counts
                 
                 LibraryUiState(
                     likedSongs = liked.map { entity -> entity.toSong() },
                     recentlyPlayed = recent.map { entity -> entity.toSong() },
                     playlists = playlists,
+                    mostPlayed = mostPlayed.map { entity -> entity.toSong() },
                     downloadedSongs = downloaded.map { entity -> entity.toSong() },
                     likedCount = likedCount,
                     downloadedCount = downloadedCount,

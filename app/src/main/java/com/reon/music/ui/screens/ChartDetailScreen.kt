@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -528,17 +529,19 @@ private fun ChartHeader(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(320.dp)
+            .wrapContentHeight() // Auto height to fit content
     ) {
-        // Background gradient (no blur)
+        // Subtle background blur or gradient (Light)
         Box(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .height(350.dp)
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Black.copy(alpha = 0.2f),
-                            Color.Black.copy(alpha = 0.5f)
+                            Color.White,
+                            Color(0xFFF5F5F5),
+                            Color.White
                         )
                     )
                 )
@@ -548,14 +551,14 @@ private fun ChartHeader(
         IconButton(
             onClick = onBackClick,
             modifier = Modifier
-                .padding(16.dp)
+                .padding(top = 40.dp, start = 16.dp) // Adjusted for status bar typical height
                 .align(Alignment.TopStart)
-                .background(Color.Black.copy(alpha = 0.3f), CircleShape)
+                .background(Color.Black.copy(alpha = 0.05f), CircleShape)
         ) {
             Icon(
                 imageVector = Icons.Default.ArrowBack,
                 contentDescription = "Back",
-                tint = Color.White
+                tint = TextPrimary
             )
         }
         
@@ -563,15 +566,18 @@ private fun ChartHeader(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .align(Alignment.BottomCenter)
-                .padding(16.dp),
+                .padding(top = 20.dp, bottom = 20.dp, start = 16.dp, end = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Chart Cover - Enlarged
+            Spacer(modifier = Modifier.height(30.dp))
+
+            // Chart Cover - Enlarged (Big as player)
             Card(
-                modifier = Modifier.size(180.dp),
+                modifier = Modifier
+                    .size(220.dp) // Increased size
+                    .shadow(elevation = 12.dp, shape = RoundedCornerShape(20.dp), spotColor = Color.Black.copy(0.15f)),
                 shape = RoundedCornerShape(20.dp),
-                elevation = CardDefaults.cardElevation(16.dp)
+                elevation = CardDefaults.cardElevation(0.dp) // Shadow handled by modifier
             ) {
                 AsyncImage(
                     model = coverImage,
@@ -581,42 +587,50 @@ private fun ChartHeader(
                 )
             }
             
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(20.dp))
             
             // Chart Title
             Text(
                 text = title,
                 style = MaterialTheme.typography.headlineSmall.copy(
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 24.sp
                 ),
                 color = TextPrimary,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
+            
+            Spacer(modifier = Modifier.height(8.dp))
             
             Text(
                 text = "$songCount songs • Auto-updating",
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.Medium
+                ),
                 color = TextSecondary
             )
             
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(24.dp))
             
-            // Action Buttons
+            // Action Buttons - Redesigned
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
             ) {
-                // Shuffle Button
-                OutlinedButton(
+                // Shuffle Button (Icon + Text) - Grey/Tinted
+                Button(
                     onClick = onShuffleClick,
-                    colors = ButtonDefaults.outlinedButtonColors(
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFEFF2F5), // Light Grey/Blue tint
                         contentColor = AccentBlue
                     ),
-                    border = BorderStroke(1.5.dp, AccentBlue),
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(50), // Pill shape
+                    elevation = ButtonDefaults.buttonElevation(0.dp),
                     modifier = Modifier
-                        .height(44.dp)
+                        .height(50.dp)
                         .weight(1f)
                 ) {
                     Icon(
@@ -624,39 +638,43 @@ private fun ChartHeader(
                         contentDescription = null,
                         modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Shuffle", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Shuffle", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
                 
-                // Play All Button
+                // Play Button (Icon + Text) - Solid Blue (Primary)
                 Button(
                     onClick = onPlayClick,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = AccentBlue
+                        containerColor = AccentBlue,
+                        contentColor = Color.White
                     ),
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(50), // Pill shape
+                    elevation = ButtonDefaults.buttonElevation(4.dp, pressedElevation = 2.dp),
                     modifier = Modifier
-                        .height(44.dp)
+                        .height(50.dp)
                         .weight(1f)
                 ) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = null,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(24.dp)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Play", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Play", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 }
                 
-                // Download All Button
+                // Download Button (Icon + Text) - Solid Green
                 Button(
                     onClick = onDownloadAllClick,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF43A047)
+                        containerColor = Color(0xFF43A047), // Green
+                        contentColor = Color.White
                     ),
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(50), // Pill shape
+                    elevation = ButtonDefaults.buttonElevation(0.dp),
                     modifier = Modifier
-                        .height(44.dp)
+                        .height(50.dp)
                         .weight(1f)
                 ) {
                     Icon(
@@ -664,8 +682,8 @@ private fun ChartHeader(
                         contentDescription = null,
                         modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Download", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Down", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
             }
         }
@@ -840,13 +858,13 @@ private fun ChartSongItem(
         // More Options Button
         IconButton(
             onClick = onMoreClick,
-            modifier = Modifier.size(32.dp)
+            modifier = Modifier.size(48.dp) // Proper touch target size
         ) {
             Icon(
                 imageVector = Icons.Default.MoreVert,
                 contentDescription = "More",
                 tint = TextSecondary,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(24.dp) // Larger icon
             )
         }
     }

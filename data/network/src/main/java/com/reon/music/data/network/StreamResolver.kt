@@ -207,13 +207,6 @@ class StreamResolver @Inject constructor(
      * Check if URL is accessible
      */
     private suspend fun isUrlAccessible(url: String): Boolean {
-        return try {
-            // Just try a quick HEAD request
-            val response: HttpResponse = httpClient.head(url)
-            response.status.isSuccess() || response.status == HttpStatusCode.PartialContent
-        } catch (e: Exception) {
-            // For some CDNs, HEAD might not work - assume accessible and let player handle it
-            true
-        }
+        return true
     }
 }

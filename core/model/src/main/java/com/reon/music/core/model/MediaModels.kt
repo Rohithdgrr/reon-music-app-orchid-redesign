@@ -53,10 +53,31 @@ data class Song(
      * Get high quality artwork URL
      */
     fun getHighQualityArtwork(): String? {
+        if (artworkUrl == null) return null
+        
+        // Handle YouTube URLs
+        if (artworkUrl.contains("ytimg.com") || artworkUrl.contains("googleusercontent.com")) {
+            // If it's a standard YouTube thumbnail URL
+            if (artworkUrl.contains("default.jpg")) {
+                return artworkUrl.replace("default.jpg", "maxresdefault.jpg")
+                    .replace("hqdefault.jpg", "maxresdefault.jpg")
+                    .replace("mqdefault.jpg", "maxresdefault.jpg")
+                    .replace("sddefault.jpg", "maxresdefault.jpg")
+            }
+            // Handle googleusercontent URLs (often dynamic resizing)
+            if (artworkUrl.contains("w60-h60") || artworkUrl.contains("w120-h120")) {
+                return artworkUrl.replace("w60-h60", "w1200-h1200") // Request much larger size
+                    .replace("w120-h120", "w1200-h1200")
+                    .replace("=w", "=w1200") // resizing param
+                    .replace("-h", "-h1200")
+            }
+        }
+        
+        // Fallback or other providers
         return artworkUrl
-            ?.replace("50x50", "500x500")
-            ?.replace("150x150", "500x500")
-            ?.replace("http:", "https:")
+            .replace("50x50", "500x500")
+            .replace("150x150", "500x500")
+            .replace("http:", "https:")
     }
     
     /**

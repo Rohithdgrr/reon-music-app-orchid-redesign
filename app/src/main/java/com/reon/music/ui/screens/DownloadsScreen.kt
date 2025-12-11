@@ -6,6 +6,8 @@
 
 package com.reon.music.ui.screens
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -98,10 +100,14 @@ fun DownloadsScreen(
             }
         }
         
+        // Filter out songs that are currently downloading to avoid duplicates
+        val activeIds = activeDownloads.map { it.songId }.toSet()
+        val nonActiveDownloaded = filtered.filter { !activeIds.contains(it.id) }
+        
         when (selectedTab) {
-            1 -> filtered.sortedBy { it.artist }
-            2 -> filtered.sortedBy { it.album }
-            else -> filtered
+            1 -> nonActiveDownloaded.sortedBy { it.artist }
+            2 -> nonActiveDownloaded.sortedBy { it.album }
+            else -> nonActiveDownloaded
         }
     }
     
@@ -754,6 +760,11 @@ private fun ActiveDownloadsSection(downloads: List<com.reon.music.services.Downl
             modifier = Modifier.padding(start = 20.dp, bottom = 4.dp)
         )
         downloads.forEach { dp ->
+            val animatedProgress by animateFloatAsState(
+                targetValue = (dp.progress.coerceIn(0, 100) / 100f),
+                animationSpec = tween(durationMillis = 300),
+                label = "active_download_progress"
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -762,7 +773,7 @@ private fun ActiveDownloadsSection(downloads: List<com.reon.music.services.Downl
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 CircularProgressIndicator(
-                    progress = dp.progress / 100f,
+                    progress = animatedProgress,
                     modifier = Modifier.size(20.dp),
                     strokeWidth = 2.dp,
                     color = AccentRed

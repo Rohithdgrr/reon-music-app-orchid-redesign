@@ -7,6 +7,8 @@
 package com.reon.music.ui.components
 
 import android.content.Intent
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -192,6 +194,11 @@ fun SongOptionsSheet(
             // Download Option
             if (showDownloadOption) {
                 if (isDownloading) {
+                    val animatedProgress by animateFloatAsState(
+                        targetValue = (downloadProgress.coerceIn(0, 100) / 100f),
+                        animationSpec = tween(durationMillis = 300),
+                        label = "download_progress"
+                    )
                     OptionItem(
                         icon = Icons.Outlined.Download,
                         title = "Downloading...",
@@ -199,6 +206,7 @@ fun SongOptionsSheet(
                         iconTint = AccentRed,
                         trailingContent = {
                             CircularProgressIndicator(
+                                progress = animatedProgress,
                                 modifier = Modifier.size(18.dp),
                                 strokeWidth = 2.dp,
                                 color = AccentRed

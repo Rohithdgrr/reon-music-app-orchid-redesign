@@ -45,6 +45,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.reon.music.ui.theme.*
 import com.reon.music.ui.navigation.ReonDestination
 import androidx.navigation.NavOptions
+import com.reon.music.services.DownloadStatus
 
 // SimpMusic Color Palette
 private val BackgroundWhite = Color(0xFFFFFFFF)
@@ -59,7 +60,7 @@ private val CategoryFollowed = Color(0xFFFFD54F)     // Yellow
 private val CategoryMostPlayed = Color(0xFF4DD0E1)   // Cyan
 private val CategoryDownloaded = Color(0xFF81C784)   // Green
 
-private enum class LibraryQuickCategory { NONE, FAVORITES, FOLLOWED, MOST_PLAYED, HISTORY, PREFERENCES }
+private enum class LibraryQuickCategory { NONE, FAVORITES, FOLLOWED, MOST_PLAYED, HISTORY }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,8 +71,12 @@ fun LibraryScreen(
 ) {
     val uiState by libraryViewModel.uiState.collectAsState()
     val playerState by playerViewModel.playerState.collectAsState()
+    val downloadProgressMap by playerViewModel.downloadProgress.collectAsState()
     
     val context = LocalContext.current
+    val downloadedSongIds = remember(uiState.downloadedSongs) {
+        uiState.downloadedSongs.map { it.id }.toSet()
+    }
     
     // Sheet states
     var showSongOptions by remember { mutableStateOf(false) }
@@ -128,6 +133,8 @@ fun LibraryScreen(
             LibraryOverviewContent(
                 uiState = uiState,
                 playerState = playerState,
+                downloadedSongIds = downloadedSongIds,
+                downloadProgressMap = downloadProgressMap,
                 onSongClick = { playerViewModel.playSong(it) },
                 onSongMoreClick = { song ->
                     selectedSong = song
@@ -137,10 +144,8 @@ fun LibraryScreen(
                 onQuickCategorySelected = { selected ->
                     when (selected) {
                         LibraryQuickCategory.HISTORY -> {
-                            navController.navigate(ReonDestination.History.route)
-                        }
-                        LibraryQuickCategory.PREFERENCES -> {
-                            navController.navigate(ReonDestination.Preferences.route)
+                            // Show history inline instead of navigating to a possibly missing route
+                            toggleQuickCategory(selected)
                         }
                         else -> {
                             toggleQuickCategory(selected)
@@ -264,9 +269,8 @@ private fun QuickCategoryHeader(
     val (title, count) = when (category) {
         LibraryQuickCategory.FAVORITES -> "Favorite Songs" to uiState.likedSongs.size
         LibraryQuickCategory.FOLLOWED -> "Followed Playlists" to uiState.playlists.size
-        LibraryQuickCategory.MOST_PLAYED -> "Most Played" to uiState.recentlyPlayed.size
+        LibraryQuickCategory.MOST_PLAYED -> "Most Played" to uiState.mostPlayed.size
         LibraryQuickCategory.HISTORY -> "Listening History" to uiState.recentlyPlayed.size
-        LibraryQuickCategory.PREFERENCES -> "Preferences" to 0
         LibraryQuickCategory.NONE -> "" to 0
     }
 
@@ -300,6 +304,8 @@ private fun QuickCategoryHeader(
 private fun QuickSongList(
     songs: List<Song>,
     playerState: PlayerState,
+    downloadedSongIds: Set<String>,
+    downloadProgressMap: Map<String, com.reon.music.services.DownloadProgress>,
     onSongClick: (Song) -> Unit,
     onSongMoreClick: (Song) -> Unit,
     emptyMessage: String = "No songs to display yet."
@@ -330,6 +336,11 @@ private fun QuickSongList(
             LibrarySongRow(
                 song = song,
                 isPlaying = playerState.currentSong?.id == song.id,
+                isDownloaded = downloadedSongIds.contains(song.id),
+                isDownloading = downloadProgressMap[song.id]?.let { dp ->
+                    dp.status == DownloadStatus.DOWNLOADING || dp.status == DownloadStatus.QUEUED
+                } ?: false,
+                downloadProgress = downloadProgressMap[song.id]?.progress ?: 0,
                 onClick = { onSongClick(song) },
                 onMoreClick = { onSongMoreClick(song) }
             )
@@ -380,6 +391,9 @@ private fun QuickPlaylistList(
 private fun LibrarySongRow(
     song: Song,
     isPlaying: Boolean,
+    isDownloaded: Boolean,
+    isDownloading: Boolean,
+    downloadProgress: Int,
     onClick: () -> Unit,
     onMoreClick: () -> Unit
 ) {
@@ -392,7 +406,7 @@ private fun LibrarySongRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         AsyncImage(
-            model = song.artworkUrl,
+            model = song.getHighQualityArtwork() ?: song.artworkUrl,
             contentDescription = song.title,
             modifier = Modifier
                 .size(48.dp)
@@ -418,6 +432,39 @@ private fun LibrarySongRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            if (isDownloading) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(
+                        progress = (downloadProgress.coerceIn(0, 100) / 100f),
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp,
+                        color = AccentRed
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "${downloadProgress.coerceIn(0, 100)}%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AccentRed
+                    )
+                }
+            } else if (isDownloaded) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.DownloadDone,
+                        contentDescription = "Downloaded",
+                        tint = AccentRed,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Offline",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AccentRed
+                    )
+                }
+            }
         }
 
         IconButton(onClick = onMoreClick) {
@@ -487,6 +534,8 @@ private fun QuickPlaylistRow(
 private fun LibraryOverviewContent(
     uiState: com.reon.music.ui.viewmodels.LibraryUiState,
     playerState: PlayerState,
+    downloadedSongIds: Set<String>,
+    downloadProgressMap: Map<String, com.reon.music.services.DownloadProgress>,
     onSongClick: (Song) -> Unit,
     onSongMoreClick: (Song) -> Unit,
     selectedQuickCategory: LibraryQuickCategory,
@@ -553,20 +602,6 @@ private fun LibraryOverviewContent(
                         onClick = { onQuickCategorySelected(LibraryQuickCategory.HISTORY) }
                     )
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    CategoryCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.Settings,
-                        title = "Preferences",
-                        backgroundColor = Color(0xFFCE93D8),
-                        iconColor = Color(0xFF7B1FA2),
-                        onClick = { onQuickCategorySelected(LibraryQuickCategory.PREFERENCES) }
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
-                }
             }
         }
         
@@ -589,6 +624,8 @@ private fun LibraryOverviewContent(
                         QuickSongList(
                             songs = uiState.likedSongs,
                             playerState = playerState,
+                            downloadedSongIds = downloadedSongIds,
+                            downloadProgressMap = downloadProgressMap,
                             onSongClick = onSongClick,
                             onSongMoreClick = onSongMoreClick
                         )
@@ -605,11 +642,13 @@ private fun LibraryOverviewContent(
                 LibraryQuickCategory.MOST_PLAYED -> {
                     item {
                         QuickSongList(
-                            songs = uiState.recentlyPlayed,
+                            songs = uiState.mostPlayed,
                             playerState = playerState,
+                            downloadedSongIds = downloadedSongIds,
+                            downloadProgressMap = downloadProgressMap,
                             onSongClick = onSongClick,
                             onSongMoreClick = onSongMoreClick,
-                            emptyMessage = "Start listening to more music to see your most played songs here."
+                            emptyMessage = "Keep listening to build your most played mix."
                         )
                     }
                 }
@@ -618,13 +657,14 @@ private fun LibraryOverviewContent(
                         QuickSongList(
                             songs = uiState.recentlyPlayed,
                             playerState = playerState,
+                            downloadedSongIds = downloadedSongIds,
+                            downloadProgressMap = downloadProgressMap,
                             onSongClick = onSongClick,
                             onSongMoreClick = onSongMoreClick,
                             emptyMessage = "Play a few songs and your listening history will appear here."
                         )
                     }
                 }
-                LibraryQuickCategory.PREFERENCES -> Unit
                 LibraryQuickCategory.NONE -> Unit
             }
 

@@ -26,6 +26,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
@@ -42,6 +44,7 @@ import com.reon.music.core.model.Artist
 import com.reon.music.core.model.Song
 import com.reon.music.ui.components.SongOptionsSheet
 import com.reon.music.services.DownloadStatus
+import com.reon.music.ui.viewmodels.LibraryViewModel
 import com.reon.music.ui.viewmodels.PlayerViewModel
 import com.reon.music.ui.viewmodels.SearchFilter
 import com.reon.music.ui.viewmodels.SearchViewModel
@@ -65,16 +68,30 @@ fun SearchScreen(
 ) {
     val uiState by searchViewModel.uiState.collectAsState()
     val playerState by playerViewModel.playerState.collectAsState()
-    val downloadProgress by playerViewModel.downloadProgress.collectAsState()
+    val downloadProgressMap by playerViewModel.downloadProgress.collectAsState()
+    val libraryViewModel: LibraryViewModel = hiltViewModel()
+    val libraryState by libraryViewModel.uiState.collectAsState()
+    val downloadedSongIds = remember(libraryState.downloadedSongs) {
+        libraryState.downloadedSongs.map { it.id }.toSet()
+    }
     val focusManager = LocalFocusManager.current
     val snackbarHostState = remember { SnackbarHostState() }
     
     var showSongOptions by remember { mutableStateOf<Song?>(null) }
-    
+    var loadingSongId by remember { mutableStateOf<String?>(null) }
+
     LaunchedEffect(uiState.error) {
         uiState.error?.let { error ->
             snackbarHostState.showSnackbar(error)
             searchViewModel.clearError()
+        }
+    }
+    LaunchedEffect(playerState.currentSong?.id, playerState.isPlaying) {
+        loadingSongId?.let { loadingId ->
+            val currentId = playerState.currentSong?.id
+            if (currentId != null && currentId == loadingId) {
+                loadingSongId = null
+            }
         }
     }
     
@@ -141,22 +158,29 @@ fun SearchScreen(
                     
                     else -> {
                         SearchResultsSection(
+                            loadingSongId = loadingSongId,
                             filter = uiState.activeFilter,
                             songs = uiState.songs,
                             albums = uiState.albums,
                             artists = uiState.artists,
+                            movies = uiState.movies,
                             currentSong = playerState.currentSong,
                             isPlaying = playerState.isPlaying,
                             isUnlimitedMode = uiState.isUnlimitedMode,
                             isLoadingMore = uiState.isLoadingMore,
                             hasMore = uiState.hasMore,
-                            onSongClick = { song -> playerViewModel.playSong(song) },
+                            onSongClick = { song ->
+                                loadingSongId = song.id
+                                playerViewModel.playSong(song)
+                            },
                             onAlbumClick = onAlbumClick,
                             onArtistClick = onArtistClick,
                             onSongOptions = { showSongOptions = it },
                             onFilterChange = { searchViewModel.setFilter(it) },
                             onLoadMore = { searchViewModel.loadMoreResults() },
-                            onToggleUnlimited = { searchViewModel.toggleUnlimitedMode() }
+                            onToggleUnlimited = { searchViewModel.toggleUnlimitedMode() },
+                            downloadedSongIds = downloadedSongIds,
+                            downloadProgressMap = downloadProgressMap
                         )
                     }
                 }
@@ -165,7 +189,7 @@ fun SearchScreen(
         
         // Song Options Bottom Sheet
         showSongOptions?.let { song ->
-            val progress = downloadProgress[song.id]
+            val progress = downloadProgressMap[song.id]
             SongOptionsSheet(
                 song = song,
                 isDownloading = progress?.status == DownloadStatus.QUEUED || progress?.status == DownloadStatus.DOWNLOADING,
@@ -389,18 +413,22 @@ private fun SearchResultsSection(
     songs: List<Song>,
     albums: List<Album>,
     artists: List<Artist>,
+    movies: List<Album>,
     currentSong: Song?,
     isPlaying: Boolean,
     isUnlimitedMode: Boolean,
     isLoadingMore: Boolean,
     hasMore: Boolean,
+    loadingSongId: String?,
     onSongClick: (Song) -> Unit,
     onAlbumClick: (Album) -> Unit,
     onArtistClick: (Artist) -> Unit,
     onSongOptions: (Song) -> Unit,
     onFilterChange: (SearchFilter) -> Unit,
     onLoadMore: () -> Unit,
-    onToggleUnlimited: () -> Unit
+    onToggleUnlimited: () -> Unit,
+    downloadedSongIds: Set<String>,
+    downloadProgressMap: Map<String, com.reon.music.services.DownloadProgress>
 ) {
     LazyColumn(
         contentPadding = PaddingValues(bottom = 100.dp)
@@ -509,10 +537,18 @@ private fun SearchResultsSection(
             // Show all songs when in unlimited mode or songs filter
             val songsToShow = if (filter == SearchFilter.SONGS || isUnlimitedMode) songs else songs.take(10)
             items(songsToShow) { song ->
+                val dp = downloadProgressMap[song.id]
+                val isDownloading = dp?.status == DownloadStatus.DOWNLOADING || dp?.status == DownloadStatus.QUEUED
+                val progressPercent = dp?.progress ?: 0
+                val isDownloaded = downloadedSongIds.contains(song.id)
                 SongResultItem(
                     song = song,
                     isCurrentSong = currentSong?.id == song.id,
                     isPlaying = isPlaying && currentSong?.id == song.id,
+                    isLoading = loadingSongId == song.id,
+                    isDownloading = isDownloading,
+                    isDownloaded = isDownloaded,
+                    downloadProgress = progressPercent,
                     onClick = { onSongClick(song) },
                     onMoreClick = { onSongOptions(song) }
                 )
@@ -567,7 +603,7 @@ private fun SearchResultsSection(
                 )
             }
             
-            items(if (filter == SearchFilter.ARTISTS) artists else artists.take(5)) { artist ->
+            items(if (filter == SearchFilter.ARTISTS) artists else artists.take(6)) { artist ->
                 ArtistResultItem(
                     artist = artist,
                     onClick = { onArtistClick(artist) }
@@ -588,10 +624,31 @@ private fun SearchResultsSection(
                 )
             }
             
-            items(if (filter == SearchFilter.ALBUMS || filter == SearchFilter.MOVIES) albums else albums.take(5)) { album ->
+            items(if (filter == SearchFilter.ALBUMS) albums else albums.take(6)) { album ->
                 AlbumResultItem(
                     album = album,
                     onClick = { onAlbumClick(album) }
+                )
+            }
+        }
+
+        // Movies Section
+        if ((filter == SearchFilter.ALL || filter == SearchFilter.MOVIES) && movies.isNotEmpty()) {
+            item {
+                Text(
+                    text = "Movies / Originals",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = TextPrimary,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                )
+            }
+
+            items(if (filter == SearchFilter.MOVIES) movies else movies.take(6)) { movie ->
+                AlbumResultItem(
+                    album = movie,
+                    onClick = { onAlbumClick(movie) }
                 )
             }
         }
@@ -603,23 +660,34 @@ private fun SongResultItem(
     song: Song,
     isCurrentSong: Boolean,
     isPlaying: Boolean,
+    isLoading: Boolean,
+    isDownloading: Boolean = false,
+    isDownloaded: Boolean = false,
+    downloadProgress: Int = 0,
     onClick: () -> Unit,
     onMoreClick: () -> Unit
 ) {
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(if (isCurrentSong) AccentRed.copy(alpha = 0.1f) else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 20.dp, vertical = 10.dp)
     ) {
-        // Thumbnail with duration badge (YouTube-style)
-        Box(
+        Row(
             modifier = Modifier
-                .size(120.dp, 68.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .fillMaxWidth()
+                .background(if (isCurrentSong) AccentRed.copy(alpha = 0.1f) else Color.Transparent)
+                .clickable(enabled = !isLoading) { onClick() }
+                .padding(vertical = 0.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            // Thumbnail with duration badge (YouTube-style)
+            Box(
+                modifier = Modifier
+                    .padding(start = 0.dp, end = 12.dp)
+                    .size(120.dp, 68.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(enabled = !isLoading) { onClick() }
+            ) {
             AsyncImage(
                 model = song.getHighQualityArtwork(),
                 contentDescription = song.title,
@@ -696,10 +764,13 @@ private fun SongResultItem(
             }
         }
         
-        Spacer(modifier = Modifier.width(12.dp))
-        
         // Song info (YouTube-style layout)
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 8.dp)
+                .clickable(enabled = !isLoading) { onClick() }
+        ) {
             // Song Title
             Text(
                 text = song.title,
@@ -796,13 +867,33 @@ private fun SongResultItem(
         }
         
         // More options button
-        IconButton(onClick = onMoreClick, modifier = Modifier.size(40.dp)) {
+        IconButton(
+            onClick = onMoreClick,
+            enabled = !isLoading,
+            modifier = Modifier.size(40.dp)
+        ) {
             Icon(
                 imageVector = Icons.Default.MoreVert,
                 contentDescription = "More options",
                 tint = TextSecondary,
                 modifier = Modifier.size(20.dp)
             )
+        }
+    }
+
+        if (isLoading) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(Color.White.copy(alpha = 0.65f)),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    color = AccentRed,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
         }
     }
 }

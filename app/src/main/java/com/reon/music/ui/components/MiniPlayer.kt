@@ -34,17 +34,15 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.reon.music.playback.PlayerState
 
-// Dark Blue Theme Colors - Modern Design
-private val MiniPlayerGradient = Brush.horizontalGradient(
-    colors = listOf(Color(0xFF1A3A52), Color(0xFF0F2533))
-)
+// White Theme Colors - Modern Design
+private val MiniPlayerBackground = Color(0xFFFFFFFF) // Pure white background
 private val MiniPlayerOverlay = Brush.verticalGradient(
-    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.2f))
+    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.1f))
 )
 private val AccentGreen = Color(0xFF1DB954)
-private val TextPrimary = Color(0xFFFFFFFF)
-private val TextSecondary = Color(0xFFB0BEC5)
-private val ProgressTrackColor = Color(0xFF37474F)
+private val TextPrimary = Color(0xFF000000) // Black text on white
+private val TextSecondary = Color(0xFF666666) // Dark gray for secondary text
+private val ProgressTrackColor = Color(0xFFE0E0E0) // Light gray track
 private val ProgressActiveColor = Color(0xFF1DB954)
 
 /**
@@ -100,7 +98,7 @@ fun MiniPlayer(
             ) {
                 Column(
                     modifier = Modifier
-                        .background(MiniPlayerGradient)
+                        .background(color = MiniPlayerBackground)
                 ) {
                     // Progress bar at top - Green gradient
                     val progress = if (playerState.duration > 0) {
@@ -124,7 +122,7 @@ fun MiniPlayer(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         // Album art with rounded corners
@@ -157,7 +155,7 @@ fun MiniPlayer(
                             }
                         }
                         
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         
                         // Song info with duration
                         Column(
@@ -217,20 +215,20 @@ fun MiniPlayer(
                         // Previous Button
                         IconButton(
                             onClick = onPrevious,
-                            modifier = Modifier.size(40.dp)
+                            modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.SkipPrevious,
                                 contentDescription = "Previous",
                                 tint = TextPrimary,
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                         
                         // Play/Pause Button - Green circle like reference
                         Box(
                             modifier = Modifier
-                                .size(46.dp)
+                                .size(42.dp)
                                 .clip(CircleShape)
                                 .background(AccentGreen)
                                 .clickable(onClick = onPlayPause),
@@ -238,7 +236,7 @@ fun MiniPlayer(
                         ) {
                             if (isLoading) {
                                 CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
+                                    modifier = Modifier.size(22.dp),
                                     strokeWidth = 2.dp,
                                     color = Color.White
                                 )
@@ -249,7 +247,7 @@ fun MiniPlayer(
                                     else
                                         Icons.Default.PlayArrow,
                                     contentDescription = if (playerState.isPlaying) "Pause" else "Play",
-                                    modifier = Modifier.size(30.dp),
+                                    modifier = Modifier.size(26.dp),
                                     tint = Color.White
                                 )
                             }
@@ -258,13 +256,13 @@ fun MiniPlayer(
                         // Next Button
                         IconButton(
                             onClick = onNext,
-                            modifier = Modifier.size(40.dp)
+                            modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.SkipNext,
                                 contentDescription = "Next",
                                 tint = TextPrimary,
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                     }

@@ -45,7 +45,8 @@ data class Genre(
     val id: String,
     val name: String,
     val iconName: String,  // Icon identifier instead of emoji
-    val color: Long
+    val accentColor: Int,
+    val searchQuery: String = name
 )
 
 /**
@@ -230,18 +231,18 @@ data class HomeUiState(
 ) {
     companion object {
         val defaultGenres = listOf(
-            Genre("pop", "Pop", "music_note", 0xFFE91E63),
-            Genre("rock", "Rock", "guitar", 0xFF9C27B0),
-            Genre("hiphop", "Hip-Hop", "mic", 0xFF673AB7),
-            Genre("classical", "Classical", "piano", 0xFF3F51B5),
-            Genre("jazz", "Jazz", "saxophone", 0xFF2196F3),
-            Genre("electronic", "Electronic", "headphones", 0xFF00BCD4),
-            Genre("folk", "Folk", "acoustic", 0xFF4CAF50),
-            Genre("indie", "Indie", "keyboard", 0xFFFF9800),
-            Genre("sufi", "Sufi", "mosque", 0xFF795548),
-            Genre("ghazal", "Ghazal", "sparkle", 0xFF607D8B),
-            Genre("devotional", "Devotional", "prayer", 0xFFCDDC39),
-            Genre("bollywood", "Bollywood", "movie", 0xFFFF5722)
+            Genre("pop", "Pop", "music_note", 0xFFE91E63.toInt()),
+            Genre("rock", "Rock", "guitar", 0xFF9C27B0.toInt()),
+            Genre("hiphop", "Hip-Hop", "mic", 0xFF673AB7.toInt()),
+            Genre("classical", "Classical", "piano", 0xFF3F51B5.toInt()),
+            Genre("jazz", "Jazz", "saxophone", 0xFF2196F3.toInt()),
+            Genre("electronic", "Electronic", "headphones", 0xFF00BCD4.toInt()),
+            Genre("folk", "Folk", "acoustic", 0xFF4CAF50.toInt()),
+            Genre("indie", "Indie", "keyboard", 0xFFFF9800.toInt()),
+            Genre("sufi", "Sufi", "mosque", 0xFF795548.toInt()),
+            Genre("ghazal", "Ghazal", "sparkle", 0xFF607D8B.toInt()),
+            Genre("devotional", "Devotional", "prayer", 0xFFCDDC39.toInt()),
+            Genre("bollywood", "Bollywood", "movie", 0xFFFF5722.toInt())
         )
     }
 }
@@ -419,46 +420,100 @@ class HomeViewModel @Inject constructor(
         }
         
         
-        // ST Banjara Songs - YouTube-only
+        // ST Banjara/Lambadi - YouTube-only (Channel-filtered)
         viewModelScope.launch {
             try {
-                val searchTerms = listOf(
+                val allowedChannels = listOf(
+                    "banjara",
+                    "lambadi",
+                    "lambani",
+                    "st banjara",
+                    "banjara beats",
+                    "banjara folk",
+                    "banjara dj",
+                    "tribal telugu"
+                )
+                val allowedLower = allowedChannels.map { it.lowercase() }
+
+                // Build targeted queries using channel keywords + generic fallbacks
+                val channelQueries = allowedChannels.map { "$it songs" }
+                val fallbackQueries = listOf(
                     "lambadi songs indian tribal",
                     "banjara folk songs telugu",
                     "lambani traditional music",
                     "banjara dj songs",
                     "lambadi songs"
                 )
-                
-                val allSongs = mutableListOf<Song>()
-                for (term in searchTerms) {
-                    repository.searchSongs(term).getOrNull()?.let { songs ->
-                        allSongs.addAll(songs.filter { it.source.equals("youtube", ignoreCase = true) }.take(4))
-                    }
-                    if (allSongs.size >= 15) break
+
+                val collected = mutableListOf<Song>()
+
+                fun channelMatch(song: Song): Boolean {
+                    val ch = song.channelName.lowercase()
+                    return allowedLower.any { key -> ch.contains(key) }
                 }
-                
-                _uiState.value = _uiState.value.copy(banjaraSongs = allSongs.distinctBy { it.id }.take(15))
-                Log.d(TAG, "Loaded ${allSongs.size} Banjara/Lambadi songs (YouTube-only)")
+
+                // First pass: channel-focused queries
+                for (q in channelQueries) {
+                    repository.searchSongsWithLimit(q, 20).getOrNull()?.let { songs ->
+                        val filtered = songs.filter {
+                            it.source.equals("youtube", true) && channelMatch(it)
+                        }
+                        collected += filtered
+                    }
+                    if (collected.size >= 20) break
+                }
+
+                // Fallback: generic tribal queries if not enough results
+                if (collected.size < 12) {
+                    for (q in fallbackQueries) {
+                        repository.searchSongsWithLimit(q, 20).getOrNull()?.let { songs ->
+                            val filtered = songs.filter { it.source.equals("youtube", true) }
+                            collected += filtered
+                        }
+                        if (collected.size >= 20) break
+                    }
+                }
+
+                val finalList = collected
+                    .distinctBy { it.id }
+                    .take(20)
+
+                _uiState.value = _uiState.value.copy(banjaraSongs = finalList)
+                Log.d(TAG, "Loaded ${finalList.size} Banjara/Lambadi songs (YouTube-only, channel-filtered)")
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading Banjara songs", e)
             }
         }
         
-        // Telugu Playlists
+        // Telugu Playlists (curated)
         viewModelScope.launch {
             try {
-                repository.searchPlaylists("telugu songs").getOrNull()?.let { playlists ->
-                    _uiState.value = _uiState.value.copy(
-                        teluguPlaylistsYoutube = playlists.take(6)
-                    )
-                    Log.d(TAG, "Loaded ${playlists.size} Telugu playlists")
+                val teluguQueries = listOf(
+                    "latest telugu hits playlist",
+                    "telugu 2000s classics",
+                    "telugu dj party mix",
+                    "telugu romantic songs playlist",
+                    "telugu workout hype mix"
+                )
+                val teluguPlaylists = mutableListOf<Playlist>()
+                teluguQueries.forEach { query ->
+                    repository.searchPlaylists(query).getOrNull()?.let { results ->
+                        teluguPlaylists += results
+                    }
                 }
+                val curatedTelugu = teluguPlaylists
+                    .distinctBy { it.id }
+                    .filter { it.name.isNotBlank() }
+                    .take(12)
+                if (curatedTelugu.isNotEmpty()) {
+                    _uiState.value = _uiState.value.copy(teluguPlaylistsYoutube = curatedTelugu)
+                }
+                Log.d(TAG, "Loaded ${curatedTelugu.size} curated Telugu playlists")
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading Telugu playlists", e)
             }
         }
-        
+
         // Telugu Songs (YouTube-only)
         viewModelScope.launch {
             try {
@@ -472,15 +527,31 @@ class HomeViewModel @Inject constructor(
             }
         }
         
-        // Indian Playlists
+        // Indian Playlists (curated)
         viewModelScope.launch {
             try {
-                repository.searchPlaylists("indian songs hindi tamil telugu").getOrNull()?.let { playlists ->
-                    _uiState.value = _uiState.value.copy(
-                        indianPlaylistsYoutube = playlists.take(6)
-                    )
-                    Log.d(TAG, "Loaded ${playlists.size} Indian playlists")
+                val panIndiaQueries = listOf(
+                    "all time bollywood romance playlist",
+                    "indian indie chill playlist",
+                    "latest hindi tamil telugu mashup",
+                    "party anthems india",
+                    "indian devotional morning playlist",
+                    "indian workout pump playlist"
+                )
+                val indianPlaylists = mutableListOf<Playlist>()
+                panIndiaQueries.forEach { query ->
+                    repository.searchPlaylists(query).getOrNull()?.let { results ->
+                        indianPlaylists += results
+                    }
                 }
+                val curatedIndian = indianPlaylists
+                    .distinctBy { it.id }
+                    .filter { it.name.isNotBlank() }
+                    .take(12)
+                if (curatedIndian.isNotEmpty()) {
+                    _uiState.value = _uiState.value.copy(indianPlaylistsYoutube = curatedIndian)
+                }
+                Log.d(TAG, "Loaded ${curatedIndian.size} curated Indian playlists")
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading Indian playlists", e)
             }

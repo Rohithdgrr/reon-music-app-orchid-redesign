@@ -39,6 +39,7 @@ data class SearchUiState(
     val songs: List<Song> = emptyList(),
     val albums: List<Album> = emptyList(),
     val artists: List<Artist> = emptyList(),
+    val movies: List<Album> = emptyList(),
     val searchHistory: List<String> = emptyList(),
     val suggestions: List<String> = emptyList(),
     val trendingSearches: List<String> = emptyList(),
@@ -61,6 +62,197 @@ private val INDIAN_LANGUAGES = listOf(
     "banjara", "rajasthani", "odia"
 )
 
+private data class ChannelPriorityMeta(
+    val primaryName: String,
+    val aliases: Set<String> = emptySet(),
+    val languages: Set<String>,
+    val weight: Int
+)
+
+private val CHANNEL_PRIORITY_LIST = listOf(
+    // Hindi / Bollywood Channels
+    ChannelPriorityMeta("T-Series", aliases = setOf("tseries"), languages = setOf("hindi", "bollywood", "global"), weight = 70),
+    ChannelPriorityMeta("Zee Music Company", languages = setOf("hindi", "bollywood"), weight = 62),
+    ChannelPriorityMeta("Tips Official", languages = setOf("hindi", "bollywood"), weight = 58),
+    ChannelPriorityMeta("YRF", aliases = setOf("yrf music"), languages = setOf("hindi", "bollywood"), weight = 56),
+    ChannelPriorityMeta("Sony Music India", languages = setOf("hindi", "bollywood"), weight = 55),
+    ChannelPriorityMeta("Saregama Music", aliases = setOf("saregama"), languages = setOf("hindi", "bollywood"), weight = 54),
+    ChannelPriorityMeta("T-Series Bollywood Classics", languages = setOf("hindi", "bollywood"), weight = 52),
+    ChannelPriorityMeta("Goldmines Gaane Sune Ansune", languages = setOf("hindi", "bollywood"), weight = 50),
+    ChannelPriorityMeta("Shemaroo Filmi Gaane", languages = setOf("hindi", "bollywood"), weight = 50),
+    ChannelPriorityMeta("Eros Now Music", languages = setOf("hindi", "bollywood"), weight = 48),
+    ChannelPriorityMeta("Arijit Singh", aliases = setOf("arijit singh official"), languages = setOf("hindi", "bollywood"), weight = 45),
+    ChannelPriorityMeta("Shreya Ghoshal", aliases = setOf("shreya ghoshal official"), languages = setOf("hindi", "tamil", "malayalam", "kannada"), weight = 45),
+    ChannelPriorityMeta("Vishal Dadlani", aliases = setOf("vishal dadlani official"), languages = setOf("hindi"), weight = 42),
+    ChannelPriorityMeta("Neha Kakkar", aliases = setOf("neha kakkar official"), languages = setOf("hindi"), weight = 42),
+    ChannelPriorityMeta("Atif Aslam", aliases = setOf("atif aslam official"), languages = setOf("hindi", "punjabi"), weight = 40),
+
+    // Telugu Channels
+    ChannelPriorityMeta("Aditya Music", languages = setOf("telugu"), weight = 60),
+    ChannelPriorityMeta("Infobells - Telugu", aliases = setOf("infobells telugu"), languages = setOf("telugu"), weight = 55),
+    ChannelPriorityMeta("T-Series Telugu", languages = setOf("telugu"), weight = 54),
+    ChannelPriorityMeta("Mango Music", languages = setOf("telugu"), weight = 52),
+    ChannelPriorityMeta("Volga Music", languages = setOf("telugu"), weight = 50),
+    ChannelPriorityMeta("Lahari Music", languages = setOf("telugu", "kannada"), weight = 48),
+    ChannelPriorityMeta("Devi Sri Prasad", aliases = setOf("devi sri prasad official"), languages = setOf("telugu"), weight = 46),
+    ChannelPriorityMeta("S.P. Balasubrahmanyam", aliases = setOf("sp balu", "s p balasubrahmanyam"), languages = setOf("telugu", "tamil"), weight = 44),
+    ChannelPriorityMeta("Thaman S", aliases = setOf("thaman s official"), languages = setOf("telugu"), weight = 44),
+    ChannelPriorityMeta("K.S. Chithra", aliases = setOf("ks chitra", "k s chithra"), languages = setOf("telugu", "tamil", "malayalam", "kannada"), weight = 43),
+    ChannelPriorityMeta("Sid Sriram", aliases = setOf("sid sriram official"), languages = setOf("telugu", "tamil"), weight = 46),
+    ChannelPriorityMeta("Mangli", aliases = setOf("mangli official"), languages = setOf("telugu"), weight = 42),
+    ChannelPriorityMeta("Geetha Madhuri", aliases = setOf("geetha madhuri official"), languages = setOf("telugu"), weight = 40),
+
+    // Tamil Channels
+    ChannelPriorityMeta("Infobells - Tamil", aliases = setOf("infobells tamil"), languages = setOf("tamil"), weight = 55),
+    ChannelPriorityMeta("Think Music India", languages = setOf("tamil", "malayalam"), weight = 54),
+    ChannelPriorityMeta("Sony Music South", languages = setOf("tamil", "telugu", "malayalam", "kannada"), weight = 53),
+    ChannelPriorityMeta("T-Series Tamil", languages = setOf("tamil"), weight = 52),
+    ChannelPriorityMeta("Divo Music", languages = setOf("tamil"), weight = 50),
+    ChannelPriorityMeta("Anirudh Ravichander", aliases = setOf("anirudh ravichander official"), languages = setOf("tamil"), weight = 52),
+    ChannelPriorityMeta("A.R. Rahman", aliases = setOf("a r rahman official"), languages = setOf("tamil", "hindi"), weight = 58),
+    ChannelPriorityMeta("Sid Sriram", aliases = setOf("sid sriram tamil"), languages = setOf("tamil", "telugu"), weight = 46),
+    ChannelPriorityMeta("Chinmayi Sripada", aliases = setOf("chinmayi official"), languages = setOf("tamil"), weight = 45),
+    ChannelPriorityMeta("Dhee", aliases = setOf("dhee official"), languages = setOf("tamil"), weight = 43),
+    ChannelPriorityMeta("Karthik", aliases = setOf("karthik official"), languages = setOf("tamil"), weight = 42),
+    ChannelPriorityMeta("Andrea Jeremiah", aliases = setOf("andrea jeremiah official"), languages = setOf("tamil"), weight = 41),
+    ChannelPriorityMeta("Hariharan", aliases = setOf("hariharan official"), languages = setOf("tamil", "hindi"), weight = 40),
+
+    // English / Global Artists
+    ChannelPriorityMeta("Justin Bieber", languages = setOf("english", "global"), weight = 60),
+    ChannelPriorityMeta("EminemMusic", aliases = setOf("eminem"), languages = setOf("english", "global"), weight = 58),
+    ChannelPriorityMeta("Taylor Swift", languages = setOf("english", "global"), weight = 60),
+    ChannelPriorityMeta("Ed Sheeran", languages = setOf("english", "global"), weight = 58),
+    ChannelPriorityMeta("Marshmello", languages = setOf("english", "global"), weight = 56),
+    ChannelPriorityMeta("Billie Eilish", languages = setOf("english", "global"), weight = 55),
+    ChannelPriorityMeta("Ariana Grande", languages = setOf("english", "global"), weight = 55),
+    ChannelPriorityMeta("Bad Bunny", languages = setOf("english", "global"), weight = 54),
+    ChannelPriorityMeta("Shakira", languages = setOf("english", "global"), weight = 53),
+    ChannelPriorityMeta("Alan Walker", languages = setOf("english", "global"), weight = 52),
+    ChannelPriorityMeta("Rihanna", languages = setOf("english", "global"), weight = 52),
+    ChannelPriorityMeta("Bruno Mars", languages = setOf("english", "global"), weight = 51),
+    ChannelPriorityMeta("Jason Derulo", languages = setOf("english", "global"), weight = 49),
+    ChannelPriorityMeta("The Weeknd", languages = setOf("english", "global"), weight = 53),
+    ChannelPriorityMeta("Selena Gomez", languages = setOf("english", "global"), weight = 52),
+    ChannelPriorityMeta("J Balvin", languages = setOf("english", "global"), weight = 50),
+    ChannelPriorityMeta("Lady Gaga", languages = setOf("english", "global"), weight = 49),
+    ChannelPriorityMeta("Dua Lipa", languages = setOf("english", "global"), weight = 50),
+
+    // Malayalam Channels & Artists
+    ChannelPriorityMeta("Saregama Malayalam", languages = setOf("malayalam"), weight = 48),
+    ChannelPriorityMeta("MC Music", languages = setOf("malayalam"), weight = 44),
+    ChannelPriorityMeta("Think Music India", aliases = setOf("think music malayalam"), languages = setOf("malayalam", "tamil"), weight = 46),
+    ChannelPriorityMeta("Sony Music South", aliases = setOf("sony music south malayalam"), languages = setOf("malayalam", "tamil", "telugu", "kannada"), weight = 45),
+    ChannelPriorityMeta("Vijay Yesudas", aliases = setOf("vijay yesudas official"), languages = setOf("malayalam"), weight = 42),
+    ChannelPriorityMeta("K.S. Harishankar", aliases = setOf("ks harishankar", "k s harishankar"), languages = setOf("malayalam"), weight = 40),
+    ChannelPriorityMeta("Sithara Krishnakumar", aliases = setOf("sithara"), languages = setOf("malayalam"), weight = 38),
+    ChannelPriorityMeta("Dabzee", aliases = setOf("dabzee official"), languages = setOf("malayalam"), weight = 36),
+    ChannelPriorityMeta("Shweta Mohan", aliases = setOf("swetha mohan", "shwetha mohan"), languages = setOf("malayalam", "tamil"), weight = 42),
+
+    // Kannada Channels & Artists
+    ChannelPriorityMeta("Saregama Kannada", languages = setOf("kannada"), weight = 46),
+    ChannelPriorityMeta("T-Series Kannada", languages = setOf("kannada"), weight = 45),
+    ChannelPriorityMeta("Anand Audio", languages = setOf("kannada"), weight = 44),
+    ChannelPriorityMeta("Think Music Kannada", languages = setOf("kannada"), weight = 43),
+    ChannelPriorityMeta("Kailash Kher", aliases = setOf("kailash kher official"), languages = setOf("kannada", "hindi"), weight = 40),
+    ChannelPriorityMeta("Sanjith Hegde", aliases = setOf("sanjith hegde"), languages = setOf("kannada"), weight = 40),
+    ChannelPriorityMeta("Varijashree Venugopal", aliases = setOf("varijashree"), languages = setOf("kannada"), weight = 36),
+
+    // Punjabi Channels & Artists
+    ChannelPriorityMeta("Speed Records", languages = setOf("punjabi"), weight = 55),
+    ChannelPriorityMeta("T-Series Apna Punjab", languages = setOf("punjabi"), weight = 53),
+    ChannelPriorityMeta("Ishtar Punjabi", languages = setOf("punjabi"), weight = 50),
+    ChannelPriorityMeta("Geet MP3", languages = setOf("punjabi"), weight = 50),
+    ChannelPriorityMeta("Sidhu Moose Wala", languages = setOf("punjabi"), weight = 52),
+    ChannelPriorityMeta("Diljit Dosanjh", aliases = setOf("diljit dosanjh official"), languages = setOf("punjabi", "hindi"), weight = 48),
+    ChannelPriorityMeta("Yo Yo Honey Singh", languages = setOf("punjabi", "hindi"), weight = 47),
+    ChannelPriorityMeta("Karan Aujla", aliases = setOf("karan aujla official"), languages = setOf("punjabi"), weight = 46),
+    ChannelPriorityMeta("Guru Randhawa", aliases = setOf("guru randhawa official"), languages = setOf("punjabi", "hindi"), weight = 46),
+    ChannelPriorityMeta("B Praak", aliases = setOf("b praak official"), languages = setOf("punjabi"), weight = 45),
+    ChannelPriorityMeta("Ammy Virk", aliases = setOf("ammy virk official"), languages = setOf("punjabi"), weight = 44),
+    ChannelPriorityMeta("Nimrat Khaira", aliases = setOf("nimrat khaira official"), languages = setOf("punjabi"), weight = 43)
+)
+
+private val CHANNEL_PRIORITY_MAP: Map<String, ChannelPriorityMeta> = buildMap {
+    CHANNEL_PRIORITY_LIST.forEach { meta ->
+        (setOf(meta.primaryName) + meta.aliases).forEach { alias ->
+            val key = normalizeChannelName(alias)
+            val existing = this[key]
+            if (existing == null || meta.weight > existing.weight) {
+                this[key] = meta
+            }
+        }
+    }
+}
+
+private val CHANNEL_PRIORITY_BY_LANGUAGE: Map<String, List<ChannelPriorityMeta>> =
+    CHANNEL_PRIORITY_LIST.flatMap { meta ->
+        meta.languages.map { language -> language to meta }
+    }.groupBy({ it.first }, { it.second })
+
+private val DETECTABLE_LANGUAGES = setOf(
+    "hindi", "telugu", "tamil", "english", "malayalam", "kannada", "punjabi"
+)
+
+private val NON_ALPHANUMERIC_REGEX = Regex("[^a-z0-9 ]")
+private val MULTI_WHITESPACE_REGEX = Regex("\\s+")
+
+private fun normalizeChannelName(name: String): String {
+    if (name.isBlank()) return ""
+    val lower = name.lowercase(Locale.US)
+    val stripped = NON_ALPHANUMERIC_REGEX.replace(lower, " ")
+    return MULTI_WHITESPACE_REGEX.replace(stripped, " ").trim()
+}
+
+private fun detectLanguageFromQuery(normalizedQuery: String): String? {
+    return when {
+        normalizedQuery.contains("telugu") || normalizedQuery.contains("tollywood") -> "telugu"
+        normalizedQuery.contains("hindi") || normalizedQuery.contains("bollywood") -> "hindi"
+        normalizedQuery.contains("tamil") -> "tamil"
+        normalizedQuery.contains("malayalam") || normalizedQuery.contains("mollywood") -> "malayalam"
+        normalizedQuery.contains("kannada") -> "kannada"
+        normalizedQuery.contains("punjabi") -> "punjabi"
+        normalizedQuery.contains("english") || normalizedQuery.contains("international") -> "english"
+        else -> null
+    }
+}
+
+private fun findChannelMetaFromQuery(normalizedQuery: String): ChannelPriorityMeta? {
+    CHANNEL_PRIORITY_MAP[normalizedQuery]?.let { return it }
+    return CHANNEL_PRIORITY_LIST.firstOrNull { meta ->
+        val candidates = (setOf(meta.primaryName) + meta.aliases).map { normalizeChannelName(it) }
+        candidates.any { candidate -> candidate.isNotBlank() && normalizedQuery.contains(candidate) }
+    }
+}
+
+private fun computeChannelPriorityScore(
+    song: Song,
+    queryLanguage: String?,
+    queryChannelMeta: ChannelPriorityMeta?
+): Double {
+    val normalizedChannelName = normalizeChannelName(song.channelName)
+    val normalizedArtistName = normalizeChannelName(song.artist)
+    val meta = CHANNEL_PRIORITY_MAP[normalizedChannelName]
+    var score = 0.0
+
+    if (meta != null) {
+        score += meta.weight.toDouble()
+        if (queryLanguage != null && meta.languages.contains(queryLanguage)) {
+            score += 25.0
+        }
+    }
+
+    if (queryChannelMeta != null) {
+        val queryChannelName = normalizeChannelName(queryChannelMeta.primaryName)
+        if (meta != null && meta.primaryName == queryChannelMeta.primaryName) {
+            score += 40.0
+        } else if (queryChannelName.isNotBlank() && normalizedArtistName.contains(queryChannelName)) {
+            score += 15.0
+        }
+    }
+
+    return score
+}
+
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val youTubeClient: YouTubeMusicClient,
@@ -71,7 +263,7 @@ class SearchViewModel @Inject constructor(
         private const val TAG = "SearchViewModel"
         private const val DEBOUNCE_MS = 400L
         private const val SUGGESTION_DEBOUNCE_MS = 300L
-        private const val INITIAL_SEARCH_LIMIT = 120
+        private const val INITIAL_SEARCH_LIMIT = 100
         private const val MAX_RESULTS = 400
         private const val PAGE_SIZE = 30
     }
@@ -203,26 +395,35 @@ class SearchViewModel @Inject constructor(
             // Build comprehensive search queries
             val searchQueries = buildPowerSearchQueries(query)
             
-            // Perform parallel searches for faster results
+            // Perform parallel searches in chunks to avoid resource exhaustion
             val allSongs = mutableListOf<Song>()
-            val searchResults = searchQueries.map { searchQuery ->
-                viewModelScope.async {
-                    try {
-                        val result = youTubeClient.searchSongs(searchQuery)
-                        when (result) {
-                            is Result.Success -> result.data
-                            else -> emptyList()
+            
+            // Limit total queries to prevent overload
+            val limitedQueries = searchQueries.take(12) 
+            
+            // Process in batches of 4
+            limitedQueries.chunked(4).forEach { batch ->
+                val batchResults = batch.map { searchQuery ->
+                    viewModelScope.async {
+                        try {
+                            // Add a small random delay to prevent thundering herd
+                            delay((10..50).random().toLong())
+                            val result = youTubeClient.searchSongs(searchQuery)
+                            when (result) {
+                                is Result.Success -> result.data
+                                else -> emptyList()
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Search query failed: $searchQuery", e)
+                            emptyList()
                         }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Search query failed: $searchQuery", e)
-                        emptyList()
                     }
                 }
-            }
-            
-            // Collect all results
-            searchResults.awaitAll().forEach { songs ->
-                allSongs.addAll(songs)
+                
+                // Wait for this batch to complete before starting next
+                batchResults.awaitAll().forEach { songs ->
+                    allSongs.addAll(songs)
+                }
             }
             
             // Remove duplicates then enrich + re-rank similar to YouTube ordering
@@ -235,36 +436,71 @@ class SearchViewModel @Inject constructor(
             
             // Extract unique artists from songs
             val artists = rankedSongs
-                .map { song -> 
+                .map { song ->
+                    val normalizedArtist = normalizeChannelName(song.artist)
+                    val meta = CHANNEL_PRIORITY_MAP[normalizedArtist]
                     Artist(
-                        id = song.artist.hashCode().toString(),
+                        id = song.artist.lowercase(Locale.US).hashCode().toString(),
                         name = song.artist,
                         artworkUrl = song.artworkUrl,
-                        followerCount = song.channelSubscriberCount.toInt()
+                        followerCount = maxOf(song.channelSubscriberCount.toInt(), meta?.weight?.times(1000000 / 10) ?: 0),
+                        topSongs = emptyList()
                     )
                 }
                 .distinctBy { it.name.lowercase() }
                 .sortedByDescending { it.followerCount }
-                .take(15)
+                .take(20)
             
             // Extract unique albums from songs
-            val albums = rankedSongs
-                .filter { it.album.isNotBlank() }
-                .map { song ->
+            val albumBuckets = rankedSongs
+                .filter { it.album.isNotBlank() || it.movieName.isNotBlank() }
+                .groupBy { (it.album.takeIf { album -> album.isNotBlank() } ?: it.movieName).lowercase() }
+            val albums = albumBuckets.map { (key, songs) ->
+                val representative = songs.first()
+                Album(
+                    id = key.hashCode().toString(),
+                    name = representative.album.takeIf { it.isNotBlank() } ?: representative.movieName,
+                    artist = representative.artist,
+                    artworkUrl = representative.artworkUrl,
+                    songs = songs.take(10)
+                )
+            }.sortedByDescending { it.songs.size }.take(20)
+            
+            val movieResults = rankedSongs
+                .filter { it.movieName.isNotBlank() || it.album.contains("(From", ignoreCase = true) || it.album.contains("Original Motion", ignoreCase = true) }
+                .groupBy { it.movieName.lowercase() }
+                .map { (name, songs) ->
                     Album(
-                        id = song.album.hashCode().toString(),
-                        name = song.album,
-                        artist = song.artist,
-                        artworkUrl = song.artworkUrl
+                        id = ("movie_" + name).hashCode().toString(),
+                        name = songs.first().movieName,
+                        artist = songs.first().heroName.ifBlank { songs.first().artist },
+                        artworkUrl = songs.first().artworkUrl,
+                        songs = songs
                     )
                 }
-                .distinctBy { it.name.lowercase() }
-                .take(15)
+                .sortedByDescending { it.songs.size }
+                .take(20)
+            
+            val artistDetails = rankedSongs
+                .groupBy { it.artist.lowercase() }
+                .map { (name, songs) ->
+                    val representative = songs.first()
+                    Artist(
+                        id = name.hashCode().toString(),
+                        name = representative.artist,
+                        artworkUrl = representative.artworkUrl,
+                        followerCount = representative.channelSubscriberCount.toInt(),
+                        topSongs = songs.take(10)
+                    )
+                }
+                .sortedByDescending { it.followerCount }
+                .take(25)
             
             _uiState.value = _uiState.value.copy(
                 songs = rankedSongs.take(INITIAL_SEARCH_LIMIT),
                 albums = albums,
-                artists = artists,
+                artists = artistDetails,
+                movies = movieResults.take(15),
                 isLoading = false,
                 hasMore = rankedSongs.size > INITIAL_SEARCH_LIMIT,
                 error = if (rankedSongs.isEmpty()) "No results found. Try searching with different keywords." else null
@@ -288,6 +524,9 @@ class SearchViewModel @Inject constructor(
      */
     private fun buildPowerSearchQueries(query: String): List<String> {
         val queries = mutableListOf<String>()
+        val normalizedQuery = normalizeChannelName(query)
+        val queryLanguage = detectLanguageFromQuery(normalizedQuery)
+        val queryChannelMeta = findChannelMetaFromQuery(normalizedQuery)
         
         // Primary query
         queries.add(query)
@@ -299,7 +538,6 @@ class SearchViewModel @Inject constructor(
         queries.add("$query track")
         
         // === MOVIE SEARCHES (for film songs) ===
-        // This helps when user searches by movie name
         queries.add("$query movie songs")
         queries.add("$query movie soundtrack")
         queries.add("$query film songs")
@@ -311,7 +549,6 @@ class SearchViewModel @Inject constructor(
         queries.add("$query performer")
         
         // === ACTOR/HERO/HEROINE SEARCHES ===
-        // Helps find songs from movies by searching hero/heroine names
         queries.add("$query hero songs")
         queries.add("$query heroine songs")
         queries.add("$query actor songs")
@@ -324,41 +561,60 @@ class SearchViewModel @Inject constructor(
         queries.add("$query devotional")
         queries.add("$query classical")
         
-        // Determine if query might be targeting specific language
-        val isIndianLanguageQuery = INDIAN_LANGUAGES.any { 
-            query.lowercase().contains(it) 
+        // === CHANNEL-FOCUSED VARIATIONS ===
+        queryChannelMeta?.let { meta ->
+            queries.add("${meta.primaryName} $query")
+            queries.add("$query ${meta.primaryName}")
+            meta.aliases.take(3).forEach { alias ->
+                queries.add("$alias $query")
+                queries.add("$query $alias")
+            }
         }
         
-        // Add Indian language variations for better coverage
+        val detectedLanguage = queryLanguage ?: run {
+            DETECTABLE_LANGUAGES.firstOrNull { language ->
+                normalizedQuery.contains(language)
+            }
+        }
+        
+        val isIndianLanguageQuery = detectedLanguage != null || INDIAN_LANGUAGES.any {
+            query.lowercase().contains(it)
+        }
+        
+        if (detectedLanguage != null) {
+            CHANNEL_PRIORITY_BY_LANGUAGE[detectedLanguage]
+                ?.distinctBy { it.primaryName }
+                ?.take(4)
+                ?.forEach { meta ->
+                    queries.add("${meta.primaryName} $query")
+                    queries.add("$query ${meta.primaryName}")
+                }
+        }
+        
+        // Add Indian language variations for better coverage when language not specified
         if (!isIndianLanguageQuery) {
-            // Telugu - highest priority
             queries.add("$query telugu")
             queries.add("$query telugu songs")
             queries.add("$query telugu movie songs")
             
-            // Hindi - second priority
             queries.add("$query hindi")
             queries.add("$query hindi songs")
             queries.add("$query bollywood $query")
             
-            // Tamil
             queries.add("$query tamil")
             queries.add("$query tamil songs")
             
-            // Kannada
             queries.add("$query kannada")
             queries.add("$query kannada songs")
             
-            // Punjabi
             queries.add("$query punjabi")
             queries.add("$query punjabi songs")
             
-            // Malayalam
             queries.add("$query malayalam")
             queries.add("$query malayalam songs")
         }
         
-        return queries.distinct().take(15) // Increased limit for comprehensive search
+        return queries.distinct().take(20)
     }
     
     /**
@@ -684,6 +940,15 @@ class SearchViewModel @Inject constructor(
     private fun reRankWithYouTubeSignals(query: String, songs: List<Song>): List<Song> {
         val nowMillis = System.currentTimeMillis()
         
+        val normalizedQuery = normalizeChannelName(query)
+        val queryLanguage = detectLanguageFromQuery(normalizedQuery)
+        val queryChannelMeta = findChannelMetaFromQuery(normalizedQuery)
+        val languageTopChannels = queryLanguage?.let { language ->
+            CHANNEL_PRIORITY_BY_LANGUAGE[language]?.mapIndexed { index, meta ->
+                normalizeChannelName(meta.primaryName) to (40.0 - index * 6)
+            }?.toMap()
+        } ?: emptyMap()
+
         return songs
             .map { song ->
                 val relevance = calculateRelevanceScore(query, song).toDouble()
@@ -718,7 +983,10 @@ class SearchViewModel @Inject constructor(
                     else -> 0.0
                 }
                 
-                val score = relevance + engagement + recencyScore + officialBoost + durationScore + qualityScore
+                val channelPriorityScore = computeChannelPriorityScore(song, queryLanguage, queryChannelMeta)
+                val topChannelLanguageBoost = languageTopChannels[normalizeChannelName(song.channelName)] ?: 0.0
+                
+                val score = relevance + engagement + recencyScore + officialBoost + durationScore + qualityScore + channelPriorityScore + topChannelLanguageBoost
                 song to score
             }
             .sortedByDescending { it.second }

@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 /*
  * REON Music App - SimpMusic-Inspired Home Screen
  * Copyright (c) 2024 REON
@@ -10,6 +11,9 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -47,7 +52,9 @@ import com.reon.music.ui.components.*
 import com.reon.music.ui.theme.*
 import com.reon.music.ui.viewmodels.ChartSection
 import com.reon.music.ui.viewmodels.HomeViewModel
+import com.reon.music.ui.viewmodels.LibraryViewModel
 import com.reon.music.ui.viewmodels.PlayerViewModel
+import com.reon.music.services.DownloadStatus
 import java.util.*
 
 // SimpMusic Color Palette
@@ -82,6 +89,31 @@ private fun angleToOffset(angle: Float, size: Float = 1000f): Pair<Offset, Offse
 }
 
 @Composable
+private fun infoChip(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null
+) {
+    AssistChip(
+        onClick = {},
+        label = {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall
+            )
+        },
+        leadingIcon = if (icon != null) {
+            { Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(14.dp)) }
+        } else null,
+        colors = AssistChipDefaults.assistChipColors(
+            containerColor = ChipUnselectedBg,
+            labelColor = TextSecondary,
+            leadingIconContentColor = TextSecondary
+        ),
+        border = null
+    )
+}
+
+@Composable
 private fun MinimalSeeAllButton(onClick: () -> Unit) {
     TextButton(
         onClick = onClick,
@@ -106,7 +138,7 @@ private fun MinimalSeeAllButton(onClick: () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreen(
     homeViewModel: HomeViewModel = hiltViewModel(),
@@ -120,38 +152,51 @@ fun HomeScreen(
     onSettingsClick: () -> Unit = {}
 ) {
     val uiState by homeViewModel.uiState.collectAsState()
+    val libraryViewModel: LibraryViewModel = hiltViewModel()
+    val libraryState by libraryViewModel.uiState.collectAsState()
+    val downloadProgressMap by playerViewModel.downloadProgress.collectAsState()
     val scrollState = rememberLazyListState()
     val pullToRefreshState = rememberPullToRefreshState()
     val context = androidx.compose.ui.platform.LocalContext.current
     
-    val featuredArtistName = "Arijit Singh"
-    val featuredArtist = uiState.topArtists.firstOrNull { it.name.equals(featuredArtistName, true) }
-        ?: uiState.topArtists.firstOrNull()
-    val featuredArtistSongs = when (featuredArtist?.name?.lowercase()) {
-        "arijit singh" -> uiState.arijitSinghSongs
-        "a.r. rahman", "ar rahman" -> uiState.arRahmanSongs
-        "shreya ghoshal" -> uiState.shreyaGhoshalSongs
-        "sid sriram" -> uiState.sidSriram
-        "anirudh ravichander", "anirudh" -> uiState.anirudhSongs
-        "badshah" -> uiState.badshah
-        "yo yo honey singh", "honey singh" -> uiState.honeysingh
-        "kanika kapoor" -> uiState.kanikKapoor
-        else -> uiState.mostPlayedSongs.filter { song ->
-            featuredArtist?.name?.let { song.artist.equals(it, true) } == true
+    val downloadedSongIds = remember(libraryState.downloadedSongs) {
+        libraryState.downloadedSongs.map { it.id }.toSet()
+    }
+
+    // Aggregate Top Artist Spotlights
+    val artistSpotlights = remember(uiState) {
+        val spotlights = mutableListOf<Pair<Artist, List<Song>>>()
+        
+        fun addSpotlight(name: String, songs: List<Song>, fallbackId: String = name) {
+            if (songs.isNotEmpty()) {
+                val artist = uiState.topArtists.find { it.name.equals(name, true) || it.name.contains(name, true) }
+                    ?: Artist(fallbackId, name, songs.firstOrNull()?.getHighQualityArtwork())
+                spotlights.add(artist to songs)
+            }
         }
-    }.ifEmpty {
-        if (featuredArtist != null) {
-            uiState.newReleases.filter { song -> song.artist.equals(featuredArtist.name, true) }
-        } else {
-            emptyList()
-        }
+        
+        addSpotlight("Arijit Singh", uiState.arijitSinghSongs)
+        addSpotlight("A.R. Rahman", uiState.arRahmanSongs)
+        addSpotlight("Shreya Ghoshal", uiState.shreyaGhoshalSongs)
+        addSpotlight("Sid Sriram", uiState.sidSriram)
+        addSpotlight("Anirudh Ravichander", uiState.anirudhSongs)
+        addSpotlight("Badshah", uiState.badshah)
+        addSpotlight("Yo Yo Honey Singh", uiState.honeysingh)
+        addSpotlight("Kanika Kapoor", uiState.kanikKapoor)
+        addSpotlight("S.P. Balasubrahmanyam", uiState.spbSongs)
+        addSpotlight("Pritam", uiState.pritam)
+        addSpotlight("Harris Jayaraj", uiState.harishJeyaraj)
+        addSpotlight("Devi Sri Prasad", uiState.dspSongs)
+        addSpotlight("Thaman S", uiState.thamanSongs)
+        
+        spotlights
     }
     
     // Category filter state (vertical filters)
     var selectedCategory by remember { mutableStateOf("All") }
     val categories = listOf(
         "All", "Telugu", "Hindi", "Tamil", "Indian", "International",
-        "Love", "Sad", "Party", "Happy", "Motivation", "Chill", "Random"
+        "Love", "Sad", "Party", "Happy", "Motivation", "Chill", "Random", "Genre"
     )
     
     // Song options sheet state
@@ -162,6 +207,15 @@ fun HomeScreen(
         if (pullToRefreshState.isRefreshing) {
             homeViewModel.refresh()
             pullToRefreshState.endRefresh()
+        }
+    }
+
+    // Compute most listened list in composable context (outside LazyListScope)
+    val mostListened = remember(uiState.mostPlayedSongs, uiState.quickPicksSongs) {
+        when {
+            uiState.mostPlayedSongs.isNotEmpty() -> uiState.mostPlayedSongs
+            uiState.quickPicksSongs.isNotEmpty() -> uiState.quickPicksSongs
+            else -> emptyList()
         }
     }
 
@@ -208,11 +262,13 @@ fun HomeScreen(
                     )
                 }
                 
-                // Quick Picks Section
-                if (uiState.quickPicksSongs.isNotEmpty()) {
+                // Quick Picks Section (Most listened)
+                if (mostListened.isNotEmpty()) {
                     item {
                         QuickPicksSection(
-                            songs = uiState.quickPicksSongs,
+                            songs = mostListened,
+                            downloadedSongIds = downloadedSongIds,
+                            downloadProgressMap = downloadProgressMap,
                             onSongClick = onSongClick
                         )
                     }
@@ -432,15 +488,16 @@ fun HomeScreen(
                 
                 // ===== FEATURED ARTIST =====
                 
-                if (featuredArtist != null && featuredArtistSongs.isNotEmpty()) {
+                // ===== TOP ARTISTS SPOTLIGHTS =====
+                
+                if (artistSpotlights.isNotEmpty()) {
                     item {
-                        FeaturedArtistSection(
-                            artist = featuredArtist,
-                            songs = featuredArtistSongs,
+                        TopArtistsSpotlightPager(
+                            spotlights = artistSpotlights,
                             onSongClick = onSongClick,
                             onArtistClick = onArtistClick,
-                            onPlayAllClick = { playerViewModel.playQueue(featuredArtistSongs) },
-                            onShuffleClick = { playerViewModel.playQueue(featuredArtistSongs.shuffled()) }
+                            onPlayAll = { songs -> playerViewModel.playQueue(songs) },
+                            onShuffle = { songs -> playerViewModel.playQueue(songs.shuffled()) }
                         )
                     }
                 }
@@ -777,7 +834,7 @@ private fun SimpMusicHeader(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 20.dp)
+            .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -851,7 +908,7 @@ private fun CategoryListVertical(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -999,6 +1056,8 @@ private fun WelcomeRadioCard(
 @Composable
 private fun QuickPicksSection(
     songs: List<Song>,
+    downloadedSongIds: Set<String>,
+    downloadProgressMap: Map<String, com.reon.music.services.DownloadProgress>,
     onSongClick: (Song) -> Unit
 ) {
     Column(
@@ -1014,12 +1073,17 @@ private fun QuickPicksSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Quick picks",
+                text = "Quick Picks · Most Played",
                 style = MaterialTheme.typography.headlineSmall.copy(
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 20.sp
                 ),
                 color = TextPrimary
+            )
+            Text(
+                text = "Based on your recent listening history",
+                style = MaterialTheme.typography.labelMedium,
+                color = TextSecondary
             )
         }
         
@@ -1028,9 +1092,16 @@ private fun QuickPicksSection(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(songs.take(10)) { song ->
+                val dp = downloadProgressMap[song.id]
+                val isDownloading = dp?.status == DownloadStatus.DOWNLOADING || dp?.status == DownloadStatus.QUEUED
+                val progressPercent = dp?.progress ?: 0
+                val isDownloaded = downloadedSongIds.contains(song.id)
                 QuickPickItem(
                     song = song,
                     gradientColor = GradientColors[songs.indexOf(song) % GradientColors.size],
+                    isDownloaded = isDownloaded,
+                    isDownloading = isDownloading,
+                    downloadProgress = progressPercent,
                     onClick = { onSongClick(song) }
                 )
             }
@@ -1042,6 +1113,9 @@ private fun QuickPicksSection(
 private fun QuickPickItem(
     song: Song,
     gradientColor: Color,
+    isDownloaded: Boolean = false,
+    isDownloading: Boolean = false,
+    downloadProgress: Int = 0,
     onClick: () -> Unit
 ) {
     var isPressed by remember { mutableStateOf(false) }
@@ -1073,7 +1147,7 @@ private fun QuickPickItem(
         // Album art thumbnail with shadow
         Box(
             modifier = Modifier
-                .size(64.dp)
+                .size(92.dp)
                 .shadow(
                     elevation = 6.dp,
                     shape = RoundedCornerShape(12.dp),
@@ -1134,6 +1208,37 @@ private fun QuickPickItem(
                     overflow = TextOverflow.Ellipsis,
                     fontWeight = FontWeight.Medium
                 )
+            }
+            if (song.description.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = song.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary.copy(alpha = 0.85f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                infoChip(label = song.language.takeIf { it.isNotBlank() } ?: "Unknown Language")
+                infoChip(label = song.genre.takeIf { it.isNotBlank() } ?: "${song.type.ifBlank { "Track" }}")
+                if (song.channelName.isNotBlank()) {
+                    infoChip(label = "Channel · ${song.channelName}")
+                }
+                if (song.is320kbps) {
+                    infoChip(label = "320 kbps")
+                } else if (song.quality.isNotBlank()) {
+                    infoChip(label = song.quality.uppercase(Locale.US))
+                }
+                if (isDownloading) {
+                    infoChip(label = "${downloadProgress.coerceIn(0, 100)}%")
+                } else if (isDownloaded) {
+                    infoChip(label = "Offline")
+                }
             }
         }
         
@@ -1681,155 +1786,204 @@ private fun formatCount(count: Long): String {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FeaturedArtistSection(
-    artist: Artist,
-    songs: List<Song>,
+private fun TopArtistsSpotlightPager(
+    spotlights: List<Pair<Artist, List<Song>>>,
     onSongClick: (Song) -> Unit,
     onArtistClick: (Artist) -> Unit,
-    onPlayAllClick: () -> Unit,
-    onShuffleClick: () -> Unit
+    onPlayAll: (List<Song>) -> Unit,
+    onShuffle: (List<Song>) -> Unit
 ) {
-    val backgroundArtwork = artist.artworkUrl
-        ?: songs.firstOrNull()?.getHighQualityArtwork()
-        ?: songs.firstOrNull()?.artworkUrl
-
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { spotlights.size })
+    
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 16.dp)
+            .padding(vertical = 16.dp)
     ) {
-        Text(
-            text = "Featured Artist",
-            style = MaterialTheme.typography.labelMedium.copy(
-                fontWeight = FontWeight.SemiBold,
-                color = AccentRed
-            )
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Card(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(220.dp)
-                .clickable { onArtistClick(artist) },
-            shape = RoundedCornerShape(24.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                if (backgroundArtwork != null) {
-                    AsyncImage(
-                        model = backgroundArtwork,
-                        contentDescription = artist.name,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                brush = Brush.linearGradient(
-                                    listOf(AccentRed, AccentRedSecondary)
-                                )
-                            )
-                    )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    Color.Black.copy(alpha = 0.35f),
-                                    Color.Black.copy(alpha = 0.75f)
-                                )
-                            )
-                        )
+            Text(
+                text = "Top Artists",
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    color = AccentRed
                 )
-
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(20.dp)
+            )
+            
+            // Pager Indicator
+            if (spotlights.size > 1) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = artist.name,
-                        style = MaterialTheme.typography.headlineSmall.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color.White
-                        ),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "${songs.size} hand-picked tracks",
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            color = Color.White.copy(alpha = 0.8f)
-                        )
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        AssistChip(
-                            onClick = onPlayAllClick,
-                            label = {
-                                Text(
-                                    text = "Play All",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = null,
-                                    tint = Color.White
-                                )
-                            },
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = AccentRed.copy(alpha = 0.85f)
-                            )
-                        )
-
-                        AssistChip(
-                            onClick = onShuffleClick,
-                            label = {
-                                Text(
-                                    text = "Shuffle",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Shuffle,
-                                    contentDescription = null,
-                                    tint = Color.White
-                                )
-                            },
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = Color.White.copy(alpha = 0.2f)
-                            )
+                    repeat(spotlights.size) { iteration ->
+                        val color = if (pagerState.currentPage == iteration) AccentRed else ChipUnselectedBg
+                        Box(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(color)
+                                .size(if (pagerState.currentPage == iteration) 8.dp else 6.dp)
                         )
                     }
                 }
             }
         }
+        
+        Spacer(modifier = Modifier.height(12.dp))
 
-        Spacer(modifier = Modifier.height(18.dp))
+        androidx.compose.foundation.pager.HorizontalPager(
+            state = pagerState,
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            pageSpacing = 16.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) { page ->
+            val (artist, songs) = spotlights[page]
+            val backgroundArtwork = artist.artworkUrl
+                ?: songs.firstOrNull()?.getHighQualityArtwork()
+                ?: songs.firstOrNull()?.artworkUrl
 
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            items(songs.take(8)) { song ->
-                SongCard(
-                    song = song,
-                    onClick = { onSongClick(song) }
-                )
+            Column(modifier = Modifier.fillMaxWidth()) {
+                // Large Artist Card
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp)
+                        .clickable { onArtistClick(artist) },
+                    shape = RoundedCornerShape(24.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        if (backgroundArtwork != null) {
+                            AsyncImage(
+                                model = backgroundArtwork,
+                                contentDescription = artist.name,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        brush = Brush.linearGradient(
+                                            listOf(AccentRed, AccentRedSecondary)
+                                        )
+                                    )
+                            )
+                        }
+
+                        // Gradient Overlay
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.Transparent,
+                                            Color.Black.copy(alpha = 0.35f),
+                                            Color.Black.copy(alpha = 0.75f)
+                                        )
+                                    )
+                                )
+                        )
+
+                        // Card Content
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(20.dp)
+                        ) {
+                            Text(
+                                text = artist.name,
+                                style = MaterialTheme.typography.headlineSmall.copy(
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color.White
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "${songs.size} hand-picked tracks",
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    color = Color.White.copy(alpha = 0.8f)
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                AssistChip(
+                                    onClick = { onPlayAll(songs) },
+                                    label = {
+                                        Text(
+                                            text = "Play All",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.PlayArrow,
+                                            contentDescription = null,
+                                            tint = Color.White
+                                        )
+                                    },
+                                    colors = AssistChipDefaults.assistChipColors(
+                                        containerColor = AccentRed.copy(alpha = 0.85f),
+                                        labelColor = Color.White,
+                                        leadingIconContentColor = Color.White
+                                    ),
+                                    border = null
+                                )
+
+                                AssistChip(
+                                    onClick = { onShuffle(songs) },
+                                    label = {
+                                        Text(
+                                            text = "Shuffle",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Shuffle,
+                                            contentDescription = null,
+                                            tint = Color.White
+                                        )
+                                    },
+                                    colors = AssistChipDefaults.assistChipColors(
+                                        containerColor = Color.White.copy(alpha = 0.2f),
+                                        labelColor = Color.White,
+                                        leadingIconContentColor = Color.White
+                                    ),
+                                    border = null
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Songs Row
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(songs.take(8)) { song ->
+                        SongCard(
+                            song = song,
+                            onClick = { onSongClick(song) }
+                        )
+                    }
+                }
             }
         }
     }
@@ -2091,7 +2245,7 @@ private fun PlaylistCarouselSection(
             contentPadding = PaddingValues(horizontal = 20.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            items(playlists.take(6)) { playlist ->
+            items(playlists.take(8)) { playlist ->
                 PlaylistCard(
                     playlist = playlist,
                     onClick = { onPlaylistClick(playlist) }
