@@ -40,7 +40,14 @@ data class Song(
     val channelId: String = "", // YouTube channel ID
     val channelSubscriberCount: Long = 0L, // Channel subscriber count
     val quality: String = "", // Video quality (HD, 4K, etc.)
-    val uploadDate: String = "" // Video upload date
+    val uploadDate: String = "", // Video upload date
+    // Movie/Film metadata
+    val movieName: String = "", // Movie name if song is from a film
+    val movieGenre: String = "", // Movie genre (Action, Romance, etc.)
+    val heroName: String = "", // Male lead actor/hero name
+    val heroineName: String = "", // Female lead actor/actress/heroine name
+    val director: String = "", // Movie director name
+    val producer: String = "" // Movie producer name
 ) {
     /**
      * Get high quality artwork URL

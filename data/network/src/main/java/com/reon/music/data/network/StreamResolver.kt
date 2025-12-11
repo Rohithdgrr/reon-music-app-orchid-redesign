@@ -48,11 +48,17 @@ class StreamResolver @Inject constructor(
     suspend fun resolveStreamUrl(song: Song): String? = withContext(Dispatchers.IO) {
         Log.d(TAG, "Resolving stream for: ${song.title} (${song.source})")
         
+        // First try using existing streamUrl if available - it's most reliable
+        if (!song.streamUrl.isNullOrBlank()) {
+            Log.d(TAG, "Using existing stream URL for ${song.title}")
+            return@withContext song.streamUrl
+        }
+        
         return@withContext when (song.source) {
             "jiosaavn" -> resolveJioSaavnUrl(song)
             "youtube" -> resolveYouTubeUrl(song)
             "local" -> song.streamUrl
-            else -> song.streamUrl ?: resolveBySearch(song)
+            else -> resolveBySearch(song)
         }
     }
     

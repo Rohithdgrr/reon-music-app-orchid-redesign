@@ -139,10 +139,21 @@ fun ChartDetailScreen(
     
     // Initialize with initial songs
     LaunchedEffect(chartType) {
-        allSongs = initialSongs
+        if (chartType.startsWith("pl")) { // Assuming JioSaavn playlist IDs start with "pl"
+            homeViewModel.getPlaylistSongs(chartType)
+        } else {
+            allSongs = initialSongs
+        }
         currentPage = 1
         hasMore = true
         isUnlimitedMode = false
+    }
+
+    // Update song list when chartSongs state changes
+    LaunchedEffect(uiState.chartSongs) {
+        if (chartType.startsWith("pl")) {
+            allSongs = uiState.chartSongs
+        }
     }
     
     // Apply sorting
@@ -221,20 +232,20 @@ fun ChartDetailScreen(
     
     val scrollState = rememberLazyListState()
     
-                // Load more when near bottom
-                LaunchedEffect(scrollState) {
-                    snapshotFlow { scrollState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
-                        .collect { lastIndex ->
-                            if (lastIndex != null && lastIndex >= sortedSongs.size - 5 && hasMore && !isLoadingMore) {
-                                if (isUnlimitedMode) {
-                                    // Continue unlimited search
-                                    currentPage++
-                                } else {
-                                    currentPage++
-                                }
-                            }
-                        }
+    // Load more when near bottom
+    LaunchedEffect(scrollState) {
+        snapshotFlow { scrollState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
+            .collect { lastIndex ->
+                if (lastIndex != null && lastIndex >= sortedSongs.size - 5 && hasMore && !isLoadingMore) {
+                    if (isUnlimitedMode) {
+                        // Continue unlimited search
+                        currentPage++
+                    } else {
+                        currentPage++
+                    }
                 }
+            }
+    }
     
     
     Box(

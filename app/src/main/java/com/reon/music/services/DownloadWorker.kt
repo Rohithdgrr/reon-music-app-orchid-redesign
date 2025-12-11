@@ -58,34 +58,45 @@ class DownloadWorker(
             val fileName = "${cleanTitle}_${quality}kbps.mp3"
             val outputFile = File(downloadsDir, fileName)
             
-            // Download the file using simple URL connection
-            val url = URL(streamUrl)
-            val connection = url.openConnection()
-            connection.connect()
+            val usedYtDlp = tryYtDlp(streamUrl, outputFile)
             
-            val contentLength = connection.contentLength
-            
-            // Write to file with progress
-            connection.getInputStream().use { input ->
-                outputFile.outputStream().use { output ->
-                    val buffer = ByteArray(8192)
-                    var totalBytesRead = 0L
-                    var bytesRead: Int
-                    
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
-                        output.write(buffer, 0, bytesRead)
-                        totalBytesRead += bytesRead
+            if (!usedYtDlp) {
+                // Fallback: Download using simple URL connection
+                val url = URL(streamUrl)
+                val connection = url.openConnection()
+                connection.connect()
+                
+                val contentLength = connection.contentLength
+                
+                // Write to file with progress
+                connection.getInputStream().use { input ->
+                    outputFile.outputStream().use { output ->
+                        val buffer = ByteArray(8192)
+                        var totalBytesRead = 0L
+                        var bytesRead: Int
                         
-                        // Report progress
-                        if (contentLength > 0) {
-                            val progress = ((totalBytesRead * 100) / contentLength).toInt()
-                            setProgress(workDataOf(KEY_PROGRESS to progress))
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            output.write(buffer, 0, bytesRead)
+                            totalBytesRead += bytesRead
+                            
+                            // Report progress
+                            if (contentLength > 0) {
+                                val progress = ((totalBytesRead * 100) / contentLength).toInt()
+                                setProgress(workDataOf(KEY_PROGRESS to progress))
+                            }
                         }
                     }
                 }
             }
             
             Log.d(TAG, "Download completed: ${outputFile.absolutePath}")
+            
+            // Verify file exists and is readable
+            if (!outputFile.exists() || !outputFile.isFile || outputFile.length() == 0L) {
+                Log.e(TAG, "Downloaded file is invalid: ${outputFile.absolutePath}")
+                return@withContext Result.failure()
+            }
+            Log.d(TAG, "File verified - Size: ${outputFile.length()} bytes")
             
             // Persist download state + path so offline playback works
             try {
@@ -94,13 +105,20 @@ class DownloadWorker(
                     ReonDatabase::class.java,
                     ReonDatabase.DATABASE_NAME
                 ).build()
+                
+                val absolutePath = outputFile.absolutePath
+                Log.d(TAG, "Updating database with path: $absolutePath")
+                
                 db.songDao().updateDownloadState(
                     songId = songId,
                     state = DownloadState.DOWNLOADED,
-                    path = outputFile.absolutePath
+                    path = absolutePath
                 )
+                
+                Log.d(TAG, "Database updated successfully for song: $songId")
             } catch (dbError: Exception) {
                 Log.e(TAG, "Failed to update download state", dbError)
+                return@withContext Result.failure()
             }
             
             // Return success with file path
@@ -117,6 +135,47 @@ class DownloadWorker(
             } else {
                 Result.failure()
             }
+        }
+    }
+    
+    /**
+     * Try downloading via yt-dlp for YouTube/piped links. Returns true if executed.
+     */
+    private fun tryYtDlp(streamUrl: String, outputFile: File): Boolean {
+        return try {
+            // Heuristic: attempt yt-dlp if URL looks like YouTube or lacks file extension
+            val shouldUseYt = streamUrl.contains("youtube.com", true) ||
+                    streamUrl.contains("youtu.be", true) ||
+                    !streamUrl.contains(".mp3", true) && !streamUrl.contains(".m4a", true)
+            if (!shouldUseYt) return false
+            
+            val process = ProcessBuilder(
+                "yt-dlp",
+                "-f", "bestaudio",
+                "-o", outputFile.absolutePath,
+                streamUrl
+            )
+                .redirectErrorStream(true)
+                .start()
+            
+            // Basic read to keep buffer clear and detect completion
+            process.inputStream.bufferedReader().use { reader ->
+                reader.forEachLine { line ->
+                    // yt-dlp prints progress; we could parse but keep lightweight
+                    Log.d(TAG, line)
+                }
+            }
+            
+            val exit = process.waitFor()
+            if (exit != 0) {
+                Log.w(TAG, "yt-dlp exited with code $exit, falling back")
+                false
+            } else {
+                true
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "yt-dlp unavailable or failed: ${e.message}")
+            false
         }
     }
 }

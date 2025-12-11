@@ -53,6 +53,7 @@ import com.reon.music.ui.screens.HomeScreen
 import com.reon.music.ui.screens.LibraryScreen
 import com.reon.music.ui.screens.NowPlayingScreen
 import com.reon.music.ui.screens.PlaylistDetailScreen
+import com.reon.music.ui.screens.PreferencesScreen
 import com.reon.music.ui.screens.SearchScreen
 import com.reon.music.ui.screens.SettingsScreen
 import com.reon.music.ui.viewmodels.PlayerViewModel
@@ -135,11 +136,9 @@ fun ReonApp(
                                     playerState = playerState,
                                     currentPosition = currentPosition,
                                     isLoading = false,
-                                    isLiked = playerUiState.isLiked,
                                     onPlayPause = { playerViewModel.togglePlayPause() },
                                     onNext = { playerViewModel.skipToNext() },
                                     onPrevious = { playerViewModel.skipToPrevious() },
-                                    onLikeClick = { playerViewModel.toggleLike() },
                                     onClick = { showNowPlaying = true },
                                     modifier = Modifier.fillMaxWidth()
                                 )
@@ -171,11 +170,9 @@ fun ReonApp(
                             playerState = playerState,
                             currentPosition = currentPosition,
                             isLoading = false,
-                            isLiked = playerUiState.isLiked,
                             onPlayPause = { playerViewModel.togglePlayPause() },
                             onNext = { playerViewModel.skipToNext() },
                             onPrevious = { playerViewModel.skipToPrevious() },
-                            onLikeClick = { playerViewModel.toggleLike() },
                             onClick = { showNowPlaying = true },
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -256,7 +253,8 @@ fun ReonApp(
                         
                         composable(ReonDestination.Library.route) {
                             LibraryScreen(
-                                playerViewModel = playerViewModel
+                                playerViewModel = playerViewModel,
+                                navController = navController
                             )
                         }
                         
@@ -270,6 +268,10 @@ fun ReonApp(
                             SettingsScreen(
                                 onBackClick = { navController.popBackStack() }
                             )
+                        }
+                        
+                        composable(ReonDestination.Preferences.route) {
+                            PreferencesScreen()
                         }
                         
                         composable(

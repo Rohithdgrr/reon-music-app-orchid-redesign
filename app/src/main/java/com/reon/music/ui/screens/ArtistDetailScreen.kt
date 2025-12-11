@@ -497,7 +497,7 @@ private fun ArtistSongItem(
                 onClick()
             }
             .background(CardWhite)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Song Number
@@ -510,17 +510,18 @@ private fun ArtistSongItem(
             modifier = Modifier.width(32.dp)
         )
         
-        // Thumbnail
+        // Thumbnail - High Quality Display
         Card(
-            modifier = Modifier.size(48.dp),
-            shape = RoundedCornerShape(8.dp),
-            elevation = CardDefaults.cardElevation(2.dp)
+            modifier = Modifier.size(56.dp),
+            shape = RoundedCornerShape(6.dp),
+            elevation = CardDefaults.cardElevation(3.dp)
         ) {
             AsyncImage(
-                model = song.getHighQualityArtwork(),
-                contentDescription = song.title,
+                model = song.artworkUrl ?: song.getHighQualityArtwork(),
+                contentDescription = "${song.title} - ${song.artist}",
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                alpha = 0.95f
             )
         }
         

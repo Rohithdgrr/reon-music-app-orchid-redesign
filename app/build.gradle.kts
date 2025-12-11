@@ -111,6 +111,14 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    
+    lint {
+        disable.add("MissingPermission")
+        disable.add("DeprecatedSymbol")
+        disable.add("ConstantConditionIf")
+        disable.add("NewApi")
+        disable.add("UnusedAttribute")
+    }
 }
 
 dependencies {

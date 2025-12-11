@@ -27,6 +27,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import java.util.Calendar
+import java.text.SimpleDateFormat
+import java.util.Locale
+import kotlin.math.ln
+import kotlin.math.max
 
 data class SearchUiState(
     val query: String = "",
@@ -221,18 +225,16 @@ class SearchViewModel @Inject constructor(
                 allSongs.addAll(songs)
             }
             
-            // Remove duplicates and prioritize by relevance
-            val uniqueSongs = allSongs
-                .distinctBy { it.id }
-                .sortedByDescending { song ->
-                    calculateRelevanceScore(query, song)
-                }
-                .take(MAX_RESULTS)
+            // Remove duplicates then enrich + re-rank similar to YouTube ordering
+            val uniqueSongs = allSongs.distinctBy { it.id }
+            val enrichedTop = repository.enhanceSongsWithMetadata(uniqueSongs.take(180))
+            val mergedSongs = (enrichedTop + uniqueSongs.drop(180)).distinctBy { it.id }
+            val rankedSongs = reRankWithYouTubeSignals(query, mergedSongs).take(MAX_RESULTS)
             
-            allSearchResults.addAll(uniqueSongs)
+            allSearchResults.addAll(rankedSongs)
             
             // Extract unique artists from songs
-            val artists = uniqueSongs
+            val artists = rankedSongs
                 .map { song -> 
                     Artist(
                         id = song.artist.hashCode().toString(),
@@ -246,7 +248,7 @@ class SearchViewModel @Inject constructor(
                 .take(15)
             
             // Extract unique albums from songs
-            val albums = uniqueSongs
+            val albums = rankedSongs
                 .filter { it.album.isNotBlank() }
                 .map { song ->
                     Album(
@@ -260,15 +262,15 @@ class SearchViewModel @Inject constructor(
                 .take(15)
             
             _uiState.value = _uiState.value.copy(
-                songs = uniqueSongs.take(INITIAL_SEARCH_LIMIT),
+                songs = rankedSongs.take(INITIAL_SEARCH_LIMIT),
                 albums = albums,
                 artists = artists,
                 isLoading = false,
-                hasMore = uniqueSongs.size > INITIAL_SEARCH_LIMIT,
-                error = if (uniqueSongs.isEmpty()) "No results found. Try searching with different keywords." else null
+                hasMore = rankedSongs.size > INITIAL_SEARCH_LIMIT,
+                error = if (rankedSongs.isEmpty()) "No results found. Try searching with different keywords." else null
             )
             
-            Log.d(TAG, "Power search completed: ${uniqueSongs.size} songs found for '$query'")
+            Log.d(TAG, "Power search completed: ${rankedSongs.size} songs found for '$query'")
             
         } catch (e: Exception) {
             Log.e(TAG, "Search error", e)
@@ -281,6 +283,7 @@ class SearchViewModel @Inject constructor(
     
     /**
      * Build comprehensive search queries for power search
+     * Supports searching by: song name, artist, album, movie, metadata, hero/heroine names
      * Prioritizes Indian languages and includes movie/album searches
      */
     private fun buildPowerSearchQueries(query: String): List<String> {
@@ -289,10 +292,37 @@ class SearchViewModel @Inject constructor(
         // Primary query
         queries.add(query)
         
-        // Movie/Album search variations
-        queries.add("$query movie songs")
+        // === SONG & ALBUM SEARCHES ===
+        queries.add("$query song")
         queries.add("$query songs")
         queries.add("$query album")
+        queries.add("$query track")
+        
+        // === MOVIE SEARCHES (for film songs) ===
+        // This helps when user searches by movie name
+        queries.add("$query movie songs")
+        queries.add("$query movie soundtrack")
+        queries.add("$query film songs")
+        queries.add("$query cinema songs")
+        
+        // === ARTIST SEARCHES ===
+        queries.add("$query artist")
+        queries.add("$query singer")
+        queries.add("$query performer")
+        
+        // === ACTOR/HERO/HEROINE SEARCHES ===
+        // Helps find songs from movies by searching hero/heroine names
+        queries.add("$query hero songs")
+        queries.add("$query heroine songs")
+        queries.add("$query actor songs")
+        queries.add("$query actress songs")
+        
+        // === METADATA & CATEGORY SEARCHES ===
+        queries.add("$query romantic")
+        queries.add("$query love songs")
+        queries.add("$query sad songs")
+        queries.add("$query devotional")
+        queries.add("$query classical")
         
         // Determine if query might be targeting specific language
         val isIndianLanguageQuery = INDIAN_LANGUAGES.any { 
@@ -304,27 +334,37 @@ class SearchViewModel @Inject constructor(
             // Telugu - highest priority
             queries.add("$query telugu")
             queries.add("$query telugu songs")
+            queries.add("$query telugu movie songs")
             
             // Hindi - second priority
             queries.add("$query hindi")
             queries.add("$query hindi songs")
+            queries.add("$query bollywood $query")
             
             // Tamil
             queries.add("$query tamil")
+            queries.add("$query tamil songs")
+            
+            // Kannada
+            queries.add("$query kannada")
+            queries.add("$query kannada songs")
             
             // Punjabi
             queries.add("$query punjabi")
+            queries.add("$query punjabi songs")
+            
+            // Malayalam
+            queries.add("$query malayalam")
+            queries.add("$query malayalam songs")
         }
         
-        // Artist search
-        queries.add("$query artist songs")
-        
-        return queries.distinct().take(8) // Limit to prevent too many parallel requests
+        return queries.distinct().take(15) // Increased limit for comprehensive search
     }
     
     /**
      * Calculate relevance score for sorting results
-     * Enhanced algorithm for better ranking
+     * Enhanced algorithm for multi-field searching with better ranking
+     * Considers: title, artist, album, movie name, hero/heroine, director, metadata
      */
     private fun calculateRelevanceScore(query: String, song: Song): Int {
         var score = 0
@@ -332,30 +372,96 @@ class SearchViewModel @Inject constructor(
         val lowerTitle = song.title.lowercase()
         val lowerArtist = song.artist.lowercase()
         val lowerAlbum = song.album.lowercase()
+        val lowerMovieName = song.movieName.lowercase()
+        val lowerHero = song.heroName.lowercase()
+        val lowerHeroine = song.heroineName.lowercase()
+        val lowerDirector = song.director.lowercase()
+        val lowerProducer = song.producer.lowercase()
+        val lowerGenre = song.genre.lowercase()
+        val lowerDescription = song.description.lowercase()
         
-        // === TITLE MATCHING (Highest Priority) ===
+        // === TITLE MATCHING (Highest Priority - 200 base points) ===
         when {
             lowerTitle == lowerQuery -> score += 200 // Exact match
-            lowerTitle.startsWith(lowerQuery) -> score += 150 // Starts with query
-            lowerTitle.contains(" $lowerQuery ") -> score += 120 // Word boundary match
-            lowerTitle.contains(lowerQuery) -> score += 80 // Contains query
+            lowerTitle.startsWith(lowerQuery) -> score += 180 // Starts with query
+            lowerTitle.contains(" $lowerQuery ") -> score += 160 // Word boundary match
+            lowerTitle.contains(lowerQuery) -> score += 120 // Contains query
+            lowerTitle.split(" ").any { it == lowerQuery } -> score += 140 // Complete word match
         }
         
-        // === ARTIST MATCHING ===
+        // === ARTIST MATCHING (160 base points) ===
         when {
             lowerArtist == lowerQuery -> score += 160 // Exact artist match
-            lowerArtist.startsWith(lowerQuery) -> score += 110 // Artist starts with query
-            lowerArtist.contains(lowerQuery) -> score += 60 // Artist contains query
+            lowerArtist.startsWith(lowerQuery) -> score += 130 // Artist starts with query
+            lowerArtist.contains(lowerQuery) -> score += 100 // Artist contains query
+            lowerArtist.split(",").any { it.trim() == lowerQuery } -> score += 140 // Multiple artists
         }
         
-        // === ALBUM/MOVIE MATCHING ===
+        // === ALBUM/MOVIE MATCHING (140 base points) ===
+        // Album search
         when {
             lowerAlbum == lowerQuery -> score += 140 // Exact album match
-            lowerAlbum.startsWith(lowerQuery) -> score += 90 // Album starts with query
-            lowerAlbum.contains(lowerQuery) -> score += 50 // Album contains query
+            lowerAlbum.startsWith(lowerQuery) -> score += 110 // Album starts with query
+            lowerAlbum.contains(lowerQuery) -> score += 80 // Album contains query
         }
         
-        // === POPULARITY SCORING ===
+        // Movie name search (130 base points - high priority for film songs)
+        when {
+            lowerMovieName == lowerQuery -> score += 130 // Exact movie match
+            lowerMovieName.startsWith(lowerQuery) -> score += 110 // Movie starts with query
+            lowerMovieName.contains(lowerQuery) -> score += 85 // Movie contains query
+        }
+        
+        // === HERO/HEROINE/ACTOR SEARCHES (120 base points) ===
+        // Helps find songs from movies by searching lead actor names
+        when {
+            lowerHero == lowerQuery -> score += 120 // Exact hero match
+            lowerHero.startsWith(lowerQuery) -> score += 100 // Hero starts with query
+            lowerHero.contains(lowerQuery) -> score += 75 // Hero contains query
+        }
+        
+        when {
+            lowerHeroine == lowerQuery -> score += 120 // Exact heroine match
+            lowerHeroine.startsWith(lowerQuery) -> score += 100 // Heroine starts with query
+            lowerHeroine.contains(lowerQuery) -> score += 75 // Heroine contains query
+        }
+        
+        // === DIRECTOR/PRODUCER/CREW SEARCHES (90 base points) ===
+        when {
+            lowerDirector == lowerQuery -> score += 90 // Exact director match
+            lowerDirector.contains(lowerQuery) -> score += 60 // Director contains query
+        }
+        
+        when {
+            lowerProducer == lowerQuery -> score += 80 // Exact producer match
+            lowerProducer.contains(lowerQuery) -> score += 50 // Producer contains query
+        }
+        
+        // === METADATA SEARCHES (Genre, Description - 70 base points) ===
+        if (lowerGenre.isNotBlank()) {
+            when {
+                lowerGenre == lowerQuery -> score += 70 // Exact genre match
+                lowerGenre.contains(lowerQuery) -> score += 50 // Genre contains query
+                lowerQuery in lowerGenre.split(",").map { it.trim() } -> score += 60
+            }
+        }
+        
+        // Movie genre search (for songs from specific genre movies)
+        if (song.movieGenre.isNotBlank() && lowerQuery.contains("movie")) {
+            val lowerMovieGenre = song.movieGenre.lowercase()
+            when {
+                lowerMovieGenre.contains(lowerQuery.replace("movie", "").trim()) -> score += 50
+            }
+        }
+        
+        // Description/metadata search
+        if (lowerDescription.isNotBlank()) {
+            if (lowerDescription.contains(lowerQuery)) {
+                score += 40 // Description contains query
+            }
+        }
+        
+        // === POPULARITY SCORING (Max 105 points) ===
         // View count (normalized, max 50 points)
         val viewScore = (song.viewCount / 1000000).toInt().coerceAtMost(50)
         score += viewScore
@@ -368,25 +474,33 @@ class SearchViewModel @Inject constructor(
         val channelScore = (song.channelSubscriberCount / 1000000).toInt().coerceAtMost(25)
         score += channelScore
         
-        // === QUALITY SCORING ===
-        if (song.is320kbps) score += 20 // High quality audio
-        if (song.quality.contains("HD", ignoreCase = true)) score += 15
-        if (song.quality.contains("4K", ignoreCase = true)) score += 25
+        // === QUALITY SCORING (Max 60 points) ===
+        if (song.is320kbps) score += 25 // High quality audio (most important)
+        if (song.quality.contains("HD", ignoreCase = true)) score += 20
+        if (song.quality.contains("4K", ignoreCase = true)) score += 35
         
-        // === LANGUAGE PREFERENCE ===
+        // === LANGUAGE PREFERENCE (Max 25 points) ===
         val language = song.language.lowercase()
         when {
             language.contains("telugu") -> score += 25 // Telugu highest priority
             language.contains("hindi") -> score += 20 // Hindi second
             language.contains("tamil") -> score += 18 // Tamil third
-            INDIAN_LANGUAGES.contains(language) -> score += 15 // Other Indian languages
+            language.contains("kannada") -> score += 16 // Kannada
+            language.contains("malayalam") -> score += 14 // Malayalam
+            INDIAN_LANGUAGES.contains(language) -> score += 12 // Other Indian languages
         }
         
-        // Prefer songs with richer metadata (album + artist present)
-        if (song.album.isNotBlank()) score += 10
-        if (song.artist.isNotBlank()) score += 10
+        // === METADATA COMPLETENESS (Max 30 points) ===
+        // Prefer songs with richer metadata (more fields filled = better quality result)
+        if (song.album.isNotBlank()) score += 5
+        if (song.artist.isNotBlank()) score += 5
+        if (song.movieName.isNotBlank()) score += 8 // Film songs get bonus for complete movie info
+        if (song.heroName.isNotBlank()) score += 4
+        if (song.heroineName.isNotBlank()) score += 4
+        if (song.director.isNotBlank()) score += 2
+        if (song.genre.isNotBlank()) score += 2
         
-        // === RECENCY BONUS ===
+        // === RECENCY BONUS (Max 10 points) ===
         // Newer uploads get slight boost
         if (song.uploadDate.isNotBlank()) {
             try {
@@ -398,6 +512,12 @@ class SearchViewModel @Inject constructor(
                 // Ignore parsing errors
             }
         }
+        
+        // === CHANNEL QUALITY BONUS ===
+        // Boost results from official channels or popular creators
+        if (song.channelName.contains("official", ignoreCase = true)) score += 15
+        if (song.channelName.contains("music", ignoreCase = true)) score += 10
+        if (song.channelSubscriberCount > 10000000) score += 8 // Mega channels
         
         return score
     }
@@ -417,16 +537,16 @@ class SearchViewModel @Inject constructor(
             val endIndex = startIndex + PAGE_SIZE
             
             if (startIndex < allSearchResults.size) {
-                val nextBatch = allSearchResults.subList(
-                    startIndex,
-                    endIndex.coerceAtMost(allSearchResults.size)
-                )
+                val reRanked = reRankWithYouTubeSignals(_uiState.value.query, allSearchResults)
+                allSearchResults = reRanked.toMutableList()
+                val sliceEnd = (startIndex + PAGE_SIZE).coerceAtMost(reRanked.size)
+                val nextBatch = reRanked.subList(startIndex, sliceEnd)
                 
                 _uiState.value = _uiState.value.copy(
                     songs = _uiState.value.songs + nextBatch,
                     currentPage = currentPage + 1,
                     isLoadingMore = false,
-                    hasMore = endIndex < allSearchResults.size
+                    hasMore = sliceEnd < reRanked.size
                 )
             } else {
                 // Fetch more from API
@@ -446,10 +566,12 @@ class SearchViewModel @Inject constructor(
                                     !allSearchResults.any { it.id == newSong.id }
                                 }
                                 allSearchResults.addAll(newSongs)
+                                val reRanked = reRankWithYouTubeSignals(query, allSearchResults)
+                                allSearchResults = reRanked.toMutableList()
                                 _uiState.value = _uiState.value.copy(
-                                    songs = _uiState.value.songs + newSongs,
+                                    songs = _uiState.value.songs + reRanked.drop(_uiState.value.songs.size),
                                     currentPage = currentPage + 1,
-                                    hasMore = newSongs.isNotEmpty()
+                                    hasMore = reRanked.size > _uiState.value.songs.size
                                 )
                             }
                         }
@@ -501,18 +623,18 @@ class SearchViewModel @Inject constructor(
                 }
                 
                 val uniqueSongs = allSongs.distinctBy { it.id }
-                    .sortedByDescending { calculateRelevanceScore(query, it) }
+                val rankedSongs = reRankWithYouTubeSignals(query, uniqueSongs)
                 
                 allSearchResults.clear()
-                allSearchResults.addAll(uniqueSongs)
+                allSearchResults.addAll(rankedSongs)
                 
                 _uiState.value = _uiState.value.copy(
-                    songs = uniqueSongs,
+                    songs = rankedSongs,
                     isLoading = false,
                     hasMore = false // All results loaded
                 )
                 
-                Log.d(TAG, "Unlimited search: ${uniqueSongs.size} total songs found")
+                Log.d(TAG, "Unlimited search: ${rankedSongs.size} total songs found")
                 
             } catch (e: Exception) {
                 Log.e(TAG, "Unlimited search error", e)
@@ -554,5 +676,72 @@ class SearchViewModel @Inject constructor(
     
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
+    }
+    
+    /**
+     * Rank songs using YouTube-style signals (relevance + engagement + recency)
+     */
+    private fun reRankWithYouTubeSignals(query: String, songs: List<Song>): List<Song> {
+        val nowMillis = System.currentTimeMillis()
+        
+        return songs
+            .map { song ->
+                val relevance = calculateRelevanceScore(query, song).toDouble()
+                
+                val engagement = (
+                    ln(song.viewCount.coerceAtLeast(1).toDouble()) * 12 +
+                    ln(song.likeCount.coerceAtLeast(1).toDouble()) * 8 +
+                    ln(song.channelSubscriberCount.coerceAtLeast(1).toDouble()) * 6
+                )
+                
+                val recencyMillis = parseUploadDateMillis(song.uploadDate)
+                val monthsOld = recencyMillis?.let { (nowMillis - it).coerceAtLeast(0) / (1000L * 60 * 60 * 24 * 30) } ?: 48L
+                val recencyScore = max(0.0, 24.0 - monthsOld.toDouble()) * 3
+                
+                val officialBoost = when {
+                    song.channelName.contains("official", ignoreCase = true) -> 25.0
+                    song.channelName.contains("music", ignoreCase = true) -> 10.0
+                    else -> 0.0
+                }
+                
+                // Prefer typical music durations (~2-7 minutes) to mimic YouTube ordering
+                val durationScore = when {
+                    song.duration in 120..420 -> 18.0
+                    song.duration in 90..540 -> 8.0
+                    else -> 0.0
+                }
+                
+                val qualityScore = when {
+                    song.is320kbps -> 6.0
+                    song.quality.contains("4K", true) -> 8.0
+                    song.quality.contains("HD", true) -> 4.0
+                    else -> 0.0
+                }
+                
+                val score = relevance + engagement + recencyScore + officialBoost + durationScore + qualityScore
+                song to score
+            }
+            .sortedByDescending { it.second }
+            .map { it.first }
+    }
+    
+    /**
+     * Parse upload date string to millis for recency scoring
+     */
+    private fun parseUploadDateMillis(uploadDate: String): Long? {
+        if (uploadDate.isBlank()) return null
+        val formats = listOf(
+            "yyyy-MM-dd",
+            "dd MMM yyyy",
+            "MMM dd, yyyy",
+            "yyyy"
+        )
+        formats.forEach { pattern ->
+            runCatching {
+                val formatter = SimpleDateFormat(pattern, Locale.US)
+                formatter.parse(uploadDate)?.time
+            }.getOrNull()?.let { return it }
+        }
+        return null
     }
 }

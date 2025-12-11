@@ -21,10 +21,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.reon.music.services.DownloadProgress
 
 data class PlayerUiState(
     val isLoading: Boolean = false,
@@ -44,7 +46,8 @@ class PlayerViewModel @Inject constructor(
     private val downloadManager: com.reon.music.services.DownloadManager,
     private val discordRichPresence: com.reon.music.services.DiscordRichPresence,
     private val aiSuggestions: com.reon.music.services.AISongSuggestions,
-    private val smartOfflineCache: com.reon.music.services.SmartOfflineCache
+    private val smartOfflineCache: com.reon.music.services.SmartOfflineCache,
+    private val userPreferences: com.reon.music.core.preferences.UserPreferences
 ) : ViewModel() {
     
     companion object {
@@ -59,6 +62,8 @@ class PlayerViewModel @Inject constructor(
     
     private val _currentPosition = MutableStateFlow(0L)
     val currentPosition: StateFlow<Long> = _currentPosition.asStateFlow()
+    private val _downloadProgress = MutableStateFlow<Map<String, DownloadProgress>>(emptyMap())
+    val downloadProgress: StateFlow<Map<String, DownloadProgress>> = _downloadProgress.asStateFlow()
     
     private var positionUpdateJob: Job? = null
     
@@ -204,6 +209,7 @@ class PlayerViewModel @Inject constructor(
     
     /**
      * Play a song - resolves stream URL and plays with retry logic
+     * Supports offline mode by checking for downloaded songs first, but allows streaming as fallback
      */
     fun playSong(song: Song, retryCount: Int = 0) {
         viewModelScope.launch {
@@ -211,11 +217,37 @@ class PlayerViewModel @Inject constructor(
             
             try {
                 Log.d(TAG, "Playing song: ${song.title} (${song.source}) - attempt ${retryCount + 1}")
+                
+                // First, try to play downloaded song if available
+                val songEntity = songDao.getSongById(song.id)
+                val downloadState = com.reon.music.data.database.entities.DownloadState
+                
+                if (songEntity != null) {
+                    Log.d(TAG, "Song found in DB - downloadState: ${songEntity.downloadState}, localPath: ${songEntity.localPath}")
+                    
+                    val localPath = songEntity.localPath
+                    if (songEntity.downloadState == downloadState.DOWNLOADED && 
+                        localPath != null && 
+                        java.io.File(localPath).exists()) {
+                        
+                        Log.d(TAG, "Playing downloaded song from local path: $localPath")
+                        Log.d(TAG, "File exists: ${java.io.File(localPath).exists()}")
+                        Log.d(TAG, "File size: ${java.io.File(localPath).length()} bytes")
+                        
+                        playerController.playSong(song, localPath)
+                        _uiState.value = _uiState.value.copy(isLoading = false, showPlayer = true)
+                        Log.d(TAG, "Offline playback started successfully")
+                        return@launch
+                    }
+                }
+                
+                // If not downloaded, try to stream online
+                Log.d(TAG, "Song not downloaded or file missing. Attempting to resolve stream URL...")
                 Log.d(TAG, "Existing streamUrl: ${song.streamUrl?.take(100) ?: "null"}")
                 
                 val streamUrl = streamResolver.resolveStreamUrl(song)
                 
-                if (streamUrl != null) {
+                if (streamUrl != null && streamUrl.isNotBlank()) {
                     Log.d(TAG, "Resolved stream URL: ${streamUrl.take(100)}...")
                     Log.d(TAG, "Starting playback...")
                     playerController.playSong(song, streamUrl)
@@ -224,30 +256,30 @@ class PlayerViewModel @Inject constructor(
                 } else {
                     Log.e(TAG, "Could not resolve stream URL")
                     
-                    // Retry up to 2 times
+                    // Retry up to 2 times with exponential backoff
                     if (retryCount < 2) {
-                        Log.d(TAG, "Retrying...")
-                        delay(1000) // Wait 1 second before retry
+                        Log.d(TAG, "Retrying (attempt ${retryCount + 2})...")
+                        delay((retryCount + 1) * 1000L) // Wait 1s, then 2s for retries
                         playSong(song, retryCount + 1)
                     } else {
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
-                            error = "Could not play: ${song.title}. Please try again."
+                            error = "Could not play: ${song.title}. Please check your internet connection and try again."
                         )
                     }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error playing song", e)
                 
-                // Retry on exception
+                // Retry on exception with exponential backoff
                 if (retryCount < 2) {
-                    Log.d(TAG, "Retrying after error...")
-                    delay(1000)
+                    Log.d(TAG, "Retrying after error (attempt ${retryCount + 2})...")
+                    delay((retryCount + 1) * 1000L)
                     playSong(song, retryCount + 1)
                 } else {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        error = "Error playing: ${e.message}"
+                        error = "Error playing: ${e.message ?: "Unknown error"}"
                     )
                 }
             }
@@ -388,10 +420,28 @@ class PlayerViewModel @Inject constructor(
         if (songs.isEmpty()) return
         viewModelScope.launch {
             try {
-                downloadManager.downloadSongs(songs)
-                // Pre-cache entries in DB so offline playback can resolve local path once worker finishes
-                val entities = songs.map { com.reon.music.data.database.entities.SongEntity.fromSong(it, isDownloaded = true) }
-                songDao.insertAll(entities)
+                val resolvedUrls = mutableMapOf<String, String?>()
+                songs.forEach { song ->
+                    resolvedUrls[song.id] = streamResolver.resolveStreamUrl(song)
+                }
+                
+                downloadManager.downloadSongs(songs, resolvedUrls)
+                
+                // Ensure each song is in DB and mark state as DOWNLOADING so it only appears in Downloads after completion
+                songs.forEach { song ->
+                    val existing = songDao.getSongById(song.id)
+                    if (existing == null) {
+                        songDao.insert(com.reon.music.data.database.entities.SongEntity.fromSong(song))
+                    }
+                    songDao.updateDownloadState(
+                        songId = song.id,
+                        state = com.reon.music.data.database.entities.DownloadState.DOWNLOADING,
+                        path = null
+                    )
+                }
+                
+                // Track progress for UI animation
+                songs.forEach { trackDownloadProgress(it.id) }
             } catch (e: Exception) {
                 Log.e(TAG, "Error starting bulk download", e)
             }
@@ -401,15 +451,63 @@ class PlayerViewModel @Inject constructor(
     fun downloadSong(song: Song) {
         viewModelScope.launch {
             try {
-                // Initiate download via DownloadManager
-                downloadManager.downloadSong(song)
+                Log.d(TAG, "Starting download for: ${song.title}")
                 
-                // Also ensure it's in DB
-                if (songDao.getSongById(song.id) == null) {
-                    songDao.insert(com.reon.music.data.database.entities.SongEntity.fromSong(song, isDownloaded = true))
+                val streamUrl = streamResolver.resolveStreamUrl(song)
+                if (streamUrl.isNullOrBlank()) {
+                    Log.e(TAG, "No stream URL available for download: ${song.title}")
+                    _uiState.value = _uiState.value.copy(
+                        error = "Cannot download: No stream URL found"
+                    )
+                    return@launch
                 }
+                
+                Log.d(TAG, "Resolved stream URL for download: ${streamUrl.take(100)}...")
+                
+                // Ensure song is in database with download pending state
+                val existingSong = songDao.getSongById(song.id)
+                if (existingSong == null) {
+                    Log.d(TAG, "Creating new song entry in database")
+                    val entity = com.reon.music.data.database.entities.SongEntity.fromSong(song)
+                    songDao.insert(entity)
+                } else {
+                    Log.d(TAG, "Song already in database, updating download state")
+                }
+                
+                // Update to downloading state
+                songDao.updateDownloadState(
+                    songId = song.id,
+                    state = com.reon.music.data.database.entities.DownloadState.DOWNLOADING,
+                    path = null
+                )
+                
+                Log.d(TAG, "Initiating download via DownloadManager")
+                
+                // Initiate download via DownloadManager
+                downloadManager.downloadSong(song, streamUrl)
+                
+                Log.d(TAG, "Download queued, tracking progress...")
+                
+                // Track progress for UI updates
+                trackDownloadProgress(song.id)
+                
+                Log.d(TAG, "Download initiated for: ${song.title}")
             } catch (e: Exception) {
                 Log.e(TAG, "Error starting download", e)
+                _uiState.value = _uiState.value.copy(
+                    error = "Download failed: ${e.message ?: "Unknown error"}"
+                )
+                
+                // Mark as failed in database
+                try {
+                    songDao.updateDownloadState(
+                        songId = song.id,
+                        state = com.reon.music.data.database.entities.DownloadState.FAILED,
+                        path = null
+                    )
+                } catch (dbError: Exception) {
+                    Log.e(TAG, "Failed to update failed state", dbError)
+                }
             }
         }
     }
@@ -428,6 +526,11 @@ class PlayerViewModel @Inject constructor(
     fun addToQueue(song: Song, playNext: Boolean = false) {
         viewModelScope.launch {
             try {
+                // Prevent duplicates
+                if (playerState.value.queue.any { it.id == song.id }) {
+                    Log.d(TAG, "Song already in queue: ${song.title}")
+                    return@launch
+                }
                 val streamUrl = streamResolver.resolveStreamUrl(song)
                 if (streamUrl != null) {
                     playerController.addToQueue(song, streamUrl)
@@ -488,38 +591,54 @@ class PlayerViewModel @Inject constructor(
     
     /**
      * Enable radio mode - plays endless songs automatically with smart auto-queue
+     * Mixes both YouTube and JioSaavn sources for maximum variety
      */
     fun enableRadioMode(seedSongs: List<Song>) {
         viewModelScope.launch {
-            // Start with seed songs
+            // Start with seed songs shuffled from both sources
             if (seedSongs.isNotEmpty()) {
-                playQueue(seedSongs)
+                playQueue(seedSongs.shuffled())
             }
             
-            // Set up automatic queue extension with smart queue management
+            // Set up automatic queue extension with smart queue management from mixed sources
             playerController.enableRadioMode { currentSong ->
                 if (currentSong != null) {
                     viewModelScope.launch {
-                        // Get multiple sources for variety
-                        val relatedSongs = repository.getRelatedSongs(currentSong, 30).getOrNull() ?: emptyList()
-                        val artistSongs = if (currentSong.artist.isNotBlank()) {
-                            repository.searchSongsWithLimit("${currentSong.artist} songs", 20).getOrNull() ?: emptyList()
-                        } else emptyList()
-                        
-                        val genreSongs = if (currentSong.genre.isNotBlank()) {
-                            repository.searchSongsWithLimit("${currentSong.genre} songs", 20).getOrNull() ?: emptyList()
-                        } else emptyList()
-                        
-                        // Combine and shuffle for variety
-                        val allNewSongs = (relatedSongs + artistSongs + genreSongs)
-                            .distinctBy { it.id }
-                            .filter { it.id != currentSong.id }
-                            .shuffled()
-                            .take(25) // Add 25 songs at a time
-                        
-                        // Add to queue
-                        allNewSongs.forEach { song ->
-                            addToQueue(song)
+                        try {
+                            // Strategy 1: Get related songs (YouTube + JioSaavn)
+                            val relatedSongs = repository.getRelatedSongs(currentSong, 40).getOrNull() ?: emptyList()
+                            
+                            // Strategy 2: Get artist songs (both sources)
+                            val artistSongs = if (currentSong.artist.isNotBlank()) {
+                                val artistQuery = "${currentSong.artist} songs"
+                                repository.searchSongsWithLimit(artistQuery, 25).getOrNull() ?: emptyList()
+                            } else emptyList()
+                            
+                            // Strategy 3: Get genre/mood songs (both sources)
+                            val genreSongs = if (currentSong.genre.isNotBlank()) {
+                                repository.searchSongsWithLimit("${currentSong.genre} songs", 25).getOrNull() ?: emptyList()
+                            } else emptyList()
+                            
+                            // Strategy 4: Get similar title keywords (both sources)
+                            val titleKeywords = currentSong.title.split(" ").take(2)
+                            val similarSongs = if (titleKeywords.isNotEmpty()) {
+                                repository.searchSongsWithLimit(titleKeywords.joinToString(" "), 20).getOrNull() ?: emptyList()
+                            } else emptyList()
+                            
+                            // Combine from all strategies and shuffle for maximum variety
+                            val allNewSongs = (relatedSongs + artistSongs + genreSongs + similarSongs)
+                                .distinctBy { it.id }
+                                .filter { it.id != currentSong.id }
+                                .shuffled()  // Shuffle to mix YouTube and JioSaavn sources
+                                .take(30) // Add 30 songs at a time for continuous playback
+                            
+                            // Add to queue
+                            allNewSongs.forEach { song ->
+                                addToQueue(song)
+                            }
+                        } catch (e: Exception) {
+                            // Silently continue if auto-queue fails
+                            e.printStackTrace()
                         }
                     }
                 }
@@ -532,5 +651,63 @@ class PlayerViewModel @Inject constructor(
      */
     fun disableRadioMode() {
         playerController.disableRadioMode()
+    }
+    
+    /**
+     * Track download progress for a song and surface to UI
+     */
+    private fun trackDownloadProgress(songId: String) {
+        viewModelScope.launch {
+            downloadManager.getDownloadProgress(songId).collect { progress ->
+                _downloadProgress.value = _downloadProgress.value + (songId to progress)
+                
+                Log.d(TAG, "Download progress for $songId: ${progress.progress}% - ${progress.status}")
+                
+                // Clean up completed/failed to avoid endless spinners
+                when (progress.status) {
+                    com.reon.music.services.DownloadStatus.COMPLETED -> {
+                        Log.d(TAG, "Download completed for song $songId")
+                        Log.d(TAG, "File path: ${progress.filePath}")
+                        
+                        // Verify file exists
+                        if (progress.filePath != null && java.io.File(progress.filePath).exists()) {
+                            Log.d(TAG, "File verified to exist: ${progress.filePath}")
+                            Log.d(TAG, "File size: ${java.io.File(progress.filePath).length()} bytes")
+                        } else {
+                            Log.w(TAG, "Downloaded file does not exist at: ${progress.filePath}")
+                        }
+                        
+                        // Clean up from tracking
+                        _downloadProgress.value = _downloadProgress.value - songId
+                    }
+                    
+                    com.reon.music.services.DownloadStatus.FAILED -> {
+                        Log.e(TAG, "Download failed for song $songId")
+                        
+                        // Mark as failed in database
+                        try {
+                            songDao.updateDownloadState(
+                                songId = songId,
+                                state = com.reon.music.data.database.entities.DownloadState.FAILED,
+                                path = null
+                            )
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to update failed state", e)
+                        }
+                        
+                        _downloadProgress.value = _downloadProgress.value - songId
+                    }
+                    
+                    com.reon.music.services.DownloadStatus.CANCELLED -> {
+                        Log.d(TAG, "Download cancelled for song $songId")
+                        _downloadProgress.value = _downloadProgress.value - songId
+                    }
+                    
+                    else -> {
+                        // Keep tracking for other states
+                    }
+                }
+            }
+        }
     }
 }

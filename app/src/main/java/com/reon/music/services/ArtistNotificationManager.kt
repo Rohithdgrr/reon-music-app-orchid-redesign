@@ -13,8 +13,10 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
+import androidx.core.content.ContextCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import android.Manifest
 import com.reon.music.core.model.Artist
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -111,6 +113,10 @@ class ArtistNotificationManager @Inject constructor(
      */
     fun notifyNewRelease(artist: Artist, releaseTitle: String, releaseType: String) {
         if (!_isEnabled.value) return
+        if (!hasPostNotificationPermission()) {
+            Log.w(TAG, "Notification permission not granted; skipping artist notification.")
+            return
+        }
         
         scope.launch {
             try {
@@ -146,6 +152,20 @@ class ArtistNotificationManager @Inject constructor(
             } catch (e: Exception) {
                 Log.e(TAG, "Error sending notification", e)
             }
+        }
+    }
+    
+    /**
+     * POST_NOTIFICATIONS runtime permission check (Android 13+)
+     */
+    private fun hasPostNotificationPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        } else {
+            true
         }
     }
     

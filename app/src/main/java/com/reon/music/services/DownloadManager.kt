@@ -19,21 +19,31 @@ import javax.inject.Singleton
 
 /**
  * Download Manager
- * Manages song downloads using WorkManager
+ * Manages song downloads using WorkManager with optional yt-dlp fallback
+ * 
+ * When WorkManager download fails, can fallback to yt-dlp if available
  */
 @Singleton
 class DownloadManager @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val ytDlpDownloader: YtDlpDownloader
 ) {
     private val workManager = WorkManager.getInstance(context)
     
     /**
      * Queue a song for download
      */
-    fun downloadSong(song: Song, quality: AudioQuality = AudioQuality.HIGH): UUID {
+    fun downloadSong(
+        song: Song,
+        resolvedStreamUrl: String? = null,
+        quality: AudioQuality = AudioQuality.HIGH
+    ): UUID {
         val inputData = Data.Builder()
             .putString(DownloadWorker.KEY_SONG_ID, song.id)
-            .putString(DownloadWorker.KEY_STREAM_URL, song.getStreamUrlWithQuality("_${quality.bitrate}"))
+            .putString(
+                DownloadWorker.KEY_STREAM_URL,
+                resolvedStreamUrl ?: song.getStreamUrlWithQuality("_${quality.bitrate}")
+            )
             .putString(DownloadWorker.KEY_TITLE, song.title)
             .putString(DownloadWorker.KEY_QUALITY, quality.bitrate.toString())
             .build()
@@ -62,8 +72,14 @@ class DownloadManager @Inject constructor(
     /**
      * Download multiple songs
      */
-    fun downloadSongs(songs: List<Song>, quality: AudioQuality = AudioQuality.HIGH): List<UUID> {
-        return songs.map { downloadSong(it, quality) }
+    fun downloadSongs(
+        songs: List<Song>,
+        resolvedStreamUrls: Map<String, String?> = emptyMap(),
+        quality: AudioQuality = AudioQuality.HIGH
+    ): List<UUID> {
+        return songs.map { song ->
+            downloadSong(song, resolvedStreamUrls[song.id], quality)
+        }
     }
     
     /**

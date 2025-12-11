@@ -39,6 +39,7 @@ import com.reon.music.data.database.entities.PlaylistEntity
 import com.reon.music.ui.viewmodels.LibraryTab
 import com.reon.music.ui.viewmodels.LibraryViewModel
 import com.reon.music.ui.viewmodels.PlayerViewModel
+import com.reon.music.playback.PlayerState
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
 import com.reon.music.ui.theme.*
@@ -58,20 +59,19 @@ private val CategoryFollowed = Color(0xFFFFD54F)     // Yellow
 private val CategoryMostPlayed = Color(0xFF4DD0E1)   // Cyan
 private val CategoryDownloaded = Color(0xFF81C784)   // Green
 
+private enum class LibraryQuickCategory { NONE, FAVORITES, FOLLOWED, MOST_PLAYED, HISTORY, PREFERENCES }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
     libraryViewModel: LibraryViewModel = hiltViewModel(),
     playerViewModel: PlayerViewModel = hiltViewModel(),
-    navController: NavHostController = rememberNavController()
+    navController: NavHostController
 ) {
     val uiState by libraryViewModel.uiState.collectAsState()
     val playerState by playerViewModel.playerState.collectAsState()
     
     val context = LocalContext.current
-    
-    var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Your library", "Your YouTube Playlists", "Made for you")
     
     // Sheet states
     var showSongOptions by remember { mutableStateOf(false) }
@@ -79,6 +79,15 @@ fun LibraryScreen(
     var showPlaylistOptions by remember { mutableStateOf(false) }
     var selectedPlaylist by remember { mutableStateOf<PlaylistEntity?>(null) }
     var showAddToPlaylistDialog by remember { mutableStateOf(false) }
+    var selectedQuickCategory by remember { mutableStateOf(LibraryQuickCategory.NONE) }
+
+    fun toggleQuickCategory(category: LibraryQuickCategory) {
+        selectedQuickCategory = if (selectedQuickCategory == category) {
+            LibraryQuickCategory.NONE
+        } else {
+            category
+        }
+    }
     
     Scaffold(
         topBar = {
@@ -92,18 +101,7 @@ fun LibraryScreen(
                     )
                 },
                 actions = {
-                    // Radio mode for library
-                    if (uiState.recentlyPlayed.isNotEmpty()) {
-                        IconButton(onClick = { 
-                            playerViewModel.enableRadioMode(uiState.recentlyPlayed)
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.Radio,
-                                contentDescription = "Radio Mode",
-                                tint = AccentRed
-                            )
-                        }
-                    }
+                    Spacer(modifier = Modifier.width(4.dp))
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = BackgroundWhite
@@ -111,14 +109,13 @@ fun LibraryScreen(
             )
         },
         floatingActionButton = {
-            if (selectedTab == 0) {
-                FloatingActionButton(
-                    onClick = { libraryViewModel.showCreatePlaylistDialog() },
-                    containerColor = AccentRed,
-                    contentColor = Color.White
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Create Playlist")
-                }
+            // Show FAB only in overview
+            FloatingActionButton(
+                onClick = { libraryViewModel.showCreatePlaylistDialog() },
+                containerColor = AccentRed,
+                contentColor = Color.White
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Create Playlist")
             }
         },
         containerColor = BackgroundWhite
@@ -128,271 +125,545 @@ fun LibraryScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Tab Switcher
-            TabRow(
-                selectedTabIndex = selectedTab,
-                containerColor = BackgroundWhite,
-                contentColor = AccentRed,
-                indicator = { tabPositions ->
-                    TabRowDefaults.Indicator(
-                        modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                        color = AccentRed,
-                        height = 3.dp
-                    )
-                }
-            ) {
-                tabs.forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedTab == index,
-                        onClick = { selectedTab = index },
-                        text = {
-                            Text(
-                                text = title,
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
-                                color = if (selectedTab == index) AccentRed else TextSecondary
-                            )
+            LibraryOverviewContent(
+                uiState = uiState,
+                playerState = playerState,
+                onSongClick = { playerViewModel.playSong(it) },
+                onSongMoreClick = { song ->
+                    selectedSong = song
+                    showSongOptions = true
+                },
+                selectedQuickCategory = selectedQuickCategory,
+                onQuickCategorySelected = { selected ->
+                    when (selected) {
+                        LibraryQuickCategory.HISTORY -> {
+                            navController.navigate(ReonDestination.History.route)
                         }
-                    )
+                        LibraryQuickCategory.PREFERENCES -> {
+                            navController.navigate(ReonDestination.Preferences.route)
+                        }
+                        else -> {
+                            toggleQuickCategory(selected)
+                        }
+                    }
+                },
+                onQuickCategoryClear = { selectedQuickCategory = LibraryQuickCategory.NONE },
+                onPlaylistClick = { playlist ->
+                    selectedPlaylist = playlist
+                    showPlaylistOptions = true
                 }
+            )
+        }
+    }
+        
+    // Create playlist dialog
+    if (uiState.showCreatePlaylistDialog) {
+        CreatePlaylistDialog(
+            onDismiss = { libraryViewModel.hideCreatePlaylistDialog() },
+            onCreate = { name, desc -> libraryViewModel.createPlaylist(name, desc) }
+        )
+    }
+        
+    // Song Options Bottom Sheet
+    if (showSongOptions && selectedSong != null) {
+        LibrarySongOptionsSheet(
+            song = selectedSong!!,
+            onDismiss = { showSongOptions = false },
+            onPlay = { 
+                playerViewModel.playSong(selectedSong!!)
+                showSongOptions = false
+            },
+            onPlayNext = { 
+                playerViewModel.addToQueue(selectedSong!!, playNext = true)
+                showSongOptions = false
+            },
+            onAddToQueue = { 
+                playerViewModel.addToQueue(selectedSong!!)
+                showSongOptions = false
+            },
+            onDownload = { 
+                playerViewModel.downloadSong(selectedSong!!)
+                showSongOptions = false
+            },
+            onAddToPlaylist = { 
+                showAddToPlaylistDialog = true
+                showSongOptions = false
+            },
+            onRemoveFromLibrary = { 
+                libraryViewModel.removeSongFromLibrary(selectedSong!!)
+                showSongOptions = false
+            },
+            onShare = { 
+                val sendIntent = Intent().apply {
+                    action = Intent.ACTION_SEND
+                    putExtra(Intent.EXTRA_TEXT, "Listen to ${selectedSong!!.title} by ${selectedSong!!.artist}")
+                    type = "text/plain"
+                }
+                context.startActivity(Intent.createChooser(sendIntent, "Share Song"))
+                showSongOptions = false
             }
-            
-            // Content based on selected tab
-            when (selectedTab) {
-                0 -> LibraryOverviewContent(
-                    uiState = uiState,
-                    playerState = playerState,
-                    onSongClick = { playerViewModel.playSong(it) },
-                    onSongMoreClick = { song ->
-                        selectedSong = song
-                        showSongOptions = true
-                    },
-                    onFavoriteClick = { 
-                        navController.navigate(
-                            route = ReonDestination.ChartDetail.createRoute("alltimefavorite", "Favorites"),
-                            navOptions = NavOptions.Builder().setLaunchSingleTop(true).build()
-                        )
-                    },
-                    onFollowedClick = { selectedTab = 1 }, // Switch to YouTube Playlists tab (safe, no crash)
-                    onMostPlayedClick = { 
-                        navController.navigate(
-                            route = ReonDestination.ChartDetail.createRoute("mostlistening", "Most Played"),
-                            navOptions = NavOptions.Builder().setLaunchSingleTop(true).build()
-                        )
-                    },
-                    onDownloadedClick = { 
-                        navController.navigate(
-                            route = ReonDestination.Downloads.route,
-                            navOptions = NavOptions.Builder().setLaunchSingleTop(true).build()
-                        )
-                    },
-                    onPlaylistClick = { libraryViewModel.selectTab(LibraryTab.PLAYLISTS) }
-                )
-                1 -> YouTubePlaylistsContent(
-                    playlists = uiState.playlists,
-                    onPlaylistClick = { /* Navigate to playlist */ },
-                    onPlaylistMoreClick = { playlist ->
-                        selectedPlaylist = playlist
-                        showPlaylistOptions = true
-                    }
-                )
-                2 -> MadeForYouContent(
-                    uiState = uiState,
-                    onSongClick = { playerViewModel.playSong(it) },
-                    onSongMoreClick = { song ->
-                        selectedSong = song
-                        showSongOptions = true
-                    }
-                )
+        )
+    }
+        
+    // Playlist Options Bottom Sheet
+    if (showPlaylistOptions && selectedPlaylist != null) {
+        PlaylistOptionsSheet(
+            playlist = selectedPlaylist!!,
+            onDismiss = { showPlaylistOptions = false },
+            onPlay = { 
+                // Play all songs in playlist
+                showPlaylistOptions = false
+            },
+            onShuffle = { 
+                // Shuffle play playlist
+                showPlaylistOptions = false
+            },
+            onAddToQueue = { 
+                // Add all songs to queue
+                showPlaylistOptions = false
+            },
+            onDownload = { 
+                // Download playlist
+                showPlaylistOptions = false
+            },
+            onDelete = { 
+                libraryViewModel.deletePlaylist(selectedPlaylist!!)
+                showPlaylistOptions = false
+            },
+            onShare = { 
+                val sendIntent = Intent().apply {
+                    action = Intent.ACTION_SEND
+                    putExtra(Intent.EXTRA_TEXT, "Check out this playlist: ${selectedPlaylist!!.title}")
+                    type = "text/plain"
+                }
+                context.startActivity(Intent.createChooser(sendIntent, "Share Playlist"))
+                showPlaylistOptions = false
+            }
+        )
+    }
+        
+    // Add to Playlist Dialog
+    if (showAddToPlaylistDialog && selectedSong != null) {
+        AddToPlaylistDialog(
+            playlists = uiState.playlists,
+            onDismiss = { showAddToPlaylistDialog = false },
+            onPlaylistSelected = { playlist ->
+                libraryViewModel.addToPlaylist(playlist.id, selectedSong!!)
+                showAddToPlaylistDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun QuickCategoryHeader(
+    category: LibraryQuickCategory,
+    uiState: com.reon.music.ui.viewmodels.LibraryUiState,
+    onClear: () -> Unit
+) {
+    val (title, count) = when (category) {
+        LibraryQuickCategory.FAVORITES -> "Favorite Songs" to uiState.likedSongs.size
+        LibraryQuickCategory.FOLLOWED -> "Followed Playlists" to uiState.playlists.size
+        LibraryQuickCategory.MOST_PLAYED -> "Most Played" to uiState.recentlyPlayed.size
+        LibraryQuickCategory.HISTORY -> "Listening History" to uiState.recentlyPlayed.size
+        LibraryQuickCategory.PREFERENCES -> "Preferences" to 0
+        LibraryQuickCategory.NONE -> "" to 0
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
+            )
+            Text(
+                text = "$count item${if (count == 1) "" else "s"}",
+                style = MaterialTheme.typography.labelMedium,
+                color = TextSecondary
+            )
+        }
+        TextButton(onClick = onClear) {
+            Text("Close", color = AccentRed)
+        }
+    }
+}
+
+@Composable
+private fun QuickSongList(
+    songs: List<Song>,
+    playerState: PlayerState,
+    onSongClick: (Song) -> Unit,
+    onSongMoreClick: (Song) -> Unit,
+    emptyMessage: String = "No songs to display yet."
+) {
+    if (songs.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = emptyMessage,
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextSecondary
+            )
+        }
+        return
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(SurfaceLight)
+    ) {
+        songs.forEachIndexed { index, song ->
+            LibrarySongRow(
+                song = song,
+                isPlaying = playerState.currentSong?.id == song.id,
+                onClick = { onSongClick(song) },
+                onMoreClick = { onSongMoreClick(song) }
+            )
+            if (index < songs.lastIndex) {
+                HorizontalDivider(color = BackgroundWhite.copy(alpha = 0.4f))
             }
         }
-        
-        // Create playlist dialog
-        if (uiState.showCreatePlaylistDialog) {
-            CreatePlaylistDialog(
-                onDismiss = { libraryViewModel.hideCreatePlaylistDialog() },
-                onCreate = { name, desc -> libraryViewModel.createPlaylist(name, desc) }
+    }
+}
+
+@Composable
+private fun QuickPlaylistList(
+    playlists: List<PlaylistEntity>,
+    onPlaylistClick: (PlaylistEntity) -> Unit
+) {
+    if (playlists.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "No followed playlists yet.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextSecondary
             )
         }
-        
-        // Song Options Bottom Sheet
-        if (showSongOptions && selectedSong != null) {
-            LibrarySongOptionsSheet(
-                song = selectedSong!!,
-                onDismiss = { showSongOptions = false },
-                onPlay = { 
-                    playerViewModel.playSong(selectedSong!!)
-                    showSongOptions = false
-                },
-                onPlayNext = { 
-                    playerViewModel.addToQueue(selectedSong!!, playNext = true)
-                    showSongOptions = false
-                },
-                onAddToQueue = { 
-                    playerViewModel.addToQueue(selectedSong!!)
-                    showSongOptions = false
-                },
-                onDownload = { 
-                    playerViewModel.downloadSong(selectedSong!!)
-                    showSongOptions = false
-                },
-                onAddToPlaylist = { 
-                    showAddToPlaylistDialog = true
-                    showSongOptions = false
-                },
-                onRemoveFromLibrary = { 
-                    libraryViewModel.removeSongFromLibrary(selectedSong!!)
-                    showSongOptions = false
-                },
-                onShare = { 
-                    val sendIntent = Intent().apply {
-                        action = Intent.ACTION_SEND
-                        putExtra(Intent.EXTRA_TEXT, "Listen to ${selectedSong!!.title} by ${selectedSong!!.artist}")
-                        type = "text/plain"
-                    }
-                    context.startActivity(Intent.createChooser(sendIntent, "Share Song"))
-                    showSongOptions = false
-                }
+        return
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(SurfaceLight)
+    ) {
+        playlists.forEachIndexed { index, playlist ->
+            QuickPlaylistRow(playlist = playlist, onClick = { onPlaylistClick(playlist) })
+            if (index < playlists.lastIndex) {
+                HorizontalDivider(color = BackgroundWhite.copy(alpha = 0.4f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun LibrarySongRow(
+    song: Song,
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+    onMoreClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        AsyncImage(
+            model = song.artworkUrl,
+            contentDescription = song.title,
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(8.dp)),
+            contentScale = ContentScale.Crop
+        )
+
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = song.title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.SemiBold,
+                color = if (isPlaying) AccentRed else TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = song.artist,
+                style = MaterialTheme.typography.labelSmall,
+                color = TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
-        
-        // Playlist Options Bottom Sheet
-        if (showPlaylistOptions && selectedPlaylist != null) {
-            PlaylistOptionsSheet(
-                playlist = selectedPlaylist!!,
-                onDismiss = { showPlaylistOptions = false },
-                onPlay = { 
-                    // Play all songs in playlist
-                    showPlaylistOptions = false
-                },
-                onShuffle = { 
-                    // Shuffle play playlist
-                    showPlaylistOptions = false
-                },
-                onAddToQueue = { 
-                    // Add all songs to queue
-                    showPlaylistOptions = false
-                },
-                onDownload = { 
-                    // Download playlist
-                    showPlaylistOptions = false
-                },
-                onDelete = { 
-                    libraryViewModel.deletePlaylist(selectedPlaylist!!)
-                    showPlaylistOptions = false
-                },
-                onShare = { 
-                    val sendIntent = Intent().apply {
-                        action = Intent.ACTION_SEND
-                        putExtra(Intent.EXTRA_TEXT, "Check out this playlist: ${selectedPlaylist!!.title}")
-                        type = "text/plain"
-                    }
-                    context.startActivity(Intent.createChooser(sendIntent, "Share Playlist"))
-                    showPlaylistOptions = false
-                }
-            )
-        }
-        
-        // Add to Playlist Dialog
-        if (showAddToPlaylistDialog && selectedSong != null) {
-            AddToPlaylistDialog(
-                playlists = uiState.playlists,
-                onDismiss = { showAddToPlaylistDialog = false },
-                onPlaylistSelected = { playlist ->
-                    libraryViewModel.addToPlaylist(playlist.id, selectedSong!!)
-                    showAddToPlaylistDialog = false
-                }
+
+        IconButton(onClick = onMoreClick) {
+            Icon(
+                imageVector = Icons.Default.MoreVert,
+                contentDescription = "More",
+                tint = TextSecondary
             )
         }
     }
 }
 
 @Composable
+private fun QuickPlaylistRow(
+    playlist: PlaylistEntity,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(AccentRed.copy(alpha = 0.85f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.QueueMusic,
+                contentDescription = null,
+                tint = Color.White
+            )
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = playlist.title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = playlist.description ?: "${playlist.songCount} songs",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        Icon(
+            imageVector = Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = TextSecondary
+        )
+    }
+}
+
+@Composable
 private fun LibraryOverviewContent(
     uiState: com.reon.music.ui.viewmodels.LibraryUiState,
-    playerState: com.reon.music.playback.PlayerState,
+    playerState: PlayerState,
     onSongClick: (Song) -> Unit,
     onSongMoreClick: (Song) -> Unit,
-    onFavoriteClick: () -> Unit,
-    onFollowedClick: () -> Unit,
-    onMostPlayedClick: () -> Unit,
-    onDownloadedClick: () -> Unit,
-    onPlaylistClick: () -> Unit
+    selectedQuickCategory: LibraryQuickCategory,
+    onQuickCategorySelected: (LibraryQuickCategory) -> Unit,
+    onQuickCategoryClear: () -> Unit,
+    onPlaylistClick: (PlaylistEntity) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Category Cards (2x2 Grid)
+        // Category Cards (2x2 Grid) with improved spacing
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                CategoryCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Favorite,
-                    title = "Favorite",
-                    backgroundColor = CategoryFavorite,
-                    iconColor = Color(0xFFD32F2F),
-                    onClick = onFavoriteClick
-                )
-                CategoryCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.TrendingUp,
-                    title = "Followed",
-                    backgroundColor = CategoryFollowed,
-                    iconColor = Color(0xFFFBC02D),
-                    onClick = onFollowedClick
-                )
-            }
+            Spacer(modifier = Modifier.height(8.dp))
         }
         
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                CategoryCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.ShowChart,
-                    title = "Most Played",
-                    backgroundColor = CategoryMostPlayed,
-                    iconColor = Color(0xFF00ACC1),
-                    onClick = onMostPlayedClick
-                )
-                CategoryCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Download,
-                    title = "Downloaded",
-                    backgroundColor = CategoryDownloaded,
-                    iconColor = Color(0xFF43A047),
-                    onClick = onDownloadedClick
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CategoryCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.Favorite,
+                        title = "Favorites",
+                        backgroundColor = CategoryFavorite,
+                        iconColor = Color(0xFFD32F2F),
+                        onClick = { onQuickCategorySelected(LibraryQuickCategory.FAVORITES) }
+                    )
+                    CategoryCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.PlaylistAdd,
+                        title = "Followed",
+                        backgroundColor = CategoryFollowed,
+                        iconColor = Color(0xFFFBC02D),
+                        onClick = { onQuickCategorySelected(LibraryQuickCategory.FOLLOWED) }
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CategoryCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.ShowChart,
+                        title = "Most Played",
+                        backgroundColor = CategoryMostPlayed,
+                        iconColor = Color(0xFF00ACC1),
+                        onClick = { onQuickCategorySelected(LibraryQuickCategory.MOST_PLAYED) }
+                    )
+                    CategoryCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.History,
+                        title = "History",
+                        backgroundColor = CategoryDownloaded,
+                        iconColor = Color(0xFF43A047),
+                        onClick = { onQuickCategorySelected(LibraryQuickCategory.HISTORY) }
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CategoryCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.Settings,
+                        title = "Preferences",
+                        backgroundColor = Color(0xFFCE93D8),
+                        iconColor = Color(0xFF7B1FA2),
+                        onClick = { onQuickCategorySelected(LibraryQuickCategory.PREFERENCES) }
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                }
             }
         }
         
+        if (selectedQuickCategory != LibraryQuickCategory.NONE) {
+            item {
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            item {
+                QuickCategoryHeader(
+                    category = selectedQuickCategory,
+                    uiState = uiState,
+                    onClear = onQuickCategoryClear
+                )
+            }
+
+            when (selectedQuickCategory) {
+                LibraryQuickCategory.FAVORITES -> {
+                    item {
+                        QuickSongList(
+                            songs = uiState.likedSongs,
+                            playerState = playerState,
+                            onSongClick = onSongClick,
+                            onSongMoreClick = onSongMoreClick
+                        )
+                    }
+                }
+                LibraryQuickCategory.FOLLOWED -> {
+                    item {
+                        QuickPlaylistList(
+                            playlists = uiState.playlists,
+                            onPlaylistClick = onPlaylistClick
+                        )
+                    }
+                }
+                LibraryQuickCategory.MOST_PLAYED -> {
+                    item {
+                        QuickSongList(
+                            songs = uiState.recentlyPlayed,
+                            playerState = playerState,
+                            onSongClick = onSongClick,
+                            onSongMoreClick = onSongMoreClick,
+                            emptyMessage = "Start listening to more music to see your most played songs here."
+                        )
+                    }
+                }
+                LibraryQuickCategory.HISTORY -> {
+                    item {
+                        QuickSongList(
+                            songs = uiState.recentlyPlayed,
+                            playerState = playerState,
+                            onSongClick = onSongClick,
+                            onSongMoreClick = onSongMoreClick,
+                            emptyMessage = "Play a few songs and your listening history will appear here."
+                        )
+                    }
+                }
+                LibraryQuickCategory.PREFERENCES -> Unit
+                LibraryQuickCategory.NONE -> Unit
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+        }
+
         // Recently Added Section
         if (uiState.recentlyPlayed.isNotEmpty()) {
             item {
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+            
+            item {
                 Text(
                     text = "Recently Added",
-                    style = MaterialTheme.typography.titleLarge.copy(
+                    style = MaterialTheme.typography.headlineSmall.copy(
                         fontWeight = FontWeight.Bold
                     ),
                     color = TextPrimary,
-                    modifier = Modifier.padding(vertical = 8.dp)
+                    modifier = Modifier.padding(vertical = 12.dp)
                 )
             }
             
-            itemsIndexed(uiState.recentlyPlayed.take(20)) { index, item ->
+            itemsIndexed(uiState.recentlyPlayed.take(15)) { index, item ->
                 RecentlyAddedItem(
                     item = item,
                     isPlaying = playerState.currentSong?.id == item.id,
                     onClick = { onSongClick(item) },
                     onMoreClick = { onSongMoreClick(item) }
                 )
+                if (index < uiState.recentlyPlayed.take(15).size - 1) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        color = SurfaceLight,
+                        thickness = 0.5.dp
+                    )
+                }
             }
         }
         
@@ -413,11 +684,11 @@ private fun CategoryCard(
 ) {
     Card(
         modifier = modifier
-            .height(100.dp)
+            .height(120.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = backgroundColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Box(
             modifier = Modifier
@@ -427,22 +698,87 @@ private fun CategoryCard(
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxSize()
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = title,
-                    tint = iconColor,
-                    modifier = Modifier.size(32.dp)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(
+                            color = iconColor.copy(alpha = 0.15f),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = title,
+                        tint = iconColor,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = TextPrimary,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun CompactCategoryCard(
+    modifier: Modifier = Modifier,
+    icon: ImageVector,
+    title: String,
+    backgroundColor: Color,
+    iconColor: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = modifier
+            .height(58.dp)
+            .clickable(onClick = {
+                try {
+                    onClick()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }),
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = backgroundColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(4.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = iconColor,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Medium,
+                    fontSize = androidx.compose.ui.unit.TextUnit(8f, androidx.compose.ui.unit.TextUnitType.Sp)
+                ),
+                color = TextPrimary,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -459,27 +795,46 @@ private fun RecentlyAddedItem(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(if (isPlaying) AccentRed.copy(alpha = 0.1f) else Color.Transparent)
+                    .background(if (isPlaying) AccentRed.copy(alpha = 0.08f) else Color.Transparent)
                     .clickable(onClick = onClick)
-                    .padding(vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                AsyncImage(
-                    model = (item as Song).getHighQualityArtwork(),
-                    contentDescription = (item as Song).title,
-                    contentScale = ContentScale.Crop,
+                Box(
                     modifier = Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                )
-                
-                Spacer(modifier = Modifier.width(16.dp))
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(SurfaceLight)
+                ) {
+                    AsyncImage(
+                        model = (item as Song).getHighQualityArtwork(),
+                        contentDescription = (item as Song).title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    if (isPlaying) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(AccentRed.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = AccentRed,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
                 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = (item as Song).title,
                         style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium,
+                        fontWeight = FontWeight.SemiBold,
                         color = if (isPlaying) AccentRed else TextPrimary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -494,9 +849,9 @@ private fun RecentlyAddedItem(
                     // Show album/movie name if available
                     if ((item as Song).album.isNotBlank()) {
                         Text(
-                            text = "Album: ${(item as Song).album}",
+                            text = (item as Song).album,
                             style = MaterialTheme.typography.labelSmall,
-                            color = AccentRed.copy(alpha = 0.7f),
+                            color = AccentRed.copy(alpha = 0.6f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -504,11 +859,12 @@ private fun RecentlyAddedItem(
                 }
                 
                 // NOW FUNCTIONAL
-                IconButton(onClick = onMoreClick) {
+                IconButton(onClick = onMoreClick, modifier = Modifier.size(40.dp)) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
                         contentDescription = "More Options",
-                        tint = TextSecondary
+                        tint = TextSecondary,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }

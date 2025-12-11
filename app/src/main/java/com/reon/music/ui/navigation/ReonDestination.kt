@@ -11,10 +11,12 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.LibraryMusic
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -97,6 +99,44 @@ sealed class ReonDestination(
             return "playlist/$playlistId/${java.net.URLEncoder.encode(playlistTitle, "UTF-8")}"
         }
     }
+    
+    // Favorites Screen
+    data object Favorites : ReonDestination(
+        route = "favorites",
+        title = "Favorites",
+        selectedIcon = Icons.Filled.Home,
+        unselectedIcon = Icons.Outlined.Home
+    )
+    
+    // Most Played Screen
+    data object MostPlayed : ReonDestination(
+        route = "mostplayed",
+        title = "Most Played",
+        selectedIcon = Icons.Filled.Home,
+        unselectedIcon = Icons.Outlined.Home
+    )
+    
+    // Followed Screen
+    data object Followed : ReonDestination(
+        route = "followed",
+        title = "Followed",
+        selectedIcon = Icons.Filled.Home,
+        unselectedIcon = Icons.Outlined.Home
+    )
+    
+    data object History : ReonDestination(
+        route = "history",
+        title = "History",
+        selectedIcon = Icons.Filled.Home,
+        unselectedIcon = Icons.Outlined.Home
+    )
+    
+    data object Preferences : ReonDestination(
+        route = "preferences",
+        title = "Preferences",
+        selectedIcon = Icons.Filled.Settings,
+        unselectedIcon = Icons.Outlined.Settings
+    )
     
     companion object {
         // Bottom nav: Home, Search, Library, Downloads (removed Settings)

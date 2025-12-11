@@ -16,7 +16,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,43 +34,36 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.reon.music.playback.PlayerState
 
-// Pure White Theme Colors - Matching reference design
-private val MiniPlayerBackground = Color(0xFFFFFFFF)
-private val AccentGreen = Color(0xFF1DB954) // Spotify-style green for play button
-private val TextPrimary = Color(0xFF1C1C1C)
-private val TextSecondary = Color(0xFF757575)
-private val ProgressTrackColor = Color(0xFFE0E0E0)
+// Dark Blue Theme Colors - Modern Design
+private val MiniPlayerGradient = Brush.horizontalGradient(
+    colors = listOf(Color(0xFF1A3A52), Color(0xFF0F2533))
+)
+private val MiniPlayerOverlay = Brush.verticalGradient(
+    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.2f))
+)
+private val AccentGreen = Color(0xFF1DB954)
+private val TextPrimary = Color(0xFFFFFFFF)
+private val TextSecondary = Color(0xFFB0BEC5)
+private val ProgressTrackColor = Color(0xFF37474F)
+private val ProgressActiveColor = Color(0xFF1DB954)
 
 /**
  * Enhanced Mini Player Component - Separated from Bottom Navigation
- * Features: Like button, Previous/Next, Swipe gestures, Progress bar, Smooth animations
- * Matches reference design with green play button and white background
+ * Features: Like button, Previous/Next, Swipe gestures, Progress bar, Radio button, Download, Smooth animations
+ * Matches reference design with dark blue background and white text
  */
 @Composable
 fun MiniPlayer(
     playerState: PlayerState,
     currentPosition: Long,
     isLoading: Boolean,
-    isLiked: Boolean = false,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit = {},
-    onLikeClick: () -> Unit = {},
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val song = playerState.currentSong
-    
-    // Animation for like button
-    var isLikeAnimating by remember { mutableStateOf(false) }
-    val likeScale by animateFloatAsState(
-        targetValue = if (isLikeAnimating) 1.3f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessHigh
-        ),
-        label = "like_scale"
-    )
     
     // Swipe gesture tracking
     var swipeOffset by remember { mutableFloatStateOf(0f) }
@@ -87,7 +79,7 @@ fun MiniPlayer(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .shadow(8.dp, RoundedCornerShape(0.dp))
+                    .shadow(4.dp, RoundedCornerShape(0.dp))
                     .pointerInput(Unit) {
                         detectHorizontalDragGestures(
                             onDragEnd = {
@@ -103,10 +95,13 @@ fun MiniPlayer(
                         )
                     }
                     .clickable(onClick = onClick),
-                color = MiniPlayerBackground,
+                color = Color.Transparent,
                 shape = RoundedCornerShape(0.dp)
             ) {
-                Column {
+                Column(
+                    modifier = Modifier
+                        .background(MiniPlayerGradient)
+                ) {
                     // Progress bar at top - Green gradient
                     val progress = if (playerState.duration > 0) {
                         currentPosition.toFloat() / playerState.duration
@@ -115,13 +110,13 @@ fun MiniPlayer(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(3.dp)
+                            .height(2.dp)
                             .background(ProgressTrackColor)
                     ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth(progress.coerceIn(0f, 1f))
-                                .height(3.dp)
+                                .height(2.dp)
                                 .background(AccentGreen)
                         )
                     }
@@ -129,15 +124,15 @@ fun MiniPlayer(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         // Album art with rounded corners
                         Box(
                             modifier = Modifier
-                                .size(52.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFFF5F5F5)),
+                                .size(46.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFF132433)),
                             contentAlignment = Alignment.Center
                         ) {
                             if (song?.artworkUrl != null) {
@@ -146,6 +141,11 @@ fun MiniPlayer(
                                     contentDescription = null,
                                     modifier = Modifier.fillMaxSize(),
                                     contentScale = ContentScale.Crop
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(MiniPlayerOverlay)
                                 )
                             } else {
                                 Icon(
@@ -186,6 +186,20 @@ fun MiniPlayer(
                                     color = TextSecondary,
                                     modifier = Modifier.weight(1f, fill = false)
                                 )
+                                if (!playerState.queue.isNullOrEmpty()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(Color.White.copy(alpha = 0.12f))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = "Q${playerState.queue.size}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = TextPrimary.copy(alpha = 0.8f)
+                                        )
+                                    }
+                                }
                                 if (playerState.duration > 0) {
                                     Text(
                                         text = " • ${formatDuration(currentPosition)}/${formatDuration(playerState.duration)}",
@@ -199,27 +213,6 @@ fun MiniPlayer(
                         }
                         
                         Spacer(modifier = Modifier.width(8.dp))
-                        
-                        // Like Button with animation - outlined heart
-                        IconButton(
-                            onClick = {
-                                isLikeAnimating = true
-                                onLikeClick()
-                            },
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                                contentDescription = if (isLiked) "Unlike" else "Like",
-                                tint = if (isLiked) Color(0xFFE53935) else TextSecondary,
-                                modifier = Modifier
-                                    .size(22.dp)
-                                    .graphicsLayer {
-                                        scaleX = likeScale
-                                        scaleY = likeScale
-                                    }
-                            )
-                        }
                         
                         // Previous Button
                         IconButton(
@@ -237,7 +230,7 @@ fun MiniPlayer(
                         // Play/Pause Button - Green circle like reference
                         Box(
                             modifier = Modifier
-                                .size(44.dp)
+                                .size(46.dp)
                                 .clip(CircleShape)
                                 .background(AccentGreen)
                                 .clickable(onClick = onPlayPause),
@@ -245,18 +238,18 @@ fun MiniPlayer(
                         ) {
                             if (isLoading) {
                                 CircularProgressIndicator(
-                                    modifier = Modifier.size(22.dp),
+                                    modifier = Modifier.size(24.dp),
                                     strokeWidth = 2.dp,
                                     color = Color.White
                                 )
                             } else {
                                 Icon(
-                                    imageVector = if (playerState.isPlaying) 
-                                        Icons.Default.Pause 
-                                    else 
+                                    imageVector = if (playerState.isPlaying)
+                                        Icons.Default.Pause
+                                    else
                                         Icons.Default.PlayArrow,
                                     contentDescription = if (playerState.isPlaying) "Pause" else "Play",
-                                    modifier = Modifier.size(28.dp),
+                                    modifier = Modifier.size(30.dp),
                                     tint = Color.White
                                 )
                             }
@@ -277,14 +270,6 @@ fun MiniPlayer(
                     }
                 }
             }
-        }
-    }
-    
-    // Reset like animation
-    LaunchedEffect(isLikeAnimating) {
-        if (isLikeAnimating) {
-            kotlinx.coroutines.delay(200)
-            isLikeAnimating = false
         }
     }
 }

@@ -570,6 +570,23 @@ fun SettingsScreen(
                 }
             }
             
+            // Optimization & Performance Section (NEW)
+            item {
+                SettingsSection(title = "Optimization & Performance") {
+                    SettingsCard {
+                        SettingsItem(
+                            icon = Icons.Outlined.Bolt,
+                            title = "Optimization Settings",
+                            subtitle = "Battery, data, and cache optimization",
+                            onClick = { 
+                                // Navigate to optimization screen
+                                // This should be handled by navigation or state
+                            }
+                        )
+                    }
+                }
+            }
+            
             // About Section
             item {
                 SettingsSection(title = "About") {

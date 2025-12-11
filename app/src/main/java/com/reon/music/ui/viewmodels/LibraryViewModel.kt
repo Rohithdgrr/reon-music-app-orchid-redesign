@@ -23,6 +23,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.File
 
 data class LibraryUiState(
     val likedSongs: List<Song> = emptyList(),
@@ -46,7 +49,8 @@ enum class LibraryTab {
 class LibraryViewModel @Inject constructor(
     private val songDao: SongDao,
     private val playlistDao: PlaylistDao,
-    private val historyDao: HistoryDao
+    private val historyDao: HistoryDao,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow(LibraryUiState())
@@ -177,12 +181,42 @@ class LibraryViewModel @Inject constructor(
     }
     
     /**
-     * Remove a downloaded song (state: 0=not downloaded, 1=downloading, 2=downloaded)
+     * Remove a downloaded song and delete the actual file
      */
     fun removeDownload(song: Song) {
         viewModelScope.launch {
+            // Get the song entity to find the download path
+            val songEntity = songDao.getSongById(song.id)
+            
+            // Delete the file if it exists
+            if (!songEntity?.localPath.isNullOrBlank()) {
+                try {
+                    val file = File(songEntity!!.localPath!!)
+                    if (file.exists()) {
+                        file.delete()
+                    }
+                } catch (e: Exception) {
+                    // Log error but continue with database update
+                    e.printStackTrace()
+                }
+            } else {
+                // Try to find file in downloads directory
+                try {
+                    val downloadsDir = File(context.getExternalFilesDir(null), "downloads")
+                    if (downloadsDir.exists()) {
+                        // Find files matching the song title
+                        val matchingFiles = downloadsDir.listFiles { file ->
+                            file.name.contains(song.title.take(20), ignoreCase = true)
+                        }
+                        matchingFiles?.forEach { it.delete() }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            
+            // Update database
             songDao.updateDownloadState(song.id, 0, null)
-            // Note: Actual file deletion would happen in a download manager
         }
     }
     

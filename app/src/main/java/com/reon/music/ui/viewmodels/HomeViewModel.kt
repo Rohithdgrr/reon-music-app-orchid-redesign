@@ -18,6 +18,7 @@ import com.reon.music.core.preferences.UserPreferences
 import com.reon.music.data.database.dao.HistoryDao
 import com.reon.music.data.database.dao.SongDao
 import com.reon.music.data.repository.MusicRepository
+import com.reon.music.data.database.entities.DownloadState
 import com.reon.music.data.database.entities.SongEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
@@ -90,6 +91,14 @@ data class HomeUiState(
     val djRemixes: List<Song> = emptyList(),
     val danceFloor: List<Song> = emptyList(),
     
+    // Telugu Playlists (YouTube-only)
+    val teluguPlaylistsYoutube: List<Playlist> = emptyList(),
+    val teluguSongsYoutube: List<Song> = emptyList(),
+    
+    // Indian Playlists (YouTube-only)
+    val indianPlaylistsYoutube: List<Playlist> = emptyList(),
+    val indianSongsYoutube: List<Song> = emptyList(),
+    
     // Language-specific Playlists
     val bhojpuriSongs: List<Song> = emptyList(),
     val malayalamSongs: List<Song> = emptyList(),
@@ -105,6 +114,9 @@ data class HomeUiState(
     val reelsTrending: List<Song> = emptyList(),
     
     // Playlists
+//    val teluguPlaylistCollection: List<Playlist> = emptyList(),
+//    val hindiPlaylistCollection: List<Playlist> = emptyList(),
+//    val tamilPlaylistCollection: List<Playlist> = emptyList(),
     val featuredPlaylists: List<Playlist> = emptyList(),
     val moodPlaylists: List<Playlist> = emptyList(),
     val trendingPlaylists: List<Playlist> = emptyList(),
@@ -123,6 +135,7 @@ data class HomeUiState(
     
     // Charts
     val charts: List<ChartSection> = emptyList(),
+    val chartSongs: List<Song> = emptyList(),
     val top50Hindi: List<Song> = emptyList(),
     val top50English: List<Song> = emptyList(),
     val top50Telugu: List<Song> = emptyList(),
@@ -162,11 +175,6 @@ data class HomeUiState(
     val selectedGenre: Genre? = null,
     val genreSongs: List<Song> = emptyList(),
     
-    // NEW: Language-specific Playlists (Playlist objects from API)
-    val teluguPlaylistCollection: List<Playlist> = emptyList(),
-    val hindiPlaylistCollection: List<Playlist> = emptyList(),
-    val tamilPlaylistCollection: List<Playlist> = emptyList(),
-    val punjabiPlaylistCollection: List<Playlist> = emptyList(),
     
     // NEW: Curated Playlist Categories
     val mostListeningTeluguSongs: List<Song> = emptyList(),
@@ -312,7 +320,6 @@ class HomeViewModel @Inject constructor(
                 loadArtistSpotlights()
                 loadIndianPlaylists()
                 loadRecentlyPlayed()
-                loadCuratedPlaylists() // NEW: Load curated playlist categories
 
                 
             } catch (e: Exception) {
@@ -331,9 +338,12 @@ class HomeViewModel @Inject constructor(
     fun markPlaylistDownloaded(id: String, title: String, songs: List<Song>) {
         viewModelScope.launch {
             try {
-                val entities = songs.map { SongEntity.fromSong(it, isDownloaded = true) }
-                songDao.insertAll(entities)
-                Log.d(TAG, "Playlist '$title' marked downloaded (${entities.size} songs)")
+                songs.forEach { song ->
+                    val existing = songDao.getSongById(song.id)
+                    if (existing == null) songDao.insert(SongEntity.fromSong(song))
+                    songDao.updateDownloadState(song.id, DownloadState.DOWNLOADING, null)
+                }
+                Log.d(TAG, "Playlist '$title' queued for download (${songs.size} songs)")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to mark playlist downloaded", e)
             }
@@ -346,9 +356,12 @@ class HomeViewModel @Inject constructor(
     fun markArtistDownloaded(artist: Artist, songs: List<Song>) {
         viewModelScope.launch {
             try {
-                val entities = songs.map { SongEntity.fromSong(it, isDownloaded = true) }
-                songDao.insertAll(entities)
-                Log.d(TAG, "Artist '${artist.name}' download recorded (${entities.size} songs)")
+                songs.forEach { song ->
+                    val existing = songDao.getSongById(song.id)
+                    if (existing == null) songDao.insert(SongEntity.fromSong(song))
+                    songDao.updateDownloadState(song.id, DownloadState.DOWNLOADING, null)
+                }
+                Log.d(TAG, "Artist '${artist.name}' queued for download (${songs.size} songs)")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to mark artist downloaded", e)
             }
@@ -405,21 +418,10 @@ class HomeViewModel @Inject constructor(
             }
         }
         
-        // Telugu Playlists
-        viewModelScope.launch {
-            try {
-                repository.searchPlaylists("telugu hits").getOrNull()?.let { playlists ->
-                    _uiState.value = _uiState.value.copy(teluguPlaylists = playlists)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error loading Telugu playlists", e)
-            }
-        }
         
-        // ST Banjara Songs - Multiple search terms for better results
+        // ST Banjara Songs - YouTube-only
         viewModelScope.launch {
             try {
-                // Search for authentic Banjara/Lambadi tribal music
                 val searchTerms = listOf(
                     "lambadi songs indian tribal",
                     "banjara folk songs telugu",
@@ -431,15 +433,69 @@ class HomeViewModel @Inject constructor(
                 val allSongs = mutableListOf<Song>()
                 for (term in searchTerms) {
                     repository.searchSongs(term).getOrNull()?.let { songs ->
-                        allSongs.addAll(songs.take(4))
+                        allSongs.addAll(songs.filter { it.source.equals("youtube", ignoreCase = true) }.take(4))
                     }
                     if (allSongs.size >= 15) break
                 }
                 
                 _uiState.value = _uiState.value.copy(banjaraSongs = allSongs.distinctBy { it.id }.take(15))
-                Log.d(TAG, "Loaded ${allSongs.size} Banjara/Lambadi songs")
+                Log.d(TAG, "Loaded ${allSongs.size} Banjara/Lambadi songs (YouTube-only)")
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading Banjara songs", e)
+            }
+        }
+        
+        // Telugu Playlists
+        viewModelScope.launch {
+            try {
+                repository.searchPlaylists("telugu songs").getOrNull()?.let { playlists ->
+                    _uiState.value = _uiState.value.copy(
+                        teluguPlaylistsYoutube = playlists.take(6)
+                    )
+                    Log.d(TAG, "Loaded ${playlists.size} Telugu playlists")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Telugu playlists", e)
+            }
+        }
+        
+        // Telugu Songs (YouTube-only)
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("telugu music 2024", 20).getOrNull()?.let { songs ->
+                    val youtubeOnly = songs.filter { it.source.equals("youtube", ignoreCase = true) }
+                    _uiState.value = _uiState.value.copy(teluguSongsYoutube = youtubeOnly)
+                    Log.d(TAG, "Loaded ${youtubeOnly.size} Telugu songs (YouTube-only)")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Telugu songs YouTube", e)
+            }
+        }
+        
+        // Indian Playlists
+        viewModelScope.launch {
+            try {
+                repository.searchPlaylists("indian songs hindi tamil telugu").getOrNull()?.let { playlists ->
+                    _uiState.value = _uiState.value.copy(
+                        indianPlaylistsYoutube = playlists.take(6)
+                    )
+                    Log.d(TAG, "Loaded ${playlists.size} Indian playlists")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Indian playlists", e)
+            }
+        }
+        
+        // Indian Songs (YouTube-only)
+        viewModelScope.launch {
+            try {
+                repository.searchSongsWithLimit("indian songs 2024", 20).getOrNull()?.let { songs ->
+                    val youtubeOnly = songs.filter { it.source.equals("youtube", ignoreCase = true) }
+                    _uiState.value = _uiState.value.copy(indianSongsYoutube = youtubeOnly)
+                    Log.d(TAG, "Loaded ${youtubeOnly.size} Indian songs (YouTube-only)")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Indian songs YouTube", e)
             }
         }
         
@@ -771,6 +827,14 @@ class HomeViewModel @Inject constructor(
      */
     suspend fun searchSongsForChart(query: String, limit: Int): List<Song> {
         return repository.searchSongsWithLimit(query, limit).getOrNull() ?: emptyList()
+    }
+
+    fun getPlaylistSongs(playlistId: String) {
+        viewModelScope.launch {
+            repository.getPlaylistDetails(playlistId).getOrNull()?.let { playlist ->
+                _uiState.value = _uiState.value.copy(chartSongs = playlist.songs)
+            }
+        }
     }
     
     /**
@@ -1161,48 +1225,48 @@ class HomeViewModel @Inject constructor(
         }
         
         // Telugu Playlist Collection
-        viewModelScope.launch {
-            try {
-                repository.searchPlaylists("telugu songs playlist").getOrNull()?.let { playlists ->
-                    _uiState.value = _uiState.value.copy(teluguPlaylistCollection = playlists)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error loading Telugu playlist collection", e)
-            }
-        }
-        
-        // Hindi Playlist Collection
-        viewModelScope.launch {
-            try {
-                repository.searchPlaylists("hindi songs playlist").getOrNull()?.let { playlists ->
-                    _uiState.value = _uiState.value.copy(hindiPlaylistCollection = playlists)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error loading Hindi playlist collection", e)
-            }
-        }
-        
-        // Tamil Playlist Collection
-        viewModelScope.launch {
-            try {
-                repository.searchPlaylists("tamil songs playlist").getOrNull()?.let { playlists ->
-                    _uiState.value = _uiState.value.copy(tamilPlaylistCollection = playlists)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error loading Tamil playlist collection", e)
-            }
-        }
-        
-        // Punjabi Playlist Collection
-        viewModelScope.launch {
-            try {
-                repository.searchPlaylists("punjabi songs playlist").getOrNull()?.let { playlists ->
-                    _uiState.value = _uiState.value.copy(punjabiPlaylistCollection = playlists)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error loading Punjabi playlist collection", e)
-            }
-        }
+//        viewModelScope.launch {
+//            try {
+//                repository.searchPlaylists("telugu songs playlist").getOrNull()?.let { playlists ->
+//                    _uiState.value = _uiState.value.copy(teluguPlaylistCollection = playlists)
+//                }
+//            } catch (e: Exception) {
+//                Log.e(TAG, "Error loading Telugu playlist collection", e)
+//            }
+//        }
+//        
+//        // Hindi Playlist Collection
+//        viewModelScope.launch {
+//            try {
+//                repository.searchPlaylists("hindi songs playlist").getOrNull()?.let { playlists ->
+//                    _uiState.value = _uiState.value.copy(hindiPlaylistCollection = playlists)
+//                }
+//            } catch (e: Exception) {
+//                Log.e(TAG, "Error loading Hindi playlist collection", e)
+//            }
+//        }
+//        
+//        // Tamil Playlist Collection
+//        viewModelScope.launch {
+//            try {
+//                repository.searchPlaylists("tamil songs playlist").getOrNull()?.let { playlists ->
+//                    _uiState.value = _uiState.value.copy(tamilPlaylistCollection = playlists)
+//                }
+//            } catch (e: Exception) {
+//                Log.e(TAG, "Error loading Tamil playlist collection", e)
+//            }
+//        }
+//        
+//        // Punjabi Playlist Collection
+//        viewModelScope.launch {
+//            try {
+//                repository.searchPlaylists("punjabi songs playlist").getOrNull()?.let { playlists ->
+//                    _uiState.value = _uiState.value.copy(punjabiPlaylistCollection = playlists)
+//                }
+//            } catch (e: Exception) {
+//                Log.e(TAG, "Error loading Punjabi playlist collection", e)
+//            }
+//        }
         
         // Load International and additional categories
         loadInternationalSongs()

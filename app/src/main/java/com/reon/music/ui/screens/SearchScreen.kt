@@ -40,6 +40,8 @@ import coil.compose.AsyncImage
 import com.reon.music.core.model.Album
 import com.reon.music.core.model.Artist
 import com.reon.music.core.model.Song
+import com.reon.music.ui.components.SongOptionsSheet
+import com.reon.music.services.DownloadStatus
 import com.reon.music.ui.viewmodels.PlayerViewModel
 import com.reon.music.ui.viewmodels.SearchFilter
 import com.reon.music.ui.viewmodels.SearchViewModel
@@ -63,6 +65,7 @@ fun SearchScreen(
 ) {
     val uiState by searchViewModel.uiState.collectAsState()
     val playerState by playerViewModel.playerState.collectAsState()
+    val downloadProgress by playerViewModel.downloadProgress.collectAsState()
     val focusManager = LocalFocusManager.current
     val snackbarHostState = remember { SnackbarHostState() }
     
@@ -162,8 +165,11 @@ fun SearchScreen(
         
         // Song Options Bottom Sheet
         showSongOptions?.let { song ->
+            val progress = downloadProgress[song.id]
             SongOptionsSheet(
                 song = song,
+                isDownloading = progress?.status == DownloadStatus.QUEUED || progress?.status == DownloadStatus.DOWNLOADING,
+                downloadProgress = progress?.progress ?: 0,
                 onDismiss = { showSongOptions = null },
                 onPlay = { 
                     playerViewModel.playSong(song)
@@ -181,6 +187,7 @@ fun SearchScreen(
                     playerViewModel.downloadSong(song)
                     showSongOptions = null
                 },
+                onRemoveDownload = { /* no-op for now */ },
                 onAddToPlaylist = { showSongOptions = null },
                 onShare = { showSongOptions = null }
             )
@@ -607,55 +614,214 @@ private fun SongResultItem(
             .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        AsyncImage(
-            model = song.getHighQualityArtwork(),
-            contentDescription = song.title,
-            contentScale = ContentScale.Crop,
+        // Thumbnail with duration badge (YouTube-style)
+        Box(
             modifier = Modifier
-                .size(54.dp)
+                .size(120.dp, 68.dp)
                 .clip(RoundedCornerShape(8.dp))
-        )
-        
-        Spacer(modifier = Modifier.width(14.dp))
-        
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = song.title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = if (isCurrentSong) AccentRed else TextPrimary
+        ) {
+            AsyncImage(
+                model = song.getHighQualityArtwork(),
+                contentDescription = song.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
             )
             
-            Text(
-                text = song.artist,
-                style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            // Duration badge (YouTube-style)
+            if (song.duration > 0) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(4.dp)
+                        .background(
+                            color = Color.Black.copy(alpha = 0.85f),
+                            shape = RoundedCornerShape(4.dp)
+                        )
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = formatDuration(song.duration),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
             
-            // Show album/movie name if available
-            if (song.album.isNotBlank()) {
-                Text(
-                    text = song.album,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = AccentRed.copy(alpha = 0.7f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+            // Quality badge (HD/4K/320kbps)
+            if (song.quality.contains("4K", ignoreCase = true) || 
+                song.quality.contains("HD", ignoreCase = true) || 
+                song.is320kbps) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
+                        .background(
+                            color = AccentRed,
+                            shape = RoundedCornerShape(4.dp)
+                        )
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = when {
+                            song.quality.contains("4K", ignoreCase = true) -> "4K"
+                            song.quality.contains("HD", ignoreCase = true) -> "HD"
+                            song.is320kbps -> "HQ"
+                            else -> "HD"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        fontSize = androidx.compose.ui.unit.TextUnit(9f, androidx.compose.ui.unit.TextUnitType.Sp),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            
+            // Playing indicator overlay
+            if (isPlaying) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(AccentRed.copy(alpha = 0.3f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "Playing",
+                        tint = Color.White,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
             }
         }
         
+        Spacer(modifier = Modifier.width(12.dp))
+        
+        // Song info (YouTube-style layout)
+        Column(modifier = Modifier.weight(1f)) {
+            // Song Title
+            Text(
+                text = song.title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (isCurrentSong) FontWeight.SemiBold else FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                color = if (isCurrentSong) AccentRed else TextPrimary,
+                lineHeight = androidx.compose.ui.unit.TextUnit(18f, androidx.compose.ui.unit.TextUnitType.Sp)
+            )
+            
+            Spacer(modifier = Modifier.height(2.dp))
+            
+            // Channel/Artist name with subscriber count
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = if (song.channelName.isNotBlank()) song.channelName else song.artist,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                
+                // Show subscriber count if available
+                if (song.channelSubscriberCount > 0) {
+                    Text(
+                        text = " • ${formatCount(song.channelSubscriberCount)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                        maxLines = 1
+                    )
+                }
+            }
+            
+            // View count and upload date (YouTube-style)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(top = 2.dp)
+            ) {
+                if (song.viewCount > 0) {
+                    Text(
+                        text = formatCount(song.viewCount) + " views",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                        maxLines = 1
+                    )
+                }
+                
+                if (song.uploadDate.isNotBlank() && song.viewCount > 0) {
+                    Text(
+                        text = " • ${song.uploadDate}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                } else if (song.uploadDate.isNotBlank()) {
+                    Text(
+                        text = song.uploadDate,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                        maxLines = 1
+                    )
+                }
+            }
+            
+            // Album/Movie name (if available)
+            if (song.album.isNotBlank() || song.movieName.isNotBlank()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 2.dp)
+                ) {
+                    val displayName = if (song.movieName.isNotBlank()) song.movieName else song.album
+                    Text(
+                        text = displayName,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary.copy(alpha = 0.8f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    
+                    // Show language badge
+                    if (song.language.isNotBlank()) {
+                        Text(
+                            text = " • ${song.language}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondary.copy(alpha = 0.7f),
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
+        
+        // More options button
         IconButton(onClick = onMoreClick, modifier = Modifier.size(40.dp)) {
             Icon(
                 imageVector = Icons.Default.MoreVert,
                 contentDescription = "More options",
-                tint = TextSecondary
+                tint = TextSecondary,
+                modifier = Modifier.size(20.dp)
             )
         }
     }
+}
+
+// Helper function to format large numbers (YouTube style)
+private fun formatCount(count: Long): String {
+    return when {
+        count >= 1_000_000_000 -> String.format("%.1fB", count / 1_000_000_000.0)
+        count >= 1_000_000 -> String.format("%.1fM", count / 1_000_000.0)
+        count >= 1_000 -> String.format("%.1fK", count / 1_000.0)
+        else -> count.toString()
+    }
+}
+
+// Helper function to format duration like YouTube (MM:SS)
+private fun formatDuration(seconds: Int): String {
+    val minutes = seconds / 60
+    val secs = seconds % 60
+    return String.format("%d:%02d", minutes, secs)
 }
 
 @Composable
@@ -752,102 +918,3 @@ private fun ArtistResultItem(artist: Artist, onClick: () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SongOptionsSheet(
-    song: Song,
-    onDismiss: () -> Unit,
-    onPlay: () -> Unit,
-    onPlayNext: () -> Unit,
-    onAddToQueue: () -> Unit,
-    onDownload: () -> Unit,
-    onAddToPlaylist: () -> Unit,
-    onShare: () -> Unit
-) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = BackgroundWhite,
-        contentColor = TextPrimary
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 32.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                AsyncImage(
-                    model = song.getHighQualityArtwork(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                )
-                Spacer(modifier = Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = song.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = song.artist,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (song.album.isNotBlank()) {
-                        Text(
-                            text = song.album,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = AccentRed.copy(alpha = 0.7f)
-                        )
-                    }
-                }
-            }
-            HorizontalDivider(color = SurfaceLight)
-            OptionMenuItem(Icons.Default.PlayArrow, "Play Now", onPlay)
-            OptionMenuItem(Icons.Outlined.Queue, "Play Next", onPlayNext)
-            OptionMenuItem(Icons.Outlined.QueueMusic, "Add to Queue", onAddToQueue)
-            OptionMenuItem(Icons.Outlined.Download, "Download", onDownload)
-            OptionMenuItem(Icons.Outlined.PlaylistAdd, "Add to Playlist", onAddToPlaylist)
-            OptionMenuItem(Icons.Outlined.Share, "Share", onShare)
-        }
-    }
-}
-
-@Composable
-private fun OptionMenuItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = title,
-            tint = TextPrimary,
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(modifier = Modifier.width(20.dp))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyLarge,
-            color = TextPrimary
-        )
-    }
-}

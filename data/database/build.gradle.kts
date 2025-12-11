@@ -12,6 +12,16 @@ android {
     defaultConfig {
         minSdk = 26
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        
+        // Room schema
+        ksp {
+            arg("room.schemaLocation", "$projectDir/schemas")
+        }
+    }
+    
+    // Room schema options
+    sourceSets {
+        getByName("androidTest").assets.srcDirs(files("$projectDir/schemas"))
     }
 
     compileOptions {

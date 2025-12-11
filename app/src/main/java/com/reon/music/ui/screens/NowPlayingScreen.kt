@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -75,8 +77,13 @@ fun NowPlayingScreen(
     val isLiked = uiState.isLiked
     
     val currentSong = playerState.currentSong
-    val progress = if (currentSong != null && currentSong.duration > 0) {
-        currentPosition.toFloat() / (currentSong.duration * 1000)
+    val durationMs = when {
+        playerState.duration > 0 -> playerState.duration
+        currentSong != null && currentSong.duration > 0 -> currentSong.duration * 1000L
+        else -> 0L
+    }
+    val progress = if (durationMs > 0) {
+        currentPosition.toFloat() / durationMs
     } else 0f
     
     // Gesture state for swipe to dismiss
@@ -120,16 +127,19 @@ fun NowPlayingScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onDismiss) {
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.size(40.dp)
+                ) {
                     Icon(
                         imageVector = Icons.Default.KeyboardArrowDown,
                         contentDescription = "Close",
                         tint = TextPrimary,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(26.dp)
                     )
                 }
                 
@@ -150,31 +160,43 @@ fun NowPlayingScreen(
                     )
                 }
                 
-                IconButton(onClick = { showOptionsSheet = true }) {
+                IconButton(
+                    onClick = { showOptionsSheet = true },
+                    modifier = Modifier.size(40.dp)
+                ) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
                         contentDescription = "More options",
-                        tint = TextPrimary
+                        tint = TextPrimary,
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
             
-            Spacer(modifier = Modifier.weight(0.1f))
+            Spacer(modifier = Modifier.weight(0.15f))
             
-            // Album Artwork - Prominent display
-            AsyncImage(
-                model = currentSong?.artworkUrl ?: currentSong?.getHighQualityArtwork(),
-                contentDescription = "Album Art",
+            // Album Artwork - Larger square thumbnail centered with premium shadow
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.85f)
-                    .aspectRatio(1f)
-                    .padding(horizontal = 32.dp)
+                    .size(320.dp) // Increased size
+                    .align(Alignment.CenterHorizontally)
+                    .shadow(
+                        elevation = 12.dp,
+                        shape = RoundedCornerShape(20.dp),
+                        ambientColor = Color.Black.copy(alpha = 0.2f),
+                        spotColor = Color.Black.copy(alpha = 0.3f)
+                    )
                     .clip(RoundedCornerShape(20.dp))
-                    .shadow(12.dp, RoundedCornerShape(20.dp)),
-                contentScale = ContentScale.Crop
-            )
+            ) {
+                AsyncImage(
+                    model = currentSong?.artworkUrl ?: currentSong?.getHighQualityArtwork(),
+                    contentDescription = "Album Art",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
             
-            Spacer(modifier = Modifier.weight(0.1f))
+            Spacer(modifier = Modifier.weight(0.15f))
             
             // Song Info with Like Button
             Row(
@@ -207,17 +229,20 @@ fun NowPlayingScreen(
                     )
                 }
                 
-                IconButton(onClick = { playerViewModel.toggleLike() }) {
+                IconButton(
+                    onClick = { playerViewModel.toggleLike() },
+                    modifier = Modifier.size(44.dp)
+                ) {
                     Icon(
                         imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                         contentDescription = "Like",
                         tint = if (isLiked) ProgressActiveColor else TextSecondary,
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }
             
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
             
             // Progress Bar - Red themed
             Column(
@@ -228,8 +253,8 @@ fun NowPlayingScreen(
                 Slider(
                     value = progress.coerceIn(0f, 1f),
                     onValueChange = { value ->
-                        currentSong?.let { song ->
-                            val newPosition = (value * song.duration * 1000).toLong()
+                        if (durationMs > 0) {
+                            val newPosition = (value * durationMs).toLong()
                             playerViewModel.seekTo(newPosition)
                         }
                     },
@@ -251,7 +276,7 @@ fun NowPlayingScreen(
                         color = TextSecondary
                     )
                     Text(
-                        text = formatTime((currentSong?.duration ?: 0) * 1000L),
+                        text = if (durationMs > 0) formatTime(durationMs) else "0:00",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
@@ -264,40 +289,40 @@ fun NowPlayingScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
+                    .padding(horizontal = 20.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Shuffle
                 IconButton(
                     onClick = { playerViewModel.toggleShuffle() },
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier.size(42.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Shuffle,
                         contentDescription = "Shuffle",
                         tint = if (playerState.shuffleEnabled) ProgressActiveColor else TextSecondary,
-                        modifier = Modifier.size(26.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                 }
                 
                 // Previous
                 IconButton(
                     onClick = { playerViewModel.skipToPrevious() },
-                    modifier = Modifier.size(56.dp)
+                    modifier = Modifier.size(50.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.SkipPrevious,
                         contentDescription = "Previous",
                         tint = TextPrimary,
-                        modifier = Modifier.size(40.dp)
+                        modifier = Modifier.size(34.dp)
                     )
                 }
                 
                 // Play/Pause - YouTube Red circle with white icon
                 Box(
                     modifier = Modifier
-                        .size(72.dp)
+                        .size(68.dp)
                         .clip(CircleShape)
                         .background(AccentRed)
                         .clickable { playerViewModel.togglePlayPause() },
@@ -314,20 +339,20 @@ fun NowPlayingScreen(
                 // Next
                 IconButton(
                     onClick = { playerViewModel.skipToNext() },
-                    modifier = Modifier.size(56.dp)
+                    modifier = Modifier.size(50.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.SkipNext,
                         contentDescription = "Next",
                         tint = TextPrimary,
-                        modifier = Modifier.size(40.dp)
+                        modifier = Modifier.size(34.dp)
                     )
                 }
                 
                 // Repeat - Cycles through OFF -> ALL -> ONE -> OFF
                 IconButton(
                     onClick = { playerViewModel.cycleRepeatMode() },
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier.size(42.dp)
                 ) {
                     Icon(
                         imageVector = when (playerState.repeatMode) {
@@ -337,7 +362,7 @@ fun NowPlayingScreen(
                         },
                         contentDescription = "Repeat",
                         tint = if (playerState.repeatMode > 0) ProgressActiveColor else TextSecondary,
-                        modifier = Modifier.size(26.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }
@@ -348,89 +373,81 @@ fun NowPlayingScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 40.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                    .padding(horizontal = 30.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), // Reduced spacing
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Song Info Button
                 IconButton(
                     onClick = { showSongInfoDialog = true },
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier.size(40.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Info,
                         contentDescription = "Song Info",
                         tint = TextSecondary,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
                 
-                // Download Button - Working
+                // Download Button
                 IconButton(
                     onClick = { 
                         currentSong?.let { 
                             playerViewModel.downloadSong(it)
                         }
                     },
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier.size(40.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Download,
                         contentDescription = "Download",
                         tint = TextSecondary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-                
-                // Radio Mode Toggle (Endless Playback)
-                IconButton(
-                    onClick = { 
-                        currentSong?.let {
-                            if (playerState.radioModeEnabled) {
-                                playerViewModel.disableRadioMode()
-                            } else {
-                                playerViewModel.enableRadioMode(listOf(it))
-                            }
-                        }
-                    },
-                    modifier = Modifier.size(44.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Radio,
-                        contentDescription = if (playerState.radioModeEnabled) "Disable Radio Mode" else "Enable Radio Mode (Endless Play)",
-                        tint = if (playerState.radioModeEnabled) AccentRed else TextSecondary,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
                 
                 // Add to Playlist Button
                 IconButton(
                     onClick = { showAddToPlaylistSheet = true },
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier.size(40.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = "Add to Playlist",
                         tint = TextSecondary,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
                 
+                // Radio Endless Button
+                IconButton(
+                    onClick = { playerViewModel.enableRadioMode(playerState.queue) },
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Radio,
+                        contentDescription = "Radio",
+                        tint = if (playerState.radioModeEnabled) AccentRed else TextSecondary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
                 // Queue Button
                 IconButton(
                     onClick = { showQueueSheet = true },
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier.size(40.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.QueueMusic,
                         contentDescription = "Queue",
                         tint = TextSecondary,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
             
-            // Radio Mode Indicator
+            // Radio Mode Indicator (moved down, shown only if enabled)
             AnimatedVisibility(
                 visible = playerState.radioModeEnabled,
                 enter = fadeIn() + expandVertically(),
@@ -1185,21 +1202,216 @@ private fun SongInfoDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Song Info", fontWeight = FontWeight.Bold) },
+        title = { 
+            Text(
+                "Song Information", 
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleLarge
+            ) 
+        },
         text = {
-            Column {
-                InfoRow("Title", song.title)
+            Column(modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+            ) {
+                // Song artwork
+                if (song.artworkUrl != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 9f)
+                            .clip(RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AsyncImage(
+                            model = song.getHighQualityArtwork(),
+                            contentDescription = "Song artwork",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+                
+                // === BASIC INFO SECTION ===
+                SectionHeader("Basic Information")
                 Spacer(modifier = Modifier.height(8.dp))
-                InfoRow("Artist", song.artist)
+                
+                InfoRow("Title", song.title)
+                InfoRow("Artist/Singer", if (song.artist.isNotBlank()) song.artist else "Unknown")
+                
                 if (song.album.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(8.dp))
                     InfoRow("Album", song.album)
                 }
-                Spacer(modifier = Modifier.height(8.dp))
-                InfoRow("Duration", song.formattedDuration())
-                if (song.source.isNotBlank()) {
+                
+                val durationText = if (song.duration > 0) {
+                    val minutes = song.duration / 60
+                    val seconds = song.duration % 60
+                    String.format("%d:%02d", minutes, seconds)
+                } else "Unknown"
+                InfoRow("Duration", durationText)
+                
+                if (song.language.isNotBlank()) {
+                    InfoRow("Language", song.language)
+                }
+                
+                if (song.genre.isNotBlank()) {
+                    InfoRow("Genre", song.genre)
+                }
+                
+                if (song.year.isNotBlank()) {
+                    InfoRow("Year", song.year)
+                } else if (song.releaseDate.isNotBlank()) {
+                    InfoRow("Release Date", song.releaseDate)
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // === MOVIE/FILM INFO SECTION ===
+                if (song.movieName.isNotBlank() || song.heroName.isNotBlank() || 
+                    song.heroineName.isNotBlank() || song.director.isNotBlank() || 
+                    song.producer.isNotBlank() || song.movieGenre.isNotBlank()) {
+                    
+                    SectionHeader("Movie/Film Information")
                     Spacer(modifier = Modifier.height(8.dp))
-                    InfoRow("Source", song.source)
+                    
+                    if (song.movieName.isNotBlank()) {
+                        InfoRow("Movie Name", song.movieName)
+                    }
+                    
+                    if (song.movieGenre.isNotBlank()) {
+                        InfoRow("Movie Genre", song.movieGenre)
+                    }
+                    
+                    if (song.heroName.isNotBlank()) {
+                        InfoRow("Hero/Lead Actor", song.heroName)
+                    }
+                    
+                    if (song.heroineName.isNotBlank()) {
+                        InfoRow("Heroine/Lead Actress", song.heroineName)
+                    }
+                    
+                    if (song.director.isNotBlank()) {
+                        InfoRow("Director", song.director)
+                    }
+                    
+                    if (song.producer.isNotBlank()) {
+                        InfoRow("Producer", song.producer)
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+                
+                // === YOUTUBE/CHANNEL INFO SECTION ===
+                if (song.channelName.isNotBlank() || song.viewCount > 0 || 
+                    song.likeCount > 0 || song.channelSubscriberCount > 0) {
+                    
+                    SectionHeader("YouTube/Channel Information")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    if (song.channelName.isNotBlank()) {
+                        InfoRow("Channel", song.channelName)
+                    }
+                    
+                    if (song.channelId.isNotBlank()) {
+                        InfoRow("Channel ID", song.channelId.take(20) + "...")
+                    }
+                    
+                    if (song.channelSubscriberCount > 0) {
+                        InfoRow("Channel Subscribers", formatCount(song.channelSubscriberCount))
+                    }
+                    
+                    if (song.viewCount > 0) {
+                        InfoRow("View Count", formatCount(song.viewCount) + " views")
+                    }
+                    
+                    if (song.likeCount > 0) {
+                        InfoRow("Likes", formatCount(song.likeCount))
+                    }
+                    
+                    if (song.uploadDate.isNotBlank()) {
+                        InfoRow("Published On", song.uploadDate)
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+                
+                // === QUALITY & TECHNICAL INFO SECTION ===
+                SectionHeader("Quality & Technical Details")
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                if (song.quality.isNotBlank()) {
+                    InfoRow("Video Quality", song.quality)
+                }
+                
+                if (song.is320kbps) {
+                    InfoRow("Audio Quality", "320 kbps (High Quality)")
+                } else {
+                    InfoRow("Audio Quality", "Standard")
+                }
+                
+                if (song.source.isNotBlank()) {
+                    InfoRow("Source/Platform", song.source.replaceFirstChar { it.uppercase() })
+                }
+                
+                if (song.type.isNotBlank()) {
+                    InfoRow("Type", song.type)
+                }
+                
+                if (song.hasLyrics) {
+                    InfoRow("Lyrics", "Available")
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // === DESCRIPTION SECTION ===
+                if (song.description.isNotBlank()) {
+                    SectionHeader("Description")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Text(
+                        text = song.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextPrimary.copy(alpha = 0.8f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                    )
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+                
+                // === IDs & LINKS SECTION ===
+                SectionHeader("IDs & Links")
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                if (song.id.isNotBlank()) {
+                    InfoRow("Song/Video ID", song.id)
+                }
+                
+                song.albumId?.takeIf { it.isNotBlank() }?.let { albumId ->
+                    InfoRow("Album ID", albumId)
+                }
+                
+                song.permaUrl?.takeIf { it.isNotBlank() }?.let { permaUrl ->
+                    InfoRow("Permalink", permaUrl.take(40) + "...")
+                }
+                
+                song.streamUrl?.takeIf { it.isNotBlank() }?.let {
+                    InfoRow("Stream URL", "Available")
+                }
+                
+                // Extra metadata
+                if (song.extras.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    SectionHeader("Additional Metadata")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    song.extras.forEach { (key, value) ->
+                        if (value.isNotBlank()) {
+                            InfoRow(key.replaceFirstChar { it.uppercase() }, value)
+                        }
+                    }
                 }
             }
         },
@@ -1212,6 +1424,28 @@ private fun SongInfoDialog(
             }
         }
     )
+}
+
+// Helper composable for section headers
+@Composable
+private fun SectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Bold,
+        color = AccentRed,
+        modifier = Modifier.padding(top = 4.dp)
+    )
+}
+
+// Helper function to format large numbers (YouTube style)
+private fun formatCount(count: Long): String {
+    return when {
+        count >= 1_000_000_000 -> String.format("%.1fB", count / 1_000_000_000.0)
+        count >= 1_000_000 -> String.format("%.1fM", count / 1_000_000.0)
+        count >= 1_000 -> String.format("%.1fK", count / 1_000.0)
+        else -> count.toString()
+    }
 }
 
 @Composable

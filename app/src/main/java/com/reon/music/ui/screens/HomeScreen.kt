@@ -23,15 +23,20 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.cos
+import kotlin.math.sin
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.reon.music.core.model.Album
@@ -65,6 +70,42 @@ private val GradientColors = listOf(
     Color(0xFFFF9800)  // Orange
 )
 
+// Helper function to convert angle to gradient offsets
+private fun angleToOffset(angle: Float, size: Float = 1000f): Pair<Offset, Offset> {
+    val radians = Math.toRadians(angle.toDouble())
+    val x = (size / 2) * cos(radians).toFloat()
+    val y = (size / 2) * sin(radians).toFloat()
+    return Pair(
+        Offset(size / 2 - x, size / 2 - y),
+        Offset(size / 2 + x, size / 2 + y)
+    )
+}
+
+@Composable
+private fun MinimalSeeAllButton(onClick: () -> Unit) {
+    TextButton(
+        onClick = onClick,
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+        modifier = Modifier.height(28.dp),
+        colors = ButtonDefaults.textButtonColors(containerColor = Color.Transparent)
+    ) {
+        Text(
+            text = "See All",
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 11.sp
+            ),
+            color = AccentRed
+        )
+        Icon(
+            imageVector = Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = AccentRed,
+            modifier = Modifier.size(14.dp)
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -82,6 +123,29 @@ fun HomeScreen(
     val scrollState = rememberLazyListState()
     val pullToRefreshState = rememberPullToRefreshState()
     val context = androidx.compose.ui.platform.LocalContext.current
+    
+    val featuredArtistName = "Arijit Singh"
+    val featuredArtist = uiState.topArtists.firstOrNull { it.name.equals(featuredArtistName, true) }
+        ?: uiState.topArtists.firstOrNull()
+    val featuredArtistSongs = when (featuredArtist?.name?.lowercase()) {
+        "arijit singh" -> uiState.arijitSinghSongs
+        "a.r. rahman", "ar rahman" -> uiState.arRahmanSongs
+        "shreya ghoshal" -> uiState.shreyaGhoshalSongs
+        "sid sriram" -> uiState.sidSriram
+        "anirudh ravichander", "anirudh" -> uiState.anirudhSongs
+        "badshah" -> uiState.badshah
+        "yo yo honey singh", "honey singh" -> uiState.honeysingh
+        "kanika kapoor" -> uiState.kanikKapoor
+        else -> uiState.mostPlayedSongs.filter { song ->
+            featuredArtist?.name?.let { song.artist.equals(it, true) } == true
+        }
+    }.ifEmpty {
+        if (featuredArtist != null) {
+            uiState.newReleases.filter { song -> song.artist.equals(featuredArtist.name, true) }
+        } else {
+            emptyList()
+        }
+    }
     
     // Category filter state (vertical filters)
     var selectedCategory by remember { mutableStateOf("All") }
@@ -125,20 +189,12 @@ fun HomeScreen(
                     SimpMusicHeader(
                         greeting = getGreeting(),
                         onNotificationsClick = { /* TODO */ },
-                        onHistoryClick = { onSeeAllClick("recent") },
                         onSettingsClick = onSettingsClick
                     )
                 }
                 
-                // History shortcut + vertical filters
-                item {
-                    CategoryListVertical(
-                        categories = categories,
-                        selectedCategory = selectedCategory,
-                        onCategorySelected = { selectedCategory = it },
-                        onHistoryClick = { onSeeAllClick("recent") }
-                    )
-                }
+                // Removed: History shortcut + vertical filters
+                // Now showing content directly without filter section
                 
                 // Welcome Back Card with Radio
                 item {
@@ -172,11 +228,21 @@ fun HomeScreen(
                     }
                 }
                 
-                // Trending Charts
+                // Trending Charts (include Telugu & Tamil if present)
                 if (uiState.charts.isNotEmpty()) {
                     item {
+                        val trendingCharts = remember(uiState.charts) {
+                            val telugu = uiState.charts.firstOrNull { it.id.equals("telugu", true) }
+                            val tamil = uiState.charts.firstOrNull { it.id.equals("tamil", true) }
+                            val base = uiState.charts.take(2)
+                            buildList {
+                                addAll(base)
+                                telugu?.let { if (!contains(it)) add(it) }
+                                tamil?.let { if (!contains(it)) add(it) }
+                            }
+                        }
                         TrendingChartsSection(
-                            charts = uiState.charts,
+                            charts = trendingCharts,
                             onChartClick = { chart ->
                                 onChartClick(chart.id, chart.title)
                             }
@@ -242,6 +308,54 @@ fun HomeScreen(
                             songs = uiState.banjaraSongs,
                             onSongClick = onSongClick,
                             onSeeAllClick = { onSeeAllClick("banjara") }
+                        )
+                    }
+                }
+                
+                // Telugu Playlists (YouTube-only)
+                if (uiState.teluguPlaylistsYoutube.isNotEmpty()) {
+                    item {
+                        PlaylistCarouselSection(
+                            title = "Telugu Playlists",
+                            playlists = uiState.teluguPlaylistsYoutube,
+                            onPlaylistClick = onPlaylistClick,
+                            onSeeAllClick = { onSeeAllClick("telugu-playlists") }
+                        )
+                    }
+                }
+                
+                // Telugu Songs (YouTube-only)
+                if (uiState.teluguSongsYoutube.isNotEmpty()) {
+                    item {
+                        LanguageSection(
+                            title = "Telugu (YouTube)",
+                            songs = uiState.teluguSongsYoutube,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("telugu-youtube") }
+                        )
+                    }
+                }
+                
+                // Indian Playlists (YouTube-only)
+                if (uiState.indianPlaylistsYoutube.isNotEmpty()) {
+                    item {
+                        PlaylistCarouselSection(
+                            title = "Indian Playlists",
+                            playlists = uiState.indianPlaylistsYoutube,
+                            onPlaylistClick = onPlaylistClick,
+                            onSeeAllClick = { onSeeAllClick("indian-playlists") }
+                        )
+                    }
+                }
+                
+                // Indian Songs (YouTube-only)
+                if (uiState.indianSongsYoutube.isNotEmpty()) {
+                    item {
+                        LanguageSection(
+                            title = "Indian (YouTube)",
+                            songs = uiState.indianSongsYoutube,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("indian-youtube") }
                         )
                     }
                 }
@@ -316,14 +430,17 @@ fun HomeScreen(
                     }
                 }
                 
-                // ===== TOP ARTISTS =====
+                // ===== FEATURED ARTIST =====
                 
-                if (uiState.topArtists.isNotEmpty()) {
+                if (featuredArtist != null && featuredArtistSongs.isNotEmpty()) {
                     item {
-                        TopArtistsSection(
-                            artists = uiState.topArtists,
+                        FeaturedArtistSection(
+                            artist = featuredArtist,
+                            songs = featuredArtistSongs,
+                            onSongClick = onSongClick,
                             onArtistClick = onArtistClick,
-                            onSeeAllClick = { onSeeAllClick("artists") }
+                            onPlayAllClick = { playerViewModel.playQueue(featuredArtistSongs) },
+                            onShuffleClick = { playerViewModel.playQueue(featuredArtistSongs.shuffled()) }
                         )
                     }
                 }
@@ -479,41 +596,41 @@ fun HomeScreen(
                     }
                 }
                 
-                // Telugu Playlists
-                if (uiState.teluguPlaylistCollection.isNotEmpty()) {
-                    item {
-                        PlaylistSection(
-                            title = "Telugu Playlists",
-                            playlists = uiState.teluguPlaylistCollection,
-                            onPlaylistClick = onPlaylistClick,
-                            onSeeAllClick = { onSeeAllClick("teluguplaylists") }
-                        )
-                    }
-                }
+//                // Hindi Playlists
+//                if (uiState.hindiPlaylistCollection.isNotEmpty()) {
+//                    item {
+//                        PlaylistSection(
+//                            title = "Hindi Playlists",
+//                            playlists = uiState.hindiPlaylistCollection,
+//                            onPlaylistClick = onPlaylistClick,
+//                            onSeeAllClick = { onSeeAllClick("hindiplaylists") }
+//                        )
+//                    }
+//                }
                 
-                // Hindi Playlists
-                if (uiState.hindiPlaylistCollection.isNotEmpty()) {
-                    item {
-                        PlaylistSection(
-                            title = "Hindi Playlists",
-                            playlists = uiState.hindiPlaylistCollection,
-                            onPlaylistClick = onPlaylistClick,
-                            onSeeAllClick = { onSeeAllClick("hindiplaylists") }
-                        )
-                    }
-                }
+//                // Tamil Playlists
+//                if (uiState.tamilPlaylistCollection.isNotEmpty()) {
+//                    item {
+//                        PlaylistSection(
+//                            title = "Tamil Playlists",
+//                            playlists = uiState.tamilPlaylistCollection,
+//                            onPlaylistClick = onPlaylistClick,
+//                            onSeeAllClick = { onSeeAllClick("tamilplaylists") }
+//                        )
+//                    }
+//                }
                 
-                // Tamil Playlists
-                if (uiState.tamilPlaylistCollection.isNotEmpty()) {
-                    item {
-                        PlaylistSection(
-                            title = "Tamil Playlists",
-                            playlists = uiState.tamilPlaylistCollection,
-                            onPlaylistClick = onPlaylistClick,
-                            onSeeAllClick = { onSeeAllClick("tamilplaylists") }
-                        )
-                    }
-                }
+//                // Telugu Playlists
+//                if (uiState.teluguPlaylistCollection.isNotEmpty()) {
+//                    item {
+//                        PlaylistSection(
+//                            title = "Telugu Playlists",
+//                            playlists = uiState.teluguPlaylistCollection,
+//                            onPlaylistClick = onPlaylistClick,
+//                            onSeeAllClick = { onSeeAllClick("teluguplaylists") }
+//                        )
+//                    }
+//                }
                 
                 // ===== MORE REGIONAL SONGS =====
                 
@@ -655,55 +772,68 @@ fun HomeScreen(
 private fun SimpMusicHeader(
     greeting: String,
     onNotificationsClick: () -> Unit,
-    onHistoryClick: () -> Unit,
     onSettingsClick: () -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 16.dp)
+            .padding(horizontal = 20.dp, vertical = 20.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "REON MUSIC",
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.headlineLarge.copy(
+                        fontWeight = FontWeight.ExtraBold,
                         letterSpacing = (-0.5).sp
                     ),
                     color = TextPrimary
                 )
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = greeting,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = TextSecondary
+                    style = MaterialTheme.typography.titleMedium,
+                    color = TextSecondary,
+                    fontWeight = FontWeight.Medium
                 )
             }
             
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                IconButton(onClick = onNotificationsClick) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(SurfaceLight)
+            ) {
+                IconButton(
+                    onClick = onNotificationsClick,
+                    modifier = Modifier.size(40.dp)
+                ) {
                     Icon(
                         imageVector = Icons.Outlined.Notifications,
                         contentDescription = "Notifications",
-                        tint = TextPrimary
+                        tint = TextPrimary,
+                        modifier = Modifier.size(22.dp)
                     )
                 }
-                IconButton(onClick = onHistoryClick) {
-                    Icon(
-                        imageVector = Icons.Outlined.History,
-                        contentDescription = "Recent Activity",
-                        tint = TextPrimary
-                    )
-                }
-                IconButton(onClick = onSettingsClick) {
+                Divider(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(24.dp),
+                    color = ChipUnselectedBg
+                )
+                IconButton(
+                    onClick = onSettingsClick,
+                    modifier = Modifier.size(40.dp)
+                ) {
                     Icon(
                         imageVector = Icons.Default.Settings,
                         contentDescription = "Settings",
-                        tint = TextPrimary
+                        tint = TextPrimary,
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
@@ -777,49 +907,81 @@ private fun CategoryListVertical(
 private fun WelcomeRadioCard(
     onRadioClick: () -> Unit
 ) {
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+        label = "welcomeScale"
+    )
+    
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .padding(horizontal = 20.dp, vertical = 16.dp)
+            .scale(scale)
             .clickable(onClick = onRadioClick)
-            .shadow(4.dp, RoundedCornerShape(16.dp)),
-        shape = RoundedCornerShape(16.dp),
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        isPressed = event.type == androidx.compose.ui.input.pointer.PointerEventType.Press
+                    }
+                }
+            }
+            .shadow(
+                elevation = 10.dp,
+                shape = RoundedCornerShape(20.dp),
+                ambientColor = AccentRed.copy(0.2f),
+                spotColor = AccentRed.copy(0.3f)
+            ),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = SurfaceLight
-        )
+            containerColor = BackgroundWhite
+        ),
+        border = BorderStroke(1.5.dp, AccentRed.copy(alpha = 0.15f))
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
+                .padding(24.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Welcome back,",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary
+                    style = MaterialTheme.typography.labelMedium,
+                    color = TextSecondary,
+                    fontWeight = FontWeight.Medium
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
                 Text(
                     text = "MUSIC TO GET YOU STARTED",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.ExtraBold,
                         letterSpacing = 0.5.sp
                     ),
                     color = TextPrimary
                 )
             }
             
+            Spacer(modifier = Modifier.width(16.dp))
+            
             Box(
                 modifier = Modifier
-                    .size(64.dp)
+                    .size(72.dp)
                     .clip(CircleShape)
                     .background(
-                        Brush.radialGradient(
-                            colors = listOf(AccentRed, AccentRedSecondary)
+                        brush = Brush.linearGradient(
+                            colors = listOf(AccentRed, AccentRedSecondary),
+                            start = angleToOffset(45f).first,
+                            end = angleToOffset(45f).second
                         )
+                    )
+                    .shadow(
+                        elevation = 8.dp,
+                        shape = CircleShape,
+                        ambientColor = AccentRed.copy(0.3f)
                     ),
                 contentAlignment = Alignment.Center
             ) {
@@ -827,7 +989,7 @@ private fun WelcomeRadioCard(
                     imageVector = Icons.Default.Radio,
                     contentDescription = "Radio",
                     tint = Color.White,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(36.dp)
                 )
             }
         }
@@ -842,19 +1004,20 @@ private fun QuickPicksSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 16.dp)
+            .padding(vertical = 20.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 8.dp),
+                .padding(horizontal = 20.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = "Quick picks",
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 20.sp
                 ),
                 color = TextPrimary
             )
@@ -862,7 +1025,7 @@ private fun QuickPicksSection(
         
         LazyColumn(
             contentPadding = PaddingValues(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(songs.take(10)) { song ->
                 QuickPickItem(
@@ -881,36 +1044,78 @@ private fun QuickPickItem(
     gradientColor: Color,
     onClick: () -> Unit
 ) {
+    var isPressed by remember { mutableStateOf(false) }
+    val backgroundColor by animateColorAsState(
+        targetValue = if (isPressed) SurfaceLight else BackgroundWhite,
+        animationSpec = tween(200),
+        label = "bgColor"
+    )
+    
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
+            .background(
+                color = backgroundColor,
+                shape = RoundedCornerShape(14.dp)
+            )
+            .padding(12.dp)
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        isPressed = event.type == androidx.compose.ui.input.pointer.PointerEventType.Press
+                    }
+                }
+            },
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Album art thumbnail
-        AsyncImage(
-            model = song.getHighQualityArtwork(),
-            contentDescription = song.title,
-            contentScale = ContentScale.Crop,
+        // Album art thumbnail with shadow
+        Box(
             modifier = Modifier
-                .size(56.dp)
-                .clip(RoundedCornerShape(8.dp))
-        )
+                .size(64.dp)
+                .shadow(
+                    elevation = 6.dp,
+                    shape = RoundedCornerShape(12.dp),
+                    ambientColor = Color.Black.copy(0.1f)
+                )
+                .clip(RoundedCornerShape(12.dp))
+        ) {
+            AsyncImage(
+                model = song.getHighQualityArtwork(),
+                contentDescription = song.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            
+            // Gradient overlay
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        brush = Brush.linearGradient(
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.2f)),
+                            start = angleToOffset(45f).first,
+                            end = angleToOffset(45f).second
+                        )
+                    )
+            )
+        }
         
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(14.dp))
         
         // Song info
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = song.title,
                 style = MaterialTheme.typography.bodyLarge.copy(
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.SemiBold
                 ),
                 color = TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = song.artist,
                 style = MaterialTheme.typography.bodyMedium,
@@ -920,25 +1125,32 @@ private fun QuickPickItem(
             )
             // Show album/movie name if available
             if (song.album.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "🎬 ${song.album}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = AccentRed.copy(alpha = 0.7f),
+                    color = AccentRed.copy(alpha = 0.8f),
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    fontWeight = FontWeight.Medium
                 )
             }
         }
         
         Spacer(modifier = Modifier.width(8.dp))
         
-        // Gradient color bar
+        // Gradient color bar with rounded ends
         Box(
             modifier = Modifier
-                .width(4.dp)
-                .height(40.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(gradientColor)
+                .width(5.dp)
+                .height(48.dp)
+                .clip(RoundedCornerShape(2.5.dp))
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(gradientColor, gradientColor.copy(alpha = 0.6f))
+                    )
+                )
+                .shadow(elevation = 4.dp)
         )
     }
 }
@@ -951,14 +1163,33 @@ private fun FeaturedBannerSection(
     if (playlists.isEmpty()) return
     
     val featured = playlists.firstOrNull() ?: return
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.98f else 1f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+        label = "bannerScale"
+    )
     
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .padding(horizontal = 20.dp, vertical = 16.dp)
+            .scale(scale)
             .clickable { onPlaylistClick(featured) }
-            .shadow(8.dp, RoundedCornerShape(16.dp)),
-        shape = RoundedCornerShape(16.dp)
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        isPressed = event.type == androidx.compose.ui.input.pointer.PointerEventType.Press
+                    }
+                }
+            }
+            .shadow(
+                elevation = 12.dp,
+                shape = RoundedCornerShape(20.dp),
+                ambientColor = Color.Black.copy(0.15f)
+            ),
+        shape = RoundedCornerShape(20.dp)
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             if (featured.artworkUrl != null) {
@@ -968,32 +1199,37 @@ private fun FeaturedBannerSection(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(180.dp)
+                        .height(200.dp)
                 )
             } else {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(180.dp)
+                        .height(200.dp)
                         .background(
-                            Brush.linearGradient(
-                                colors = listOf(AccentRed, AccentRedSecondary)
+                            brush = Brush.linearGradient(
+                                colors = listOf(AccentRed, AccentRedSecondary),
+                                start = angleToOffset(45f).first,
+                                end = angleToOffset(45f).second
                             )
                         )
                 )
             }
             
-            // Gradient overlay
+            // Enhanced gradient overlay
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(180.dp)
+                    .height(200.dp)
                     .background(
-                        Brush.verticalGradient(
+                        brush = Brush.verticalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                Color.Black.copy(alpha = 0.7f)
-                            )
+                                Color.Black.copy(alpha = 0.3f),
+                                Color.Black.copy(alpha = 0.8f)
+                            ),
+                            startY = 50f,
+                            endY = Float.POSITIVE_INFINITY
                         )
                     )
             )
@@ -1002,23 +1238,43 @@ private fun FeaturedBannerSection(
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(20.dp)
+                    .padding(24.dp)
             ) {
                 Text(
                     text = featured.name,
                     style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 22.sp
                     ),
                     color = Color.White,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "${featured.songCount} tracks",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.9f)
-                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .background(
+                            Color.White.copy(alpha = 0.2f),
+                            RoundedCornerShape(6.dp)
+                        )
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                        .width(IntrinsicSize.Max)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "${featured.songCount} tracks",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
     }
@@ -1032,14 +1288,15 @@ private fun TrendingChartsSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 16.dp)
+            .padding(vertical = 20.dp)
     ) {
         Text(
             text = "Trending",
-            style = MaterialTheme.typography.titleLarge.copy(
-                fontWeight = FontWeight.Bold
+            style = MaterialTheme.typography.headlineSmall.copy(
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 20.sp
             ),
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
             color = TextPrimary
         )
         
@@ -1047,7 +1304,7 @@ private fun TrendingChartsSection(
             contentPadding = PaddingValues(horizontal = 20.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            items(charts.take(2)) { chart ->
+            items(charts.distinctBy { it.id }) { chart ->
                 ChartCard(
                     chart = chart,
                     onClick = { onChartClick(chart) }
@@ -1062,13 +1319,33 @@ private fun ChartCard(
     chart: ChartSection,
     onClick: () -> Unit
 ) {
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+        label = "chartScale"
+    )
+    
     Card(
         modifier = Modifier
-            .width(280.dp)
-            .height(200.dp)
+            .width(300.dp)
+            .height(220.dp)
+            .scale(scale)
             .clickable(onClick = onClick)
-            .shadow(8.dp, RoundedCornerShape(16.dp)),
-        shape = RoundedCornerShape(16.dp)
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        isPressed = event.type == androidx.compose.ui.input.pointer.PointerEventType.Press
+                    }
+                }
+            }
+            .shadow(
+                elevation = 10.dp,
+                shape = RoundedCornerShape(20.dp),
+                ambientColor = Color.Black.copy(0.1f)
+            ),
+        shape = RoundedCornerShape(20.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             val thumbnailUrl = chart.songs.firstOrNull()?.getHighQualityArtwork()
@@ -1085,23 +1362,28 @@ private fun ChartCard(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(
-                            Brush.linearGradient(
-                                colors = listOf(AccentRed, AccentRedSecondary)
+                            brush = Brush.linearGradient(
+                                colors = listOf(AccentRed, AccentRedSecondary),
+                                start = angleToOffset(45f).first,
+                                end = angleToOffset(45f).second
                             )
                         )
                 )
             }
             
-            // Gradient overlay
+            // Enhanced gradient overlay
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
-                        Brush.verticalGradient(
+                        brush = Brush.verticalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                Color.Black.copy(alpha = 0.6f)
-                            )
+                                Color.Black.copy(alpha = 0.4f),
+                                Color.Black.copy(alpha = 0.8f)
+                            ),
+                            startY = 100f,
+                            endY = Float.POSITIVE_INFINITY
                         )
                     )
             )
@@ -1110,22 +1392,621 @@ private fun ChartCard(
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(16.dp)
+                    .padding(20.dp)
             ) {
                 Text(
                     text = chart.title,
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 18.sp
                     ),
                     color = Color.White,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .background(
+                            Color.White.copy(alpha = 0.2f),
+                            RoundedCornerShape(6.dp)
+                        )
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                        .width(IntrinsicSize.Max)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.TrendingUp,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(
+                        text = "Chart",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun SongCard(
+    song: Song,
+    onClick: () -> Unit,
+    onMoreClick: (() -> Unit)? = null,
+    isRectangular: Boolean = false
+) {
+    // Animation state for hover effect
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+        label = "cardScale"
+    )
+    
+    Column(
+        modifier = Modifier
+            .width(if (isRectangular) 220.dp else 190.dp)
+            .clickable(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .scale(scale)
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            isPressed = event.type == androidx.compose.ui.input.pointer.PointerEventType.Press
+                        }
+                    }
+                }
+        ) {
+            // Consistent rounded rectangle shape for all cards in a row
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(if (isRectangular) 16f/9f else 1f)
+                    .clip(RoundedCornerShape(20.dp))
+                    .shadow(
+                        elevation = 8.dp,
+                        shape = RoundedCornerShape(20.dp),
+                        ambientColor = Color.Black.copy(0.15f),
+                        spotColor = Color.Black.copy(0.25f)
+                    )
+            ) {
+                AsyncImage(
+                    model = song.getHighQualityArtwork(),
+                    contentDescription = song.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                
+                // Gradient overlay for depth
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.35f)
+                                ),
+                                radius = 500f
+                            )
+                        )
+                )
+            }
+            
+            // Quality badge (HD/4K/320kbps) - Top Left
+            if (song.quality.contains("4K", ignoreCase = true) || 
+                song.quality.contains("HD", ignoreCase = true) || 
+                song.is320kbps) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp)
+                        .background(
+                            color = AccentRed,
+                            shape = RoundedCornerShape(6.dp)
+                        )
+                        .padding(horizontal = 6.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        text = when {
+                            song.quality.contains("4K", ignoreCase = true) -> "4K"
+                            song.quality.contains("HD", ignoreCase = true) -> "HD"
+                            song.is320kbps -> "HQ"
+                            else -> "HD"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            
+            // Duration badge with enhanced styling - Bottom Right
+            if (song.duration > 0) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp)
+                        .background(
+                            color = Color.Black.copy(alpha = 0.75f),
+                            shape = RoundedCornerShape(6.dp)
+                        )
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        text = formatDuration(song.duration),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+            
+            // More options button
+            if (onMoreClick != null) {
+                IconButton(
+                    onClick = onMoreClick,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "More Options",
+                        tint = Color.White,
+                        modifier = Modifier
+                            .background(
+                                color = Color.Black.copy(alpha = 0.5f),
+                                shape = CircleShape
+                            )
+                            .padding(5.dp)
+                            .size(18.dp)
+                    )
+                }
+            }
+            
+            // Play indicator icon for visual appeal
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(48.dp)
+                    .background(
+                        color = AccentRed.copy(alpha = 0.8f),
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = "Play",
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        // Song title
+        Text(
+            text = song.title,
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontWeight = FontWeight.SemiBold
+            ),
+            color = TextPrimary,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            fontSize = 13.sp
+        )
+        
+        // Artist/Channel name
+        Text(
+            text = if (song.channelName.isNotBlank()) song.channelName else song.artist,
+            style = MaterialTheme.typography.bodySmall,
+            color = TextSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            fontSize = 11.sp
+        )
+        
+        // View count (YouTube-style)
+        if (song.viewCount > 0) {
+            Text(
+                text = "${formatCount(song.viewCount)} views",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextSecondary.copy(alpha = 0.8f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                fontSize = 10.sp
+            )
+        }
+        
+        // Album/Movie name if available
+        if (song.album.isNotBlank() || song.movieName.isNotBlank()) {
+            val displayName = if (song.movieName.isNotBlank()) song.movieName else song.album
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "Chart • YouTube Music",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.9f)
+                    text = displayName,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AccentRed.copy(alpha = 0.8f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontSize = 10.sp,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                
+                // Language badge
+                if (song.language.isNotBlank()) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "• ${song.language.take(3).uppercase()}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary.copy(alpha = 0.7f),
+                        fontSize = 9.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+// Helper function to format duration
+private fun formatDuration(seconds: Int): String {
+    val minutes = seconds / 60
+    val secs = seconds % 60
+    return String.format("%d:%02d", minutes, secs)
+}
+
+// Helper function to format large numbers (YouTube style)
+private fun formatCount(count: Long): String {
+    return when {
+        count >= 1_000_000_000 -> String.format("%.1fB", count / 1_000_000_000.0)
+        count >= 1_000_000 -> String.format("%.1fM", count / 1_000_000.0)
+        count >= 1_000 -> String.format("%.1fK", count / 1_000.0)
+        else -> count.toString()
+    }
+}
+
+@Composable
+private fun FeaturedArtistSection(
+    artist: Artist,
+    songs: List<Song>,
+    onSongClick: (Song) -> Unit,
+    onArtistClick: (Artist) -> Unit,
+    onPlayAllClick: () -> Unit,
+    onShuffleClick: () -> Unit
+) {
+    val backgroundArtwork = artist.artworkUrl
+        ?: songs.firstOrNull()?.getHighQualityArtwork()
+        ?: songs.firstOrNull()?.artworkUrl
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 16.dp)
+    ) {
+        Text(
+            text = "Featured Artist",
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontWeight = FontWeight.SemiBold,
+                color = AccentRed
+            )
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(220.dp)
+                .clickable { onArtistClick(artist) },
+            shape = RoundedCornerShape(24.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (backgroundArtwork != null) {
+                    AsyncImage(
+                        model = backgroundArtwork,
+                        contentDescription = artist.name,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                brush = Brush.linearGradient(
+                                    listOf(AccentRed, AccentRedSecondary)
+                                )
+                            )
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.35f),
+                                    Color.Black.copy(alpha = 0.75f)
+                                )
+                            )
+                        )
+                )
+
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(20.dp)
+                ) {
+                    Text(
+                        text = artist.name,
+                        style = MaterialTheme.typography.headlineSmall.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White
+                        ),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "${songs.size} hand-picked tracks",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            color = Color.White.copy(alpha = 0.8f)
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        AssistChip(
+                            onClick = onPlayAllClick,
+                            label = {
+                                Text(
+                                    text = "Play All",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    tint = Color.White
+                                )
+                            },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = AccentRed.copy(alpha = 0.85f)
+                            )
+                        )
+
+                        AssistChip(
+                            onClick = onShuffleClick,
+                            label = {
+                                Text(
+                                    text = "Shuffle",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Shuffle,
+                                    contentDescription = null,
+                                    tint = Color.White
+                                )
+                            },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = Color.White.copy(alpha = 0.2f)
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            items(songs.take(8)) { song ->
+                SongCard(
+                    song = song,
+                    onClick = { onSongClick(song) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TopArtistsSection(
+    artists: List<Artist>,
+    onArtistClick: (Artist) -> Unit,
+    onSeeAllClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 20.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Top artists",
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 20.sp
+                ),
+                color = TextPrimary
+            )
+            MinimalSeeAllButton(onClick = onSeeAllClick)
+        }
+        
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            items(artists.take(10)) { artist ->
+                ArtistCard(
+                    artist = artist,
+                    onClick = { onArtistClick(artist) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArtistCard(
+    artist: Artist,
+    onClick: () -> Unit
+) {
+    val displayArt = artist.artworkUrl ?: artist.topSongs.firstOrNull()?.getHighQualityArtwork()
+        ?: artist.topSongs.firstOrNull()?.artworkUrl
+    
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.92f else 1f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+        label = "artistScale"
+    )
+    
+    Column(
+        modifier = Modifier
+            .width(120.dp)
+            .clickable(onClick = onClick)
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        isPressed = event.type == androidx.compose.ui.input.pointer.PointerEventType.Press
+                    }
+                }
+            },
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(120.dp)
+                .scale(scale)
+                .shadow(
+                    elevation = 8.dp,
+                    shape = CircleShape,
+                    ambientColor = Color.Black.copy(0.15f),
+                    spotColor = Color.Black.copy(0.25f)
+                )
+                .clip(CircleShape)
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            AccentRed.copy(alpha = 0.2f),
+                            AccentRed.copy(alpha = 0.05f)
+                        ),
+                        radius = 100f
+                    )
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            AsyncImage(
+                model = displayArt,
+                contentDescription = artist.name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(CircleShape)
+            )
+            
+            // Overlay with gradient
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.25f)
+                            ),
+                            radius = 100f
+                        )
+                    )
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        Text(
+            text = artist.name,
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontWeight = FontWeight.SemiBold
+            ),
+            color = TextPrimary,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun ContentSection(
+    title: String,
+    songs: List<Song>,
+    onSongClick: (Song) -> Unit,
+    onSeeAllClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 20.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 20.sp
+                ),
+                color = TextPrimary
+            )
+            MinimalSeeAllButton(onClick = onSeeAllClick)
+        }
+        
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            items(songs.take(10)) { song ->
+                SongCard(
+                    song = song,
+                    onClick = { onSongClick(song) }
                 )
             }
         }
@@ -1147,34 +2028,27 @@ private fun LanguageSection(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 8.dp),
+                .padding(horizontal = 20.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
                 ),
                 color = TextPrimary
             )
-            TextButton(onClick = onSeeAllClick) {
-                Text(
-                    text = "See All",
-                    color = AccentRed,
-                    style = MaterialTheme.typography.labelLarge.copy(
-                        fontWeight = FontWeight.SemiBold
-                    )
-                )
-            }
+            MinimalSeeAllButton(onClick = onSeeAllClick)
         }
         
         LazyRow(
             contentPadding = PaddingValues(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            items(songs.take(5)) { song ->
-                SongCard(
+            items(songs.take(8)) { song ->
+                CompactSongCard(
                     song = song,
                     onClick = { onSongClick(song) }
                 )
@@ -1184,158 +2058,43 @@ private fun LanguageSection(
 }
 
 @Composable
-private fun SongCard(
-    song: Song,
-    onClick: () -> Unit,
-    onMoreClick: (() -> Unit)? = null,
-    isRectangular: Boolean = false
-) {
-    Column(
-        modifier = Modifier
-            .width(if (isRectangular) 180.dp else 150.dp)
-            .clickable(onClick = onClick)
-    ) {
-        Box {
-            AsyncImage(
-                model = song.getHighQualityArtwork(),
-                contentDescription = song.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(if (isRectangular) 16f/9f else 1f)
-                    .clip(RoundedCornerShape(12.dp))
-            )
-            
-            // Duration badge
-            if (song.duration > 0) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(6.dp)
-                        .background(
-                            color = Color.Black.copy(alpha = 0.7f),
-                            shape = RoundedCornerShape(4.dp)
-                        )
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = formatDuration(song.duration),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
-                        fontSize = 10.sp
-                    )
-                }
-            }
-            
-            // More options button
-            if (onMoreClick != null) {
-                IconButton(
-                    onClick = onMoreClick,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .size(32.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = "More Options",
-                        tint = Color.White,
-                        modifier = Modifier
-                            .background(
-                                color = Color.Black.copy(alpha = 0.4f),
-                                shape = CircleShape
-                            )
-                            .padding(4.dp)
-                            .size(16.dp)
-                    )
-                }
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        Text(
-            text = song.title,
-            style = MaterialTheme.typography.bodyMedium.copy(
-                fontWeight = FontWeight.Medium
-            ),
-            color = TextPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        
-        // Show artist name
-        Text(
-            text = song.artist,
-            style = MaterialTheme.typography.bodySmall,
-            color = TextSecondary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        
-        // Show album/movie name if available (without emoji)
-        if (song.album.isNotBlank()) {
-            Text(
-                text = song.album,
-                style = MaterialTheme.typography.labelSmall,
-                color = AccentRed.copy(alpha = 0.8f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-// Helper function to format duration
-private fun formatDuration(seconds: Int): String {
-    val minutes = seconds / 60
-    val secs = seconds % 60
-    return String.format("%d:%02d", minutes, secs)
-}
-
-@Composable
-private fun TopArtistsSection(
-    artists: List<Artist>,
-    onArtistClick: (Artist) -> Unit,
+private fun PlaylistCarouselSection(
+    title: String,
+    playlists: List<Playlist>,
+    onPlaylistClick: (Playlist) -> Unit,
     onSeeAllClick: () -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 16.dp)
+            .padding(vertical = 18.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 8.dp),
+                .padding(horizontal = 20.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Top artists",
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold
+                text = title,
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 19.sp
                 ),
                 color = TextPrimary
             )
-            TextButton(onClick = onSeeAllClick) {
-                Text(
-                    text = "See All",
-                    color = AccentRed,
-                    style = MaterialTheme.typography.labelLarge.copy(
-                        fontWeight = FontWeight.SemiBold
-                    )
-                )
-            }
+            MinimalSeeAllButton(onClick = onSeeAllClick)
         }
         
         LazyRow(
             contentPadding = PaddingValues(horizontal = 20.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            items(artists.take(10)) { artist ->
-                ArtistCard(
-                    artist = artist,
-                    onClick = { onArtistClick(artist) }
+            items(playlists.take(6)) { playlist ->
+                PlaylistCard(
+                    playlist = playlist,
+                    onClick = { onPlaylistClick(playlist) }
                 )
             }
         }
@@ -1343,90 +2102,57 @@ private fun TopArtistsSection(
 }
 
 @Composable
-private fun ArtistCard(
-    artist: Artist,
+private fun CompactSongCard(
+    song: Song,
     onClick: () -> Unit
 ) {
-    val displayArt = artist.artworkUrl ?: artist.topSongs.firstOrNull()?.getHighQualityArtwork()
-        ?: artist.topSongs.firstOrNull()?.artworkUrl
-    
-    Column(
+    Card(
         modifier = Modifier
-            .width(100.dp)
+            .width(140.dp)
+            .height(180.dp)
             .clickable(onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfaceLight)
     ) {
-        AsyncImage(
-            model = displayArt,
-            contentDescription = artist.name,
-            contentScale = ContentScale.Crop,
+        Column(
             modifier = Modifier
-                .size(100.dp)
-                .clip(CircleShape)
-        )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        Text(
-            text = artist.name,
-            style = MaterialTheme.typography.bodySmall.copy(
-                fontWeight = FontWeight.Medium
-            ),
-            color = TextPrimary,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-        )
-    }
-}
-
-@Composable
-private fun ContentSection(
-    title: String,
-    songs: List<Song>,
-    onSongClick: (Song) -> Unit,
-    onSeeAllClick: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 16.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxSize()
+                .padding(8.dp)
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold
-                ),
-                color = TextPrimary
+            AsyncImage(
+                model = song.getHighQualityArtwork() ?: song.artworkUrl,
+                contentDescription = song.title,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp)
+                    .clip(RoundedCornerShape(8.dp)),
+                contentScale = ContentScale.Crop
             )
-            TextButton(onClick = onSeeAllClick) {
-                Text(
-                    text = "See All",
-                    color = AccentRed,
-                    style = MaterialTheme.typography.labelLarge.copy(
-                        fontWeight = FontWeight.SemiBold
-                    )
-                )
-            }
-        }
-        
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            items(songs.take(10)) { song ->
-                SongCard(
-                    song = song,
-                    onClick = { onSongClick(song) }
-                )
-            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Text(
+                text = song.title,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.SemiBold
+                ),
+                color = TextPrimary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                fontSize = 12.sp
+            )
+            
+            Spacer(modifier = Modifier.height(4.dp))
+            
+            Text(
+                text = song.artist,
+                style = MaterialTheme.typography.labelSmall,
+                color = TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                fontSize = 10.sp
+            )
         }
     }
 }
@@ -1457,13 +2183,28 @@ private fun PlaylistSection(
                 ),
                 color = TextPrimary
             )
-            TextButton(onClick = onSeeAllClick) {
+            TextButton(
+                onClick = onSeeAllClick,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(AccentRed.copy(alpha = 0.1f))
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+            ) {
                 Text(
                     text = "See All",
                     color = AccentRed,
-                    style = MaterialTheme.typography.labelLarge.copy(
-                        fontWeight = FontWeight.SemiBold
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp
                     )
+                )
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = AccentRed,
+                    modifier = Modifier
+                        .size(16.dp)
+                        .padding(start = 4.dp)
                 )
             }
         }

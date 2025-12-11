@@ -46,6 +46,8 @@ fun SongOptionsSheet(
     song: Song,
     isDownloaded: Boolean = false,
     isLiked: Boolean = false,
+    isDownloading: Boolean = false,
+    downloadProgress: Int = 0,
     showDownloadOption: Boolean = true,
     showRemoveFromLibrary: Boolean = false,
     showRemoveFromPlaylist: Boolean = false,
@@ -189,7 +191,22 @@ fun SongOptionsSheet(
             
             // Download Option
             if (showDownloadOption) {
-                if (isDownloaded) {
+                if (isDownloading) {
+                    OptionItem(
+                        icon = Icons.Outlined.Download,
+                        title = "Downloading...",
+                        subtitle = if (downloadProgress > 0) "$downloadProgress%" else "Preparing",
+                        iconTint = AccentRed,
+                        trailingContent = {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = AccentRed
+                            )
+                        },
+                        onClick = { }
+                    )
+                } else if (isDownloaded) {
                     OptionItem(
                         icon = Icons.Filled.DownloadDone,
                         title = "Downloaded",
@@ -296,6 +313,7 @@ private fun OptionItem(
     title: String,
     subtitle: String? = null,
     iconTint: Color = TextPrimary,
+    trailingContent: (@Composable (() -> Unit))? = null,
     textColor: Color = TextPrimary,
     onClick: () -> Unit
 ) {
@@ -326,6 +344,10 @@ private fun OptionItem(
                     color = TextSecondary
                 )
             }
+        }
+        if (trailingContent != null) {
+            Spacer(modifier = Modifier.width(8.dp))
+            trailingContent()
         }
     }
 }

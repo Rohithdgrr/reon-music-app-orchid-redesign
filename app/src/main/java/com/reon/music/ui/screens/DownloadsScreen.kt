@@ -22,6 +22,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -34,6 +36,8 @@ import com.reon.music.ui.viewmodels.LibraryViewModel
 import com.reon.music.ui.viewmodels.PlayerViewModel
 import java.io.File
 import android.content.Intent
+import android.os.Environment
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.platform.LocalContext
 import com.reon.music.data.database.entities.PlaylistEntity
 import com.reon.music.ui.viewmodels.SettingsViewModel
@@ -48,12 +52,7 @@ private val AccentRed = Color(0xFFE53935)
 private val AccentGreen = Color(0xFF43A047)
 private val AccentOrange = Color(0xFFFF9800)
 
-// Download status enum
-enum class DownloadStatus {
-    COMPLETED,
-    DOWNLOADING,
-    FAILED
-}
+// Using global DownloadStatus from services
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,58 +69,98 @@ fun DownloadsScreen(
     
     // Tab state for grouping
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("All Songs", "By Playlist", "By Artist")
+    val tabs = listOf("All Songs", "By Artist", "By Album")
+    
+    // collect download progress
+    val downloadProgressMap by playerViewModel.downloadProgress.collectAsState()
+    val activeDownloads = remember(downloadProgressMap) {
+        downloadProgressMap.values.filter { it.status == com.reon.music.services.DownloadStatus.DOWNLOADING || it.status == com.reon.music.services.DownloadStatus.QUEUED }
+    }
     
     // Song options state
     var showSongOptions by remember { mutableStateOf(false) }
     var selectedSong by remember { mutableStateOf<Song?>(null) }
     var showAddToPlaylistDialog by remember { mutableStateOf(false) }
     
+    // Search state
+    var searchQuery by remember { mutableStateOf("") }
+    var showSearch by remember { mutableStateOf(false) }
+    
+    // Filter downloaded songs based on tab and search
+    val filteredSongs = remember(uiState.downloadedSongs, selectedTab, searchQuery) {
+        val filtered = if (searchQuery.isEmpty()) {
+            uiState.downloadedSongs
+        } else {
+            uiState.downloadedSongs.filter { song ->
+                song.title.contains(searchQuery, ignoreCase = true) ||
+                song.artist.contains(searchQuery, ignoreCase = true) ||
+                song.album.contains(searchQuery, ignoreCase = true)
+            }
+        }
+        
+        when (selectedTab) {
+            1 -> filtered.sortedBy { it.artist }
+            2 -> filtered.sortedBy { it.album }
+            else -> filtered
+        }
+    }
+    
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Downloaded",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = { /* Navigate back */ }) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back",
-                            tint = TextPrimary
-                        )
+            if (showSearch) {
+                SearchTopBar(
+                    searchQuery = searchQuery,
+                    onSearchQueryChanged = { searchQuery = it },
+                    onCloseSearch = { 
+                        showSearch = false
+                        searchQuery = ""
                     }
-                },
-                actions = {
-                    IconButton(onClick = { /* Search */ }) {
-                        Icon(
-                            imageVector = Icons.Outlined.Search,
-                            contentDescription = "Search",
-                            tint = TextPrimary
-                        )
-                    }
-                    // Radio mode button
-                    IconButton(onClick = { 
-                        if (uiState.downloadedSongs.isNotEmpty()) {
-                            playerViewModel.enableRadioMode(uiState.downloadedSongs)
-                        }
-                    }) {
-                        Icon(
-                            imageVector = Icons.Default.Radio,
-                            contentDescription = "Radio Mode",
-                            tint = AccentRed
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BackgroundWhite
                 )
-            )
+            } else {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = "Downloads",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { /* Navigate back */ }) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowBack,
+                                contentDescription = "Back",
+                                tint = TextPrimary
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { showSearch = true }) {
+                            Icon(
+                                imageVector = Icons.Outlined.Search,
+                                contentDescription = "Search",
+                                tint = TextPrimary
+                            )
+                        }
+                        // Radio mode button
+                        if (uiState.downloadedSongs.isNotEmpty()) {
+                            IconButton(onClick = { 
+                                playerViewModel.enableRadioMode(uiState.downloadedSongs)
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.Radio,
+                                    contentDescription = "Radio Mode",
+                                    tint = AccentRed
+                                )
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = BackgroundWhite
+                    )
+                )
+            }
         },
         containerColor = BackgroundWhite
     ) { paddingValues ->
@@ -133,6 +172,10 @@ fun DownloadsScreen(
             if (uiState.downloadedSongs.isEmpty()) {
                 EmptyDownloadsState()
             } else {
+                // Active Downloads Section
+                if (activeDownloads.isNotEmpty()) {
+                    ActiveDownloadsSection(activeDownloads)
+                }
                 // Storage Indicator
                 StorageIndicator(
                     usedMB = calculateStorageUsed(uiState.downloadedSongs),
@@ -210,54 +253,95 @@ fun DownloadsScreen(
                 ) {
                     Button(
                         onClick = { 
-                            if (uiState.downloadedSongs.isNotEmpty()) {
-                                playerViewModel.playQueue(uiState.downloadedSongs)
+                            if (filteredSongs.isNotEmpty()) {
+                                playerViewModel.playQueue(filteredSongs)
                             }
                         },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = AccentRed)
                     ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null)
+                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Play All")
                     }
                     OutlinedButton(
                         onClick = { 
-                            if (uiState.downloadedSongs.isNotEmpty()) {
-                                playerViewModel.playQueue(uiState.downloadedSongs.shuffled())
+                            if (filteredSongs.isNotEmpty()) {
+                                playerViewModel.playQueue(filteredSongs.shuffled())
                             }
                         },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentRed)
                     ) {
-                        Icon(Icons.Default.Shuffle, contentDescription = null)
+                        Icon(Icons.Default.Shuffle, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Shuffle")
                     }
                 }
                 
-                // Downloads List
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    itemsIndexed(uiState.downloadedSongs) { index, song ->
-                        DownloadItem(
-                            song = song,
-                            isPlaying = playerState.currentSong?.id == song.id,
-                            downloadStatus = DownloadStatus.COMPLETED,
-                            fileSize = "3.2MB", // Calculate actual size
-                            onClick = { playerViewModel.playSong(song) },
-                            onMoreClick = {
-                                selectedSong = song
-                                showSongOptions = true
-                            }
+                // Downloads List or Empty State
+                if (filteredSongs.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No downloads match your search",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextSecondary
                         )
                     }
+                } else {
+                    // Group songs by artist if needed
+                    val groupedSongs = remember(filteredSongs, selectedTab) {
+                        when (selectedTab) {
+                            1 -> filteredSongs.groupBy { it.artist }
+                            2 -> filteredSongs.groupBy { it.album }
+                            else -> mapOf("" to filteredSongs)
+                        }
+                    }
                     
-                    item {
-                        Spacer(modifier = Modifier.height(100.dp))
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(0.dp)
+                    ) {
+                        groupedSongs.forEach { (group, songs) ->
+                            if (group.isNotEmpty()) {
+                                item {
+                                    Text(
+                                        text = group,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = AccentRed,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+                            
+                            itemsIndexed(songs) { index, song ->
+                                DownloadItem(
+                                    song = song,
+                                    isPlaying = playerState.currentSong?.id == song.id,
+                                    onClick = { playerViewModel.playSong(song) },
+                                    onMoreClick = {
+                                        selectedSong = song
+                                        showSongOptions = true
+                                    }
+                                )
+                                if (index < songs.size - 1) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(horizontal = 76.dp),
+                                        color = SurfaceLight,
+                                        thickness = 0.5.dp
+                                    )
+                                }
+                            }
+                        }
+                        
+                        item {
+                            Spacer(modifier = Modifier.height(100.dp))
+                        }
                     }
                 }
             }
@@ -314,6 +398,53 @@ fun DownloadsScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SearchTopBar(
+    searchQuery: String,
+    onSearchQueryChanged: (String) -> Unit,
+    onCloseSearch: () -> Unit
+) {
+    var focusRequester = FocusRequester()
+    
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+    
+    TopAppBar(
+        title = {
+            TextField(
+                value = searchQuery,
+                onValueChange = onSearchQueryChanged,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester),
+                placeholder = { Text("Search downloads...", color = TextSecondary) },
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = TextPrimary),
+                singleLine = true,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
+                )
+            )
+        },
+        navigationIcon = {
+            IconButton(onClick = onCloseSearch) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "Close Search",
+                    tint = TextPrimary
+                )
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = BackgroundWhite
+        )
+    )
+}
+
 @Composable
 private fun StorageIndicator(
     usedMB: Long,
@@ -362,37 +493,55 @@ private fun StorageIndicator(
 private fun DownloadItem(
     song: Song,
     isPlaying: Boolean,
-    downloadStatus: DownloadStatus,
-    fileSize: String,
     onClick: () -> Unit,
     onMoreClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(if (isPlaying) AccentRed.copy(alpha = 0.1f) else Color.Transparent)
+            .background(if (isPlaying) AccentRed.copy(alpha = 0.08f) else Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Album art thumbnail
-        AsyncImage(
-            model = song.getHighQualityArtwork(),
-            contentDescription = song.title,
-            contentScale = ContentScale.Crop,
+        Box(
             modifier = Modifier
-                .size(56.dp)
-                .clip(RoundedCornerShape(8.dp))
-        )
-        
-        Spacer(modifier = Modifier.width(16.dp))
+                .size(48.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(SurfaceLight)
+        ) {
+            AsyncImage(
+                model = song.getHighQualityArtwork(),
+                contentDescription = song.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            // Playing indicator
+            if (isPlaying) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(AccentRed.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = AccentRed,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+        }
         
         // Song info
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = song.title,
                 style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
+                fontWeight = FontWeight.SemiBold,
                 color = if (isPlaying) AccentRed else TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -409,58 +558,25 @@ private fun DownloadItem(
                 Text(
                     text = song.album,
                     style = MaterialTheme.typography.labelSmall,
-                    color = AccentRed.copy(alpha = 0.7f),
+                    color = AccentRed.copy(alpha = 0.6f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
         }
         
-        Spacer(modifier = Modifier.width(8.dp))
-        
-        // Download status badge
-        DownloadStatusBadge(
-            status = downloadStatus,
-            fileSize = fileSize
-        )
-        
-        Spacer(modifier = Modifier.width(8.dp))
-        
-        // More options - NOW FUNCTIONAL
-        IconButton(onClick = onMoreClick) {
+        // More options
+        IconButton(
+            onClick = onMoreClick,
+            modifier = Modifier.size(40.dp)
+        ) {
             Icon(
                 imageVector = Icons.Default.MoreVert,
                 contentDescription = "More Options",
-                tint = TextSecondary
+                tint = TextSecondary,
+                modifier = Modifier.size(20.dp)
             )
         }
-    }
-}
-
-@Composable
-private fun DownloadStatusBadge(
-    status: DownloadStatus,
-    fileSize: String
-) {
-    val (text, color) = when (status) {
-        DownloadStatus.COMPLETED -> "Done $fileSize" to AccentGreen
-        DownloadStatus.DOWNLOADING -> "Downloading 45%" to AccentOrange
-        DownloadStatus.FAILED -> "Failed" to AccentRed
-    }
-    
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(color.copy(alpha = 0.1f))
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Medium,
-            color = color
-        )
     }
 }
 
@@ -579,32 +695,130 @@ private fun EmptyDownloadsState() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(
-            imageVector = Icons.Outlined.Download,
-            contentDescription = null,
-            modifier = Modifier.size(64.dp),
-            tint = TextSecondary.copy(alpha = 0.5f)
-        )
-        Spacer(modifier = Modifier.height(16.dp))
+        // Large download icon
+        Box(
+            modifier = Modifier
+                .size(100.dp)
+                .background(AccentRed.copy(alpha = 0.1f), shape = CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Download,
+                contentDescription = null,
+                modifier = Modifier.size(60.dp),
+                tint = AccentRed
+            )
+        }
+        Spacer(modifier = Modifier.height(24.dp))
         Text(
             text = "No downloads yet",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = TextPrimary
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = TextPrimary,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = "Download songs to listen offline",
             style = MaterialTheme.typography.bodyMedium,
-            color = TextSecondary
+            color = TextSecondary,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
+        Spacer(modifier = Modifier.height(24.dp))
+        OutlinedButton(
+            onClick = { /* Navigate to home to download */ },
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentRed),
+            border = BorderStroke(1.5.dp, AccentRed)
+        ) {
+            Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Browse & Download")
+        }
+    }
+}
+
+@Composable
+private fun ActiveDownloadsSection(downloads: List<com.reon.music.services.DownloadProgress>) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(SurfaceLight)
+            .padding(vertical = 8.dp)
+    ) {
+        Text(
+            text = "Active Downloads (${downloads.size})",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = TextPrimary,
+            modifier = Modifier.padding(start = 20.dp, bottom = 4.dp)
+        )
+        downloads.forEach { dp ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                CircularProgressIndicator(
+                    progress = dp.progress / 100f,
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = AccentRed
+                )
+                Text(
+                    text = "${dp.progress}%",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary
+                )
+                Text(
+                    text = dp.songId.take(20),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
     }
 }
 
 private fun calculateStorageUsed(songs: List<Song>): Long {
-    // Calculate total storage used by downloaded songs
-    // This is a placeholder - actual implementation would check file sizes
-    return songs.size * 3L // Assume ~3MB per song on average
+    var totalBytes = 0L
+    try {
+        val downloadsDir = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "ReonMusic")
+        if (downloadsDir.exists()) {
+            downloadsDir.walkTopDown().forEach { file ->
+                if (file.isFile) {
+                    totalBytes += file.length()
+                }
+            }
+        }
+        // Also check app-specific external files directory
+        val appDir = File(android.os.Environment.getExternalStorageDirectory(), "Android/data/com.reon.music/files/downloads")
+        if (appDir.exists()) {
+            appDir.walkTopDown().forEach { file ->
+                if (file.isFile) {
+                    totalBytes += file.length()
+                }
+            }
+        }
+    } catch (e: Exception) {
+        // Fallback: estimate based on number of songs
+        return songs.size * 3L
+    }
+    return totalBytes / (1024 * 1024) // Convert to MB
+}
+
+private fun formatFileSize(bytes: Long): String {
+    return when {
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+        bytes < 1024 * 1024 * 1024 -> "${bytes / (1024 * 1024)} MB"
+        else -> "${bytes / (1024 * 1024 * 1024)} GB"
+    }
 }
 
 @Composable
