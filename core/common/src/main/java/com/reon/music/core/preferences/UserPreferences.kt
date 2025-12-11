@@ -184,9 +184,9 @@ class UserPreferences @Inject constructor(
         prefs[LAST_SYNC_TIME] ?: 0L
     }
     
-    // Content settings
+    // Content settings - YouTube-only mode
     val preferredSource: Flow<MusicSource> = dataStore.data.map { prefs ->
-        MusicSource.fromString(prefs[PREFERRED_SOURCE] ?: "jiosaavn")
+        MusicSource.fromString(prefs[PREFERRED_SOURCE] ?: "youtube")
     }
     
     suspend fun setPreferredSource(source: MusicSource) {
@@ -356,13 +356,14 @@ enum class AppTheme(val label: String) {
 }
 
 enum class MusicSource(val label: String) {
-    JIOSAAVN("JioSaavn"),
+    JIOSAAVN("JioSaavn"), // Deprecated - kept for compatibility
     YOUTUBE("YouTube"),
-    BOTH("Both");
+    BOTH("Both"); // Deprecated - YouTube-only mode
     
     companion object {
         fun fromString(value: String): MusicSource {
-            return entries.find { it.name.equals(value, ignoreCase = true) } ?: BOTH
+            // Always return YOUTUBE in YouTube-only mode
+            return entries.find { it.name.equals(value, ignoreCase = true) } ?: YOUTUBE
         }
     }
 }

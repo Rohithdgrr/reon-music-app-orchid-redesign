@@ -48,27 +48,12 @@ fun SourceToggle(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // YouTube-only mode - only show YouTube option
             SourceOption(
-                selected = currentSource == MusicSource.JIOSAAVN,
-                label = "JS",
-                fullLabel = "JioSaavn",
-                onClick = { onSourceSelected(MusicSource.JIOSAAVN) },
-                useIcons = useIcons
-            )
-            
-            SourceOption(
-                selected = currentSource == MusicSource.YOUTUBE,
+                selected = true,
                 label = "YT",
                 fullLabel = "YouTube",
                 onClick = { onSourceSelected(MusicSource.YOUTUBE) },
-                useIcons = useIcons
-            )
-            
-            SourceOption(
-                selected = currentSource == MusicSource.BOTH,
-                label = "All",
-                fullLabel = "Both",
-                onClick = { onSourceSelected(MusicSource.BOTH) },
                 useIcons = useIcons
             )
         }
