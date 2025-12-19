@@ -81,16 +81,25 @@ data class HomeUiState(
     // Indian Playlists - Love & Romance
     val loveSongs: List<Song> = emptyList(),
     val romanticHits: List<Song> = emptyList(),
+    val romanticSongs: List<Song> = emptyList(),
     val weddingSongs: List<Song> = emptyList(),
     
     // Heartbreak & Sad Songs
     val heartbreakSongs: List<Song> = emptyList(),
+    val sadSongs: List<Song> = emptyList(),
     val sadSongPlaylist: List<Song> = emptyList(),
     
     // Party & Dance
+    val partySongs: List<Song> = emptyList(),
     val partyHits: List<Song> = emptyList(),
     val djRemixes: List<Song> = emptyList(),
     val danceFloor: List<Song> = emptyList(),
+    
+    // Moods
+    val lofiSongs: List<Song> = emptyList(),
+    val devotionalSongs: List<Song> = emptyList(),
+    val workoutSongs: List<Song> = emptyList(),
+    val retroSongs: List<Song> = emptyList(),
     
     // Telugu Playlists (YouTube-only)
     val teluguPlaylistsYoutube: List<Playlist> = emptyList(),
@@ -115,9 +124,6 @@ data class HomeUiState(
     val reelsTrending: List<Song> = emptyList(),
     
     // Playlists
-//    val teluguPlaylistCollection: List<Playlist> = emptyList(),
-//    val hindiPlaylistCollection: List<Playlist> = emptyList(),
-//    val tamilPlaylistCollection: List<Playlist> = emptyList(),
     val featuredPlaylists: List<Playlist> = emptyList(),
     val moodPlaylists: List<Playlist> = emptyList(),
     val trendingPlaylists: List<Playlist> = emptyList(),
@@ -155,6 +161,28 @@ data class HomeUiState(
     val selectedGenre: Genre? = null,
     val genreSongs: List<Song> = emptyList(),
     
+    // Artist Spotlights
+    val arijitSinghSongs: List<Song> = emptyList(),
+    val arRahmanSongs: List<Song> = emptyList(),
+    val shreyaGhoshalSongs: List<Song> = emptyList(),
+    val sidSriram: List<Song> = emptyList(),
+    val anirudhSongs: List<Song> = emptyList(),
+    val kanikKapoor: List<Song> = emptyList(),
+    val badshah: List<Song> = emptyList(),
+    val honeysingh: List<Song> = emptyList(),
+    val spbSongs: List<Song> = emptyList(),
+    val lataMangeshkarSongs: List<Song> = emptyList(),
+    val kishorKumarSongs: List<Song> = emptyList(),
+    val mohammedRafiSongs: List<Song> = emptyList(),
+    val aborubaPattuSongs: List<Song> = emptyList(),
+    val anupamKher: List<Song> = emptyList(),
+    val pritam: List<Song> = emptyList(),
+    val harishJeyaraj: List<Song> = emptyList(),
+    val shaileshoSongs: List<Song> = emptyList(),
+    val vijaySongs: List<Song> = emptyList(),
+    val dspSongs: List<Song> = emptyList(),
+    val manisharma: List<Song> = emptyList(),
+    val thamanSongs: List<Song> = emptyList(),
     
     // NEW: Curated Playlist Categories
     val mostListeningTeluguSongs: List<Song> = emptyList(),
@@ -185,29 +213,12 @@ data class HomeUiState(
     val mostListeningSongs: List<Song> = emptyList(),
     val trendingNowSongs: List<Song> = emptyList(),
     
-    // Additional Artists Collections
-    val spbSongs: List<Song> = emptyList(),
-    val lataMangeshkarSongs: List<Song> = emptyList(),
-    val kishorKumarSongs: List<Song> = emptyList(),
-    val mohammedRafiSongs: List<Song> = emptyList(),
-    val aborubaPattuSongs: List<Song> = emptyList(),
-    
-    // Indian Artists - Popular
-    val anupamKher: List<Song> = emptyList(),
-    val pritam: List<Song> = emptyList(),
-    val harishJeyaraj: List<Song> = emptyList(),
-    val shaileshoSongs: List<Song> = emptyList(),
-    val vijaySongs: List<Song> = emptyList(),
-    val dspSongs: List<Song> = emptyList(),
-    val manisharma: List<Song> = emptyList(),
-    val thamanSongs: List<Song> = emptyList(),
-    
     // State
     val isLoading: Boolean = true,
     val error: String? = null,
     val preferredSource: MusicSource = MusicSource.BOTH
+)
 
-) {
     companion object {
         val defaultMoods = listOf(
             Genre("chill", "Chill", "beach_access", 0xFFFF9800.toInt()),

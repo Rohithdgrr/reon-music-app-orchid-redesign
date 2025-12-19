@@ -25,6 +25,7 @@ val SunsetDeepRed = Color(0xFFB71C1C)
 val SunsetPurple = Color(0xFF4A148C)
 val SunsetGold = Color(0xFFFFD700)
 val SunsetPeach = Color(0xFFFFAB91)
+val SunrisePeach = Color(0xFFFFCCBC) // New: Sunrise Peach variant
 
 val SunriseGradient = listOf(SunriseWhite, SunriseYellow, SunriseOrange, SunriseRed)
 val SunsetGradient = listOf(SunriseRed, SunsetDeepRed, SunsetPurple)
