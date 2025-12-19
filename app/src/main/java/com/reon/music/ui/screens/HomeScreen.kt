@@ -222,7 +222,16 @@ fun HomeScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundWhite)
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        SunriseWhite,
+                        SunriseWhite,
+                        SunrisePeach.copy(alpha = 0.1f),
+                        SunriseYellow.copy(alpha = 0.05f)
+                    )
+                )
+            )
             .nestedScroll(pullToRefreshState.nestedScrollConnection)
     ) {
         if (uiState.isLoading && !pullToRefreshState.isRefreshing) {
@@ -774,6 +783,25 @@ fun HomeScreen(
                         )
                     }
                 }
+
+                // ===== MOODS & GENRES SECTIONS (Image 2) =====
+                item {
+                    MoodsAndMomentSection(
+                        moods = uiState.moods,
+                        onMoodClick = { mood -> 
+                            // TODO: Navigate to mood/genre songs
+                        }
+                    )
+                }
+
+                item {
+                    GenreGridSection(
+                        genres = uiState.genres,
+                        onGenreClick = { genre ->
+                            // TODO: Navigate to genre songs
+                        }
+                    )
+                }
             }
         }
         
@@ -1063,17 +1091,17 @@ private fun QuickPicksSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 20.dp)
+            .padding(vertical = 16.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+                .padding(horizontal = 20.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Quick Picks · Most Played",
+                text = "Quick Picks",
                 style = MaterialTheme.typography.headlineSmall.copy(
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 20.sp
@@ -1081,31 +1109,95 @@ private fun QuickPicksSection(
                 color = TextPrimary
             )
             Text(
-                text = "Based on your recent listening history",
-                style = MaterialTheme.typography.labelMedium,
-                color = TextSecondary
+                text = "5x6 Grid",
+                style = MaterialTheme.typography.labelSmall,
+                color = AccentRed,
+                fontWeight = FontWeight.Bold
             )
         }
         
-        LazyColumn(
-            contentPadding = PaddingValues(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+        // 5x6 Grid implementation (LazyVerticalGrid with fixed height or adaptive)
+        // Since it's inside a LazyColumn, we use FlowRow or a fixed Height container with Grid
+        val columns = 3 // 5 columns might be too tight for text, using 3 for better visibility or horizontal pager
+        
+        androidx.compose.foundation.layout.FlowRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            maxItemsInEachRow = 5
         ) {
-            items(songs.take(10)) { song ->
+            // Take up to 30 songs for 5x6 grid
+            songs.take(30).forEach { song ->
                 val dp = downloadProgressMap[song.id]
                 val isDownloading = dp?.status == DownloadStatus.DOWNLOADING || dp?.status == DownloadStatus.QUEUED
-                val progressPercent = dp?.progress ?: 0
                 val isDownloaded = downloadedSongIds.contains(song.id)
-                QuickPickItem(
+                
+                QuickPickGridItem(
                     song = song,
-                    gradientColor = GradientColors[songs.indexOf(song) % GradientColors.size],
                     isDownloaded = isDownloaded,
                     isDownloading = isDownloading,
-                    downloadProgress = progressPercent,
-                    onClick = { onSongClick(song) }
+                    onClick = { onSongClick(song) },
+                    modifier = Modifier.width(68.dp) // Adjusted for 5 items in row
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun QuickPickGridItem(
+    song: Song,
+    isDownloaded: Boolean,
+    isDownloading: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(60.dp)
+                .shadow(4.dp, RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(12.dp))
+        ) {
+            AsyncImage(
+                model = song.getHighQualityArtwork(),
+                contentDescription = song.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            
+            if (isDownloaded) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(2.dp)
+                        .background(AccentRed, CircleShape)
+                        .padding(2.dp)
+                ) {
+                    Icon(
+                        Icons.Default.DownloadDone,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(10.dp)
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = song.title,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            color = TextPrimary,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
     }
 }
 
@@ -2408,6 +2500,138 @@ private fun PlaylistCard(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+@Composable
+private fun MoodsAndMomentSection(
+    moods: List<com.reon.music.ui.viewmodels.Genre>,
+    onMoodClick: (com.reon.music.ui.viewmodels.Genre) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp)
+    ) {
+        Text(
+            text = "LET'S PICK A PLAYLIST FOR YOU",
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 1.sp
+            ),
+            modifier = Modifier.padding(horizontal = 20.dp),
+            color = TextSecondary
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Moods & Moment",
+            style = MaterialTheme.typography.headlineSmall.copy(
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 22.sp
+            ),
+            modifier = Modifier.padding(horizontal = 20.dp),
+            color = TextPrimary
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Grid of moods
+        FlowRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            maxItemsInEachRow = 2
+        ) {
+            moods.forEach { mood ->
+                CategoryCard(
+                    category = mood,
+                    onClick = { onMoodClick(mood) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GenreGridSection(
+    genres: List<com.reon.music.ui.viewmodels.Genre>,
+    onGenreClick: (com.reon.music.ui.viewmodels.Genre) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp)
+    ) {
+        Text(
+            text = "Genre",
+            style = MaterialTheme.typography.headlineSmall.copy(
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 22.sp
+            ),
+            modifier = Modifier.padding(horizontal = 20.dp),
+            color = TextPrimary
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Grid of genres
+        FlowRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            maxItemsInEachRow = 2
+        ) {
+            genres.forEach { genre ->
+                CategoryCard(
+                    category = genre,
+                    onClick = { onGenreClick(genre) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryCard(
+    category: com.reon.music.ui.viewmodels.Genre,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .height(64.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFF1E1E1E) // Dark background like Image 2
+        )
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Colored left border/bar
+            Box(
+                modifier = Modifier
+                    .width(6.dp)
+                    .fillMaxHeight()
+                    .background(Color(category.accentColor))
+            )
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            Text(
+                text = category.name,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            )
+        }
     }
 }
 

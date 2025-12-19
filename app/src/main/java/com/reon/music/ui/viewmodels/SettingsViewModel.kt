@@ -89,7 +89,17 @@ data class SettingsUiState(
     val dataSaverEnabled: Boolean = false,
     val mobileStreamingQuality: String = "medium", // "low", "medium", "high", "auto"
     val wifiStreamingQuality: String = "high",
-    val autoQualityEnabled: Boolean = true
+    val autoQualityEnabled: Boolean = true,
+    
+    // Interests (NEW)
+    val interestedArtists: Set<String> = emptySet(),
+    val notInterestedArtists: Set<String> = emptySet(),
+    val interestedRegions: Set<String> = emptySet(),
+    val notInterestedRegions: Set<String> = emptySet(),
+    val interestedLanguages: Set<String> = emptySet(),
+    val notInterestedLanguages: Set<String> = emptySet(),
+    val interestedCategories: Set<String> = emptySet(),
+    val notInterestedCategories: Set<String> = emptySet()
 )
 
 @HiltViewModel
@@ -137,7 +147,15 @@ class SettingsViewModel @Inject constructor(
                 userPreferences.incognitoMode,
                 userPreferences.cloudSyncEnabled,
                 userPreferences.lastSyncTime,
-                userPreferences.preferredSource
+                userPreferences.preferredSource,
+                userPreferences.interestedArtists,
+                userPreferences.notInterestedArtists,
+                userPreferences.interestedRegions,
+                userPreferences.notInterestedRegions,
+                userPreferences.interestedLanguages,
+                userPreferences.notInterestedLanguages,
+                userPreferences.interestedCategories,
+                userPreferences.notInterestedCategories
             ) { values ->
                 @Suppress("UNCHECKED_CAST")
                 SettingsUiState(
@@ -155,7 +173,15 @@ class SettingsViewModel @Inject constructor(
                     incognitoMode = values[11] as Boolean,
                     cloudSyncEnabled = values[12] as Boolean,
                     lastSyncTime = values[13] as Long,
-                    preferredSource = values[14] as MusicSource
+                    preferredSource = values[14] as MusicSource,
+                    interestedArtists = values[15] as Set<String>,
+                    notInterestedArtists = values[16] as Set<String>,
+                    interestedRegions = values[17] as Set<String>,
+                    notInterestedRegions = values[18] as Set<String>,
+                    interestedLanguages = values[19] as Set<String>,
+                    notInterestedLanguages = values[20] as Set<String>,
+                    interestedCategories = values[21] as Set<String>,
+                    notInterestedCategories = values[22] as Set<String>
                 )
             }.collect { state ->
                 _uiState.value = state

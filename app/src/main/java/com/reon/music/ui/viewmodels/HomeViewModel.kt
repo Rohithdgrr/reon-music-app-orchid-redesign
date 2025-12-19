@@ -150,28 +150,7 @@ data class HomeUiState(
     val englishSongs: List<Song> = emptyList(),
     
     // Mood/Genre Sections
-    val romanticSongs: List<Song> = emptyList(),
-    val partySongs: List<Song> = emptyList(),
-    val sadSongs: List<Song> = emptyList(),
-    val lofiSongs: List<Song> = emptyList(),
-    val devotionalSongs: List<Song> = emptyList(),
-    val workoutSongs: List<Song> = emptyList(),
-    val retroSongs: List<Song> = emptyList(),
-    val sufiSongs: List<Song> = emptyList(),
-    val ghazals: List<Song> = emptyList(),
-    val indipop: List<Song> = emptyList(),
-    
-    // Artist Spotlights
-    val arijitSinghSongs: List<Song> = emptyList(),
-    val arRahmanSongs: List<Song> = emptyList(),
-    val shreyaGhoshalSongs: List<Song> = emptyList(),
-    val sidSriram: List<Song> = emptyList(),
-    val anirudhSongs: List<Song> = emptyList(),
-    val kanikKapoor: List<Song> = emptyList(),
-    val badshah: List<Song> = emptyList(),
-    val honeysingh: List<Song> = emptyList(),
-    
-    // Genres for Selection
+    val moods: List<Genre> = defaultMoods,
     val genres: List<Genre> = defaultGenres,
     val selectedGenre: Genre? = null,
     val genreSongs: List<Song> = emptyList(),
@@ -230,19 +209,24 @@ data class HomeUiState(
 
 ) {
     companion object {
+        val defaultMoods = listOf(
+            Genre("chill", "Chill", "beach_access", 0xFFFF9800.toInt()),
+            Genre("feelgood", "Feel good", "sentiment_very_satisfied", 0xFF2196F3.toInt()),
+            Genre("commute", "Commute", "directions_car", 0xFF3F51B5.toInt()),
+            Genre("focus", "Focus", "center_focus_strong", 0xFF607D8B.toInt()),
+            Genre("energize", "Energize", "flash_on", 0xFFE91E63.toInt()),
+            Genre("gaming", "Gaming", "videogame_asset", 0xFF795548.toInt())
+        )
+
         val defaultGenres = listOf(
-            Genre("pop", "Pop", "music_note", 0xFFE91E63.toInt()),
-            Genre("rock", "Rock", "guitar", 0xFF9C27B0.toInt()),
-            Genre("hiphop", "Hip-Hop", "mic", 0xFF673AB7.toInt()),
-            Genre("classical", "Classical", "piano", 0xFF3F51B5.toInt()),
-            Genre("jazz", "Jazz", "saxophone", 0xFF2196F3.toInt()),
-            Genre("electronic", "Electronic", "headphones", 0xFF00BCD4.toInt()),
-            Genre("folk", "Folk", "acoustic", 0xFF4CAF50.toInt()),
-            Genre("indie", "Indie", "keyboard", 0xFFFF9800.toInt()),
-            Genre("sufi", "Sufi", "mosque", 0xFF795548.toInt()),
-            Genre("ghazal", "Ghazal", "sparkle", 0xFF607D8B.toInt()),
-            Genre("devotional", "Devotional", "prayer", 0xFFCDDC39.toInt()),
-            Genre("bollywood", "Bollywood", "movie", 0xFFFF5722.toInt())
+            Genre("african", "African", "public", 0xFF4CAF50.toInt()),
+            Genre("bhojpuri", "Bhojpuri", "music_note", 0xFFBA68C8.toInt()),
+            Genre("arabic", "Arabic", "star", 0xFF81C784.toInt()),
+            Genre("carnatic", "Carnatic classical", "music_note", 0xFF9C27B0.toInt()),
+            Genre("bengali", "Bengali", "music_note", 0xFF00BCD4.toInt()),
+            Genre("classical", "Classical", "piano", 0xFF673AB7.toInt()),
+            Genre("pop", "Pop", "mic", 0xFFE91E63.toInt()),
+            Genre("rock", "Rock", "guitar", 0xFF9C27B0.toInt())
         )
     }
 }
@@ -334,6 +318,20 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
+     * Check if a song is already downloaded
+     */
+    suspend fun isSongDownloaded(songId: String): Boolean {
+        return try {
+            val song = songDao.getSongById(songId)
+            song?.downloadState == DownloadState.DOWNLOADED && 
+            !song.localPath.isNullOrBlank() && 
+            java.io.File(song.localPath!!).exists()
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
      * Mark a playlist download in DB for offline availability
      */
     fun markPlaylistDownloaded(id: String, title: String, songs: List<Song>) {
@@ -371,20 +369,20 @@ class HomeViewModel @Inject constructor(
     
     private suspend fun loadQuickPicks() {
         try {
-            // Get recent history from database
-            val recentHistory = historyDao.getRecentHistory(20).first()
-            val recentSongIds = recentHistory.map { it.songId }
+            // Get recent history from database - fetch 60 to filter/ensure we have enough unique ones
+            val recentHistory = historyDao.getRecentHistory(60).first()
+            val recentSongIds = recentHistory.map { it.songId }.distinct()
             
-            // Convert to Songs
+            // Convert to Songs - fetch up to 30 for the 5x6 grid
             val recentSongs = recentSongIds.mapNotNull { songId ->
                 songDao.getSongById(songId)?.toSong()
-            }.take(10)
+            }.take(30)
             
             _uiState.value = _uiState.value.copy(quickPicksSongs = recentSongs)
-            Log.d(TAG, "Loaded ${recentSongs.size} quick picks")
+            Log.d(TAG, "Loaded ${recentSongs.size} quick picks for 5x6 grid")
             
             // Get unique artists from recent songs
-            val recentArtistNames = recentSongs.map { it.artist }.distinct().take(5)
+            val recentArtistNames = recentSongs.map { it.artist }.distinct().take(10)
             val artists = recentArtistNames.map { name ->
                 Artist(id = name.hashCode().toString(), name = name, artworkUrl = null)
             }
@@ -690,9 +688,42 @@ class HomeViewModel @Inject constructor(
     private fun loadArtists() {
         viewModelScope.launch {
             try {
+                val extendedArtists = listOf(
+                    // Telugu
+                    "Ghantasala", "M.M. Keeravani", "Mani Sharma", "Devi Sri Prasad", "Thaman S",
+                    "Koti", "Chakri", "Anup Rubens", "R.P. Patnaik", "S.P. Balasubrahmanyam",
+                    "K.S. Chithra", "Sid Sriram", "Sunitha Upadrashta", "Geetha Madhuri",
+                    "Hemachandra", "Mangli", "Kaala Bhairava",
+                    // Hindi
+                    "R.D. Burman", "Laxmikant–Pyarelal", "Naushad", "Anand–Milind", "A.R. Rahman",
+                    "Pritam", "Vishal–Shekhar", "Shankar–Ehsaan–Loy", "Anu Malik", "Amit Trivedi",
+                    "Ajay–Atul", "Lata Mangeshkar", "Asha Bhosle", "Kishore Kumar", "Mohammed Rafi",
+                    "Arijit Singh", "Shreya Ghoshal", "Sonu Nigam", "Alka Yagnik", "Neha Kakkar",
+                    "Jubin Nautiyal", "Badshah",
+                    // Tamil
+                    "Ilaiyaraaja", "Yuvan Shankar Raja", "Harris Jayaraj", "Santhosh Narayanan",
+                    "D. Imman", "Anirudh Ravichander", "K.J. Yesudas", "Chinmayi", "Shweta Mohan",
+                    "Dhee", "Andrea Jeremiah", "Haricharan",
+                    // Pan-Indian
+                    "G.V. Prakash Kumar", "Himesh Reshammiya", "Ankit Tiwari", "Jeet Gannguli",
+                    "Bappi Lahiri", "Adnan Sami", "Amaal Mallik", "Salim–Sulaiman", "Udit Narayan",
+                    "Kumar Sanu", "Palak Muchhal", "Sukhwinder Singh", "Ravi Basrur", "Vijay Yesudas",
+                    "Ranjith", "Shankar Mahadevan",
+                    // International
+                    "Quincy Jones", "Max Martin", "Pharrell Williams", "Rick Rubin", "David Guetta",
+                    "Hans Zimmer", "Michael Jackson", "Madonna", "Elvis Presley", "Taylor Swift",
+                    "Adele", "Ed Sheeran", "Beyoncé", "Rihanna", "Bruno Mars", "Freddie Mercury",
+                    "Whitney Houston", "Lady Gaga", "The Beatles", "Eminem", "Justin Bieber"
+                ).distinct().map { name ->
+                    Artist(id = name.hashCode().toString(), name = name, artworkUrl = null)
+                }
+
                 repository.getTopArtists().getOrNull()?.let { artists ->
-                    _uiState.value = _uiState.value.copy(topArtists = artists)
-                    Log.d(TAG, "Loaded ${artists.size} Top Artists")
+                    val combined = (extendedArtists + artists).distinctBy { it.name.lowercase() }
+                    _uiState.value = _uiState.value.copy(topArtists = combined)
+                    Log.d(TAG, "Loaded ${combined.size} Top Artists (extended)")
+                } ?: run {
+                    _uiState.value = _uiState.value.copy(topArtists = extendedArtists)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading Top Artists", e)

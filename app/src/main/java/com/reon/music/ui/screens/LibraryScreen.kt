@@ -85,6 +85,15 @@ fun LibraryScreen(
     var selectedPlaylist by remember { mutableStateOf<PlaylistEntity?>(null) }
     var showAddToPlaylistDialog by remember { mutableStateOf(false) }
     var selectedQuickCategory by remember { mutableStateOf(LibraryQuickCategory.NONE) }
+    var searchQuery by remember { mutableStateOf("") }
+
+    val filteredRecentlyPlayed = remember(uiState.recentlyPlayed, searchQuery) {
+        if (searchQuery.isBlank()) uiState.recentlyPlayed
+        else uiState.recentlyPlayed.filter { 
+            it.title.contains(searchQuery, ignoreCase = true) || 
+            it.artist.contains(searchQuery, ignoreCase = true) 
+        }
+    }
 
     fun toggleQuickCategory(category: LibraryQuickCategory) {
         selectedQuickCategory = if (selectedQuickCategory == category) {
@@ -130,6 +139,31 @@ fun LibraryScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            // Search Bar
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                placeholder = { Text("Search in library") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = if (searchQuery.isNotEmpty()) {
+                    {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(Icons.Default.Clear, contentDescription = "Clear")
+                        }
+                    }
+                } else null,
+                shape = RoundedCornerShape(12.dp),
+                colors = TextFieldDefaults.outlinedTextFieldColors(
+                    containerColor = SurfaceLight,
+                    unfocusedBorderColor = Color.Transparent,
+                    focusedBorderColor = AccentRed.copy(alpha = 0.5f)
+                ),
+                singleLine = true
+            )
+
             LibraryOverviewContent(
                 uiState = uiState,
                 playerState = playerState,
@@ -156,7 +190,8 @@ fun LibraryScreen(
                 onPlaylistClick = { playlist ->
                     selectedPlaylist = playlist
                     showPlaylistOptions = true
-                }
+                },
+                searchQuery = searchQuery // Pass search query to filter
             )
         }
     }

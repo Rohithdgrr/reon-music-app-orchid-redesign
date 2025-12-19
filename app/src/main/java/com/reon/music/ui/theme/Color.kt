@@ -16,6 +16,20 @@ val ReonPrimaryDark = Color(0xFFC62828)      // Darker red for emphasis
 val ReonPrimaryLight = Color(0xFFFFEBEE)     // Light red tint
 val ReonPrimaryVariant = Color(0xFFFF5252)   // Vibrant red variant
 
+// NEW: Sunrise/Sunset Palette
+val SunriseWhite = Color(0xFFFFFFFF)
+val SunriseYellow = Color(0xFFFFD54F)
+val SunriseOrange = Color(0xFFFF9800)
+val SunriseRed = Color(0xFFE53935)
+val SunsetDeepRed = Color(0xFFB71C1C)
+val SunsetPurple = Color(0xFF4A148C)
+val SunsetGold = Color(0xFFFFD700)
+val SunsetPeach = Color(0xFFFFAB91)
+
+val SunriseGradient = listOf(SunriseWhite, SunriseYellow, SunriseOrange, SunriseRed)
+val SunsetGradient = listOf(SunriseRed, SunsetDeepRed, SunsetPurple)
+val SunriseSunsetGradient = listOf(SunriseYellow, SunriseOrange, SunriseRed, SunsetDeepRed)
+
 // Keep for compatibility
 val ReonGreen = ReonPrimary
 val ReonGreenDark = ReonPrimaryDark

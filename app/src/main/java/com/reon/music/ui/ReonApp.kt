@@ -235,18 +235,13 @@ fun ReonApp(
                             )
                         }
                         
-                        composable(ReonDestination.Search.route) {
-                            SearchScreen(
-                                playerViewModel = playerViewModel,
-                                onArtistClick = { artist ->
-                                    navController.navigate(
-                                        ReonDestination.ArtistDetail.createRoute(artist.id, artist.name)
-                                    )
-                                },
-                                onPlaylistClick = { playlist ->
-                                    navController.navigate(
-                                        ReonDestination.PlaylistDetail.createRoute(playlist.id, playlist.name)
-                                    )
+                        composable(ReonDestination.Artists.route) {
+                            ChartDetailScreen(
+                                chartTitle = "Artists",
+                                chartType = "artists",
+                                onBackClick = { navController.popBackStack() },
+                                onSongClick = { song ->
+                                    playerViewModel.playSong(song)
                                 }
                             )
                         }

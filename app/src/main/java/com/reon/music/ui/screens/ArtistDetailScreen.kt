@@ -109,6 +109,15 @@ fun ArtistDetailScreen(
     }
     
     val scrollState = rememberLazyListState()
+    var searchQuery by remember { mutableStateOf("") }
+    
+    val filteredSongs = remember(allArtistSongs, searchQuery) {
+        if (searchQuery.isBlank()) allArtistSongs
+        else allArtistSongs.filter { 
+            it.title.contains(searchQuery, ignoreCase = true) || 
+            it.album.contains(searchQuery, ignoreCase = true) 
+        }
+    }
     
     // Load more when near bottom
     LaunchedEffect(scrollState) {
@@ -152,14 +161,41 @@ fun ArtistDetailScreen(
             
             // Popular Songs Section
             item {
-                SectionHeader(
-                    title = "Popular"
-                )
+                Column {
+                    SectionHeader(
+                        title = "Popular"
+                    )
+                    
+                    // Search Bar
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        placeholder = { Text("Search in ${artist.name} songs") },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        trailingIcon = if (searchQuery.isNotEmpty()) {
+                            {
+                                IconButton(onClick = { searchQuery = "" }) {
+                                    Icon(Icons.Default.Clear, contentDescription = "Clear")
+                                }
+                            }
+                        } else null,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = TextFieldDefaults.outlinedTextFieldColors(
+                            containerColor = CardWhite,
+                            unfocusedBorderColor = Color.Transparent,
+                            focusedBorderColor = AccentBlue.copy(alpha = 0.5f)
+                        ),
+                        singleLine = true
+                    )
+                }
             }
             
             // Songs List - All songs with endless scrolling
-            if (allArtistSongs.isNotEmpty()) {
-                itemsIndexed(allArtistSongs) { index, song ->
+            if (filteredSongs.isNotEmpty()) {
+                itemsIndexed(filteredSongs) { index, song ->
                     ArtistSongItem(
                         index = index + 1,
                         song = song,
@@ -373,62 +409,99 @@ private fun ArtistHeader(
             
             Spacer(modifier = Modifier.height(12.dp))
             
-            // Action Buttons Row
+            // Action Buttons Row - Improved UI (Image 1)
             Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Follow Button
-                OutlinedButton(
+                Button(
                     onClick = onFollowClick,
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = if (isFollowing) AccentBlue else Color.Transparent,
-                        contentColor = Color.White
+                    modifier = Modifier
+                        .weight(1.1f)
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isFollowing) Color(0xFF333333) else Color(0xFF222222)
                     ),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.5f)),
-                    shape = RoundedCornerShape(20.dp)
+                    shape = RoundedCornerShape(28.dp)
                 ) {
                     Icon(
                         imageVector = if (isFollowing) Icons.Default.Check else Icons.Default.PersonAdd,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp),
+                        tint = Color.White
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(if (isFollowing) "Following" else "Follow")
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        if (isFollowing) "Following" else "Follow",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        ),
+                        color = Color.White
+                    )
                 }
                 
-                // Shuffle Play Button
+                // Shuffle Button (Blue)
                 Button(
                     onClick = onShuffleClick,
+                    modifier = Modifier
+                        .weight(1.1f)
+                        .height(56.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = AccentBlue
+                        containerColor = Color(0xFF3B82F6) // Bright blue
                     ),
-                    shape = RoundedCornerShape(20.dp)
+                    shape = RoundedCornerShape(28.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Shuffle,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp),
+                        tint = Color.White
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Shuffle")
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Shuffle",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        ),
+                        color = Color.White
+                    )
                 }
                 
-                // Download All Button
+                // Download Button (Large Red Vertical-style)
                 Button(
                     onClick = onDownloadAllClick,
+                    modifier = Modifier
+                        .width(72.dp)
+                        .height(96.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = AccentRed
+                        containerColor = Color(0xFFEF4444) // Bright red
                     ),
-                    shape = RoundedCornerShape(20.dp)
+                    shape = RoundedCornerShape(24.dp),
+                    contentPadding = PaddingValues(0.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Download,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Download All")
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = "Download All",
+                            modifier = Modifier.size(32.dp),
+                            tint = Color.White
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(4.dp)
+                                .background(Color.White, CircleShape)
+                        )
+                    }
                 }
             }
         }

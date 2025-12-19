@@ -89,25 +89,28 @@ fun DownloadsScreen(
     var showSearch by remember { mutableStateOf(false) }
     
     // Filter downloaded songs based on tab and search
-    val filteredSongs = remember(uiState.downloadedSongs, selectedTab, searchQuery) {
+    val filteredSongs = remember(uiState.downloadedSongs, selectedTab, searchQuery, activeDownloads) {
+        val activeIds = activeDownloads.map { it.songId }.toSet()
+        
+        // Strictly allow only songs that are marked as DOWNLOADED and NOT currently active
+        val downloadedOnly = uiState.downloadedSongs.filter { song ->
+            !activeIds.contains(song.id)
+        }
+        
         val filtered = if (searchQuery.isEmpty()) {
-            uiState.downloadedSongs
+            downloadedOnly
         } else {
-            uiState.downloadedSongs.filter { song ->
+            downloadedOnly.filter { song ->
                 song.title.contains(searchQuery, ignoreCase = true) ||
                 song.artist.contains(searchQuery, ignoreCase = true) ||
                 song.album.contains(searchQuery, ignoreCase = true)
             }
         }
         
-        // Filter out songs that are currently downloading to avoid duplicates
-        val activeIds = activeDownloads.map { it.songId }.toSet()
-        val nonActiveDownloaded = filtered.filter { !activeIds.contains(it.id) }
-        
         when (selectedTab) {
-            1 -> nonActiveDownloaded.sortedBy { it.artist }
-            2 -> nonActiveDownloaded.sortedBy { it.album }
-            else -> nonActiveDownloaded
+            1 -> filtered.sortedBy { it.artist }
+            2 -> filtered.sortedBy { it.album }
+            else -> filtered
         }
     }
     
@@ -182,43 +185,39 @@ fun DownloadsScreen(
                 if (activeDownloads.isNotEmpty()) {
                     ActiveDownloadsSection(activeDownloads)
                 }
-                // Storage Indicator
-                StorageIndicator(
-                    usedMB = calculateStorageUsed(uiState.downloadedSongs),
-                    totalMB = 500 // Default or from settings
-                )
                 
-                // Offline Mode Toggle
+                // NEW: Action Row with Local Songs (Image 4)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
-                        Text(
-                            text = "Offline Mode",
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Medium,
-                            color = TextPrimary
-                        )
-                        Text(
-                            text = "Play only downloaded songs",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
-                        )
+                    // Local Songs Button
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(56.dp)
+                            .clickable { /* TODO: Open local files picker or screen */ },
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = SurfaceLight),
+                        border = BorderStroke(1.dp, AccentRed.copy(alpha = 0.1f))
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(Icons.Default.Folder, contentDescription = null, tint = AccentRed)
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                "Local Songs",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = TextPrimary
+                            )
+                        }
                     }
-                    Switch(
-                        checked = settingsState.offlineModeEnabled,
-                        onCheckedChange = { settingsViewModel.setOfflineModeEnabled(it) },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = AccentRed,
-                            uncheckedThumbColor = TextSecondary,
-                            uncheckedTrackColor = SurfaceLight
-                        )
-                    )
                 }
                 
                 // Tab Row for grouping

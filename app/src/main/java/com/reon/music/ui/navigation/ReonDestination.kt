@@ -8,12 +8,12 @@ package com.reon.music.ui.navigation
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.LibraryMusic
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Settings
@@ -35,11 +35,11 @@ sealed class ReonDestination(
         unselectedIcon = Icons.Outlined.Home
     )
     
-    data object Search : ReonDestination(
-        route = "search",
-        title = "Search",
-        selectedIcon = Icons.Filled.Search,
-        unselectedIcon = Icons.Outlined.Search
+    data object Artists : ReonDestination(
+        route = "artists",
+        title = "Artists",
+        selectedIcon = Icons.Filled.Person,
+        unselectedIcon = Icons.Outlined.Person
     )
     
     data object Library : ReonDestination(
@@ -56,12 +56,12 @@ sealed class ReonDestination(
         unselectedIcon = Icons.Outlined.Download
     )
     
-    // Settings is no longer in bottom nav, but still a valid destination
+    // Settings
     data object Settings : ReonDestination(
         route = "settings",
         title = "Settings",
-        selectedIcon = Icons.Filled.Home, // Not used in bottom nav
-        unselectedIcon = Icons.Outlined.Home
+        selectedIcon = Icons.Filled.Settings,
+        unselectedIcon = Icons.Outlined.Settings
     )
     
     // Artist Detail Screen
@@ -139,8 +139,6 @@ sealed class ReonDestination(
     )
     
     companion object {
-        // Bottom nav: Home, Search, Library, Downloads (removed Settings)
-        val bottomNavDestinations = listOf(Home, Search, Library, Downloads)
+        val bottomNavDestinations = listOf(Home, Artists, Library, Downloads)
     }
 }
-

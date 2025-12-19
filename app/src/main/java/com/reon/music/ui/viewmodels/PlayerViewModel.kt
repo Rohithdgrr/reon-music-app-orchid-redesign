@@ -210,6 +210,12 @@ class PlayerViewModel @Inject constructor(
                 state.currentSong?.let { song ->
                     checkIfLiked(song.id)
                     
+                    // Update duration in DB if it was 0 but now we have it
+                    if (song.duration == 0 && state.duration > 0) {
+                        val actualDuration = (state.duration / 1000).toInt()
+                        updateSongDuration(song.id, actualDuration)
+                    }
+
                     // If song changed, mark previous song as completed
                     if (previousSong != null && previousSong?.id != song.id) {
                         previousSong?.let { completedSong ->
@@ -219,6 +225,23 @@ class PlayerViewModel @Inject constructor(
                     
                     previousSong = song
                 }
+            }
+        }
+    }
+
+    /**
+     * Update song duration in database
+     */
+    private fun updateSongDuration(songId: String, duration: Int) {
+        viewModelScope.launch {
+            try {
+                val song = songDao.getSongById(songId)
+                if (song != null && song.duration == 0) {
+                    songDao.update(song.copy(duration = duration))
+                    Log.d(TAG, "Updated duration for $songId to $duration seconds")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to update duration", e)
             }
         }
     }
@@ -678,58 +701,65 @@ class PlayerViewModel @Inject constructor(
      */
     fun enableRadioMode(seedSongs: List<Song>) {
         viewModelScope.launch {
-            // Start with seed songs shuffled from both sources
-            if (seedSongs.isNotEmpty()) {
+            val currentState = playerState.value
+            val currentSong = currentState.currentSong
+            
+            // IMPROVEMENT: If a song is already playing, STAY on it. 
+            // Just add related songs to the queue instead of starting over.
+            if (currentSong == null && seedSongs.isNotEmpty()) {
                 playQueue(seedSongs.shuffled())
+            } else if (currentSong != null) {
+                // We are already playing a song, so just trigger the related songs logic immediately
+                // to populate the queue for endless playback from the CURRENT song.
+                try {
+                    val relatedSongs = repository.getRelatedSongs(currentSong, 40).getOrNull() ?: emptyList()
+                    val combined = relatedSongs.filter { it.id != currentSong.id }
+                    val merged = mergeDuplicateSongs(combined)
+                    val filtered = filterForQueueWindow(playerState.value.queue, merged, windowSize = 50)
+                    filtered.shuffled().take(20).forEach { addToQueue(it) }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
             
-            // Set up automatic queue extension with smart queue management from mixed sources
-            playerController.enableRadioMode { currentSong ->
-                if (currentSong != null) {
+            // Set up automatic queue extension with smart queue management
+            playerController.enableRadioMode { song ->
+                val songToUse = song ?: playerState.value.currentSong
+                if (songToUse != null) {
                     viewModelScope.launch {
                         try {
-                            // Strategy 1: Get related songs (YouTube + JioSaavn)
-                            val relatedSongs = repository.getRelatedSongs(currentSong, 40).getOrNull() ?: emptyList()
-                            
-                            // Strategy 2: Get artist songs (both sources)
-                            val artistSongs = if (currentSong.artist.isNotBlank()) {
-                                val artistQuery = "${currentSong.artist} songs"
-                                repository.searchSongsWithLimit(artistQuery, 25).getOrNull() ?: emptyList()
-                            } else emptyList()
-                            
-                            // Strategy 3: Get genre/mood songs (both sources)
-                            val genreSongs = if (currentSong.genre.isNotBlank()) {
-                                repository.searchSongsWithLimit("${currentSong.genre} songs", 25).getOrNull() ?: emptyList()
-                            } else emptyList()
-                            
-                            // Strategy 4: Get similar title keywords (both sources)
-                            val titleKeywords = currentSong.title.split(" ").take(2)
-                            val similarSongs = if (titleKeywords.isNotEmpty()) {
-                                repository.searchSongsWithLimit(titleKeywords.joinToString(" "), 20).getOrNull() ?: emptyList()
-                            } else emptyList()
-                            
-                            // Combine from all strategies and shuffle for maximum variety
-                            val rawNewSongs = (relatedSongs + artistSongs + genreSongs + similarSongs)
-                                .filter { it.id != currentSong.id }
-                            // 1) Merge duplicates across sources
-                            val mergedCandidates = mergeDuplicateSongs(rawNewSongs)
-                            // 2) Enforce 50-song no-repeat window on titles against current queue
-                            val currentQueue = playerState.value.queue
-                            val filtered = filterForQueueWindow(currentQueue, mergedCandidates, windowSize = 50)
-                            val allNewSongs = filtered
-                                .shuffled()
-                                .take(30) // Add 30 songs at a time for continuous playback
-                            
-                            // Add to queue
-                            allNewSongs.forEach { song ->
-                                addToQueue(song)
-                            }
+                            val relatedSongs = repository.getRelatedSongs(songToUse, 40).getOrNull() ?: emptyList()
+                            val combined = relatedSongs.filter { it.id != songToUse.id }
+                            val merged = mergeDuplicateSongs(combined)
+                            val filtered = filterForQueueWindow(playerState.value.queue, merged, windowSize = 50)
+                            filtered.shuffled().take(20).forEach { addToQueue(it) }
                         } catch (e: Exception) {
-                            // Silently continue if auto-queue fails
                             e.printStackTrace()
                         }
                     }
                 }
+            }
+        }
+    }
+
+    /**
+     * Add similar songs to queue based on current song
+     */
+    fun addSimilarSongs() {
+        val currentSong = playerState.value.currentSong ?: return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            try {
+                // Fetch related artists' songs, album songs, movie songs, genre songs
+                val relatedSongs = repository.getRelatedSongs(currentSong, 50).getOrNull() ?: emptyList()
+                
+                val merged = mergeDuplicateSongs(relatedSongs)
+                val filtered = filterForQueueWindow(playerState.value.queue, merged, windowSize = 50)
+                
+                filtered.forEach { addToQueue(it) }
+                _uiState.value = _uiState.value.copy(isLoading = false)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(isLoading = false, error = "Failed to fetch similar songs")
             }
         }
     }

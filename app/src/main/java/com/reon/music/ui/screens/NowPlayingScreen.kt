@@ -482,6 +482,46 @@ fun NowPlayingScreen(
             Spacer(modifier = Modifier.weight(0.1f))
         }
         
+        // Loading Overlay with real status (NEW)
+        if (uiState.isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.4f))
+                    .clickable(enabled = false) {},
+                contentAlignment = Alignment.Center
+            ) {
+                Card(
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularProgressIndicator(
+                            color = AccentRed,
+                            strokeWidth = 4.dp,
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Loading Song...",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Extracting high quality stream",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                    }
+                }
+            }
+        }
+        
         // Queue Bottom Sheet
         if (showQueueSheet) {
             QueueBottomSheet(
@@ -646,11 +686,32 @@ private fun QueueBottomSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Queue (${queue.size} songs)",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+                Column {
+                    Text(
+                        text = "Queue (${queue.size} songs)",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    // Similar Songs Button
+                    TextButton(
+                        onClick = { playerViewModel.addSimilarSongs() },
+                        contentPadding = PaddingValues(0.dp),
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = ProgressActiveColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Get Similar Songs",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = ProgressActiveColor
+                        )
+                    }
+                }
                 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(

@@ -232,6 +232,17 @@ fun ChartDetailScreen(
     val coverImage = allSongs.firstOrNull()?.getHighQualityArtwork() ?: ""
     
     val scrollState = rememberLazyListState()
+    var searchQuery by remember { mutableStateOf("") }
+    
+    // Filter songs based on search
+    val filteredSongs = remember(sortedSongs, searchQuery) {
+        if (searchQuery.isBlank()) sortedSongs
+        else sortedSongs.filter { 
+            it.title.contains(searchQuery, ignoreCase = true) || 
+            it.artist.contains(searchQuery, ignoreCase = true) ||
+            it.album.contains(searchQuery, ignoreCase = true)
+        }
+    }
     
     // Load more when near bottom
     LaunchedEffect(scrollState) {
@@ -343,6 +354,33 @@ fun ChartDetailScreen(
                 }
             }
             
+            // Search Bar Section
+            item {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    placeholder = { Text("Search in $chartTitle", color = TextSecondary) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextSecondary) },
+                    trailingIcon = if (searchQuery.isNotEmpty()) {
+                        {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Clear, contentDescription = "Clear", tint = TextSecondary)
+                            }
+                        }
+                    } else null,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = TextFieldDefaults.outlinedTextFieldColors(
+                        containerColor = CardWhite,
+                        unfocusedBorderColor = Color.LightGray.copy(alpha = 0.3f),
+                        focusedBorderColor = AccentBlue.copy(alpha = 0.5f)
+                    ),
+                    singleLine = true
+                )
+            }
+            
             // Song List Header with Sorting
             item {
                 Column {
@@ -397,7 +435,7 @@ fun ChartDetailScreen(
                             }
                             
                             Text(
-                                text = "${sortedSongs.size}${if (hasMore) "+" else ""} songs",
+                                text = "${filteredSongs.size}${if (hasMore) "+" else ""} songs",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = TextSecondary,
                                 modifier = Modifier.padding(start = 8.dp)
@@ -407,9 +445,9 @@ fun ChartDetailScreen(
                 }
             }
             
-            // Songs List with ranking - Endless scrolling (using sorted songs)
-            if (sortedSongs.isNotEmpty()) {
-                itemsIndexed(sortedSongs) { index, song ->
+            // Songs List with ranking - Endless scrolling (using filtered songs)
+            if (filteredSongs.isNotEmpty()) {
+                itemsIndexed(filteredSongs) { index, song ->
                     ChartSongItem(
                         rank = index + 1,
                         song = song,
@@ -421,7 +459,7 @@ fun ChartDetailScreen(
                         }
                     )
                     
-                    if (index < sortedSongs.size - 1) {
+                    if (index < filteredSongs.size - 1) {
                         HorizontalDivider(
                             modifier = Modifier.padding(start = 72.dp, end = 16.dp),
                             color = Color.LightGray.copy(alpha = 0.3f),
@@ -429,6 +467,7 @@ fun ChartDetailScreen(
                         )
                     }
                 }
+
                 
                 // Loading indicator at bottom
                 if (isLoadingMore) {
@@ -491,8 +530,20 @@ fun ChartDetailScreen(
         
         // Song Options Bottom Sheet
         if (showSongOptions && selectedSong != null) {
-            ChartSongOptionsSheet(
+            val downloadProgressMap by playerViewModel.downloadProgress.collectAsState()
+            val songProgress = downloadProgressMap[selectedSong!!.id]
+            
+            // Check if downloaded from repository/DB
+            var isDownloaded by remember(selectedSong) { mutableStateOf(false) }
+            LaunchedEffect(selectedSong) {
+                isDownloaded = homeViewModel.isSongDownloaded(selectedSong!!.id)
+            }
+
+            com.reon.music.ui.components.SongOptionsSheet(
                 song = selectedSong!!,
+                isDownloaded = isDownloaded,
+                isDownloading = songProgress != null,
+                downloadProgress = songProgress?.progress ?: 0,
                 onDismiss = { showSongOptions = false },
                 onPlay = { 
                     playerViewModel.playSong(selectedSong!!)
@@ -506,11 +557,21 @@ fun ChartDetailScreen(
                     playerViewModel.addToQueue(selectedSong!!)
                     showSongOptions = false
                 },
+                onAddToPlaylist = {
+                    // Navigate or show playlist dialog
+                    showSongOptions = false
+                },
                 onDownload = { 
                     playerViewModel.downloadSong(selectedSong!!)
                     showSongOptions = false
                 },
-                onShare = { showSongOptions = false }
+                onRemoveDownload = {
+                    // Add remove download functionality if needed
+                    showSongOptions = false
+                },
+                onShare = { 
+                    showSongOptions = false 
+                }
             )
         }
     }
@@ -614,76 +675,99 @@ private fun ChartHeader(
             
             Spacer(modifier = Modifier.height(24.dp))
             
-            // Action Buttons - Redesigned
+            // Action Buttons - Improved Responsive UI (Image 1)
             Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Shuffle Button (Icon + Text) - Grey/Tinted
+                // Shuffle Button (Blue)
                 Button(
                     onClick = onShuffleClick,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFEFF2F5), // Light Grey/Blue tint
-                        contentColor = AccentBlue
-                    ),
-                    shape = RoundedCornerShape(50), // Pill shape
-                    elevation = ButtonDefaults.buttonElevation(0.dp),
                     modifier = Modifier
-                        .height(50.dp)
-                        .weight(1f)
+                        .weight(1.1f)
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF3B82F6) // Bright blue
+                    ),
+                    shape = RoundedCornerShape(28.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Shuffle,
                         contentDescription = null,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(20.dp),
+                        tint = Color.White
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Shuffle", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Shuffle",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        ),
+                        color = Color.White
+                    )
                 }
                 
-                // Play Button (Icon + Text) - Solid Blue (Primary)
+                // Play Button (Dark)
                 Button(
                     onClick = onPlayClick,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = AccentBlue,
-                        contentColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(50), // Pill shape
-                    elevation = ButtonDefaults.buttonElevation(4.dp, pressedElevation = 2.dp),
                     modifier = Modifier
-                        .height(50.dp)
-                        .weight(1f)
+                        .weight(1.1f)
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF222222)
+                    ),
+                    shape = RoundedCornerShape(28.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = null,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(22.dp),
+                        tint = Color.White
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Play", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Play All",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        ),
+                        color = Color.White
+                    )
                 }
                 
-                // Download Button (Icon + Text) - Solid Green
+                // Download Button (Large Red Vertical-style)
                 Button(
                     onClick = onDownloadAllClick,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF43A047), // Green
-                        contentColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(50), // Pill shape
-                    elevation = ButtonDefaults.buttonElevation(0.dp),
                     modifier = Modifier
-                        .height(50.dp)
-                        .weight(1f)
+                        .width(72.dp)
+                        .height(96.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFEF4444) // Bright red
+                    ),
+                    shape = RoundedCornerShape(24.dp),
+                    contentPadding = PaddingValues(0.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Download,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Down", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = "Download All",
+                            modifier = Modifier.size(32.dp),
+                            tint = Color.White
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(4.dp)
+                                .background(Color.White, CircleShape)
+                        )
+                    }
                 }
             }
         }

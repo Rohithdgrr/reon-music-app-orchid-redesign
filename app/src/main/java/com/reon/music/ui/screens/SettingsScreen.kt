@@ -523,6 +523,47 @@ fun SettingsScreen(
                 }
             }
             
+            // Personalization Section (NEW)
+            item {
+                SettingsSection(title = "Personalization") {
+                    SettingsCard {
+                        SettingsItem(
+                            icon = Icons.Outlined.Person,
+                            title = "Artists of Interest",
+                            subtitle = "${uiState.interestedArtists.size} interested, ${uiState.notInterestedArtists.size} not interested",
+                            onClick = { /* TODO: Open artist preference dialog */ }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsItem(
+                            icon = Icons.Outlined.Public,
+                            title = "Regions of Interest",
+                            subtitle = "${uiState.interestedRegions.size} interested, ${uiState.notInterestedRegions.size} not interested",
+                            onClick = { /* TODO: Open region preference dialog */ }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsItem(
+                            icon = Icons.Outlined.Language,
+                            title = "Languages of Interest",
+                            subtitle = "${uiState.interestedLanguages.size} interested, ${uiState.notInterestedLanguages.size} not interested",
+                            onClick = { /* TODO: Open language preference dialog */ }
+                        )
+                        
+                        HorizontalDivider(color = CardColor)
+                        
+                        SettingsItem(
+                            icon = Icons.Outlined.Category,
+                            title = "Categories of Interest",
+                            subtitle = "${uiState.interestedCategories.size} interested, ${uiState.notInterestedCategories.size} not interested",
+                            onClick = { /* TODO: Open category preference dialog */ }
+                        )
+                    }
+                }
+            }
+            
             // Sleep Timer Section (NEW - All apps)
             item {
                 SettingsSection(title = "Sleep Timer") {
@@ -686,9 +727,9 @@ fun SettingsScreen(
                             .background(
                                 brush = androidx.compose.ui.graphics.Brush.linearGradient(
                                     colors = listOf(
-                                        Color(0xFF424242),
-                                        Color(0xFF212121),
-                                        Color(0xFF1A1A1A)
+                                        Color(0xFFE53935),
+                                        Color(0xFFFF7043),
+                                        Color(0xFFFFCA28)
                                     )
                                 )
                             ),
@@ -715,29 +756,73 @@ fun SettingsScreen(
                 }
             },
             text = {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.fillMaxWidth()
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
+                    horizontalAlignment = Alignment.Start
                 ) {
-                    Text(
-                        text = "A premium music streaming experience with high-quality audio, lyrics support, and seamless playback.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "Created by Rohith",
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "© 2024 REON. All rights reserved.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
-                    )
+                    item {
+                        Text(
+                            text = "REON Music is a comprehensive, feature-rich music streaming application built with Kotlin and Jetpack Compose.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextPrimary
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Core Features:",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "• Stream music from YouTube Music and JioSaavn\n" +
+                                   "• Material 3 UI with dynamic theming\n" +
+                                   "• Background playback and Media controls\n" +
+                                   "• Gapless playback and crossfade support\n" +
+                                   "• Offline downloads and playlist management\n" +
+                                   "• Synchronized lyrics (LrcLib)\n" +
+                                   "• SponsorBlock integration",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Citations & Resources:",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "1. YouTube InnerTube API\n" +
+                                   "2. NewPipe Extractor - YouTube metadata extraction\n" +
+                                   "3. JioSaavn API - Indian music streaming\n" +
+                                   "4. LrcLib - Lyrics provider\n" +
+                                   "5. SponsorBlock - Community segment skipping\n" +
+                                   "6. Return YouTube Dislike - Engagement metrics",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Legal Notice:",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "This project is an original implementation. No GPL-licensed code has been copied. All dependencies use permissive licenses (Apache 2.0, MIT).",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Created by Rohith",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "© 2024 REON. All rights reserved.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                    }
                 }
             },
             confirmButton = {

@@ -78,7 +78,36 @@ class UserPreferences @Inject constructor(
         private val AUTO_UPDATE_ENABLED = booleanPreferencesKey("auto_update_enabled")
         private val AUTO_UPDATE_FREQUENCY = intPreferencesKey("auto_update_frequency")
         private val AUTO_UPDATE_WIFI_ONLY = booleanPreferencesKey("auto_update_wifi_only")
+
+        // NEW: Interests
+        private val INTERESTED_ARTISTS = stringSetPreferencesKey("interested_artists")
+        private val NOT_INTERESTED_ARTISTS = stringSetPreferencesKey("not_interested_artists")
+        private val INTERESTED_REGIONS = stringSetPreferencesKey("interested_regions")
+        private val NOT_INTERESTED_REGIONS = stringSetPreferencesKey("not_interested_regions")
+        private val INTERESTED_LANGUAGES = stringSetPreferencesKey("interested_languages")
+        private val NOT_INTERESTED_LANGUAGES = stringSetPreferencesKey("not_interested_languages")
+        private val INTERESTED_CATEGORIES = stringSetPreferencesKey("interested_categories")
+        private val NOT_INTERESTED_CATEGORIES = stringSetPreferencesKey("not_interested_categories")
     }
+    
+    // Interests
+    val interestedArtists: Flow<Set<String>> = dataStore.data.map { it[INTERESTED_ARTISTS] ?: emptySet() }
+    val notInterestedArtists: Flow<Set<String>> = dataStore.data.map { it[NOT_INTERESTED_ARTISTS] ?: emptySet() }
+    val interestedRegions: Flow<Set<String>> = dataStore.data.map { it[INTERESTED_REGIONS] ?: emptySet() }
+    val notInterestedRegions: Flow<Set<String>> = dataStore.data.map { it[NOT_INTERESTED_REGIONS] ?: emptySet() }
+    val interestedLanguages: Flow<Set<String>> = dataStore.data.map { it[INTERESTED_LANGUAGES] ?: emptySet() }
+    val notInterestedLanguages: Flow<Set<String>> = dataStore.data.map { it[NOT_INTERESTED_LANGUAGES] ?: emptySet() }
+    val interestedCategories: Flow<Set<String>> = dataStore.data.map { it[INTERESTED_CATEGORIES] ?: emptySet() }
+    val notInterestedCategories: Flow<Set<String>> = dataStore.data.map { it[NOT_INTERESTED_CATEGORIES] ?: emptySet() }
+
+    suspend fun setInterestedArtists(artists: Set<String>) { dataStore.edit { it[INTERESTED_ARTISTS] = artists } }
+    suspend fun setNotInterestedArtists(artists: Set<String>) { dataStore.edit { it[NOT_INTERESTED_ARTISTS] = artists } }
+    suspend fun setInterestedRegions(regions: Set<String>) { dataStore.edit { it[INTERESTED_REGIONS] = regions } }
+    suspend fun setNotInterestedRegions(regions: Set<String>) { dataStore.edit { it[NOT_INTERESTED_REGIONS] = regions } }
+    suspend fun setInterestedLanguages(languages: Set<String>) { dataStore.edit { it[INTERESTED_LANGUAGES] = languages } }
+    suspend fun setNotInterestedLanguages(languages: Set<String>) { dataStore.edit { it[NOT_INTERESTED_LANGUAGES] = languages } }
+    suspend fun setInterestedCategories(categories: Set<String>) { dataStore.edit { it[INTERESTED_CATEGORIES] = categories } }
+    suspend fun setNotInterestedCategories(categories: Set<String>) { dataStore.edit { it[NOT_INTERESTED_CATEGORIES] = categories } }
     
     // Playback settings
     val audioQuality: Flow<AudioQuality> = dataStore.data.map { prefs ->
