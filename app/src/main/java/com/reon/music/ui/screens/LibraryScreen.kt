@@ -190,8 +190,7 @@ fun LibraryScreen(
                 onPlaylistClick = { playlist ->
                     selectedPlaylist = playlist
                     showPlaylistOptions = true
-                },
-                searchQuery = searchQuery // Pass search query to filter
+                }
             )
         }
     }

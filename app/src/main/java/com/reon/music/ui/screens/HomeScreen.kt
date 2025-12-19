@@ -44,10 +44,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
-import com.reon.music.core.model.Album
-import com.reon.music.core.model.Artist
-import com.reon.music.core.model.Playlist
-import com.reon.music.core.model.Song
+import com.reon.music.core.model.*
 import com.reon.music.ui.components.*
 import com.reon.music.ui.theme.*
 import com.reon.music.ui.viewmodels.ChartSection
@@ -224,12 +221,13 @@ fun HomeScreen(
             .fillMaxSize()
             .background(
                 brush = Brush.verticalGradient(
-                    colors = listOf(
-                        SunriseWhite,
-                        SunriseWhite,
-                        SunrisePeach.copy(alpha = 0.1f),
-                        SunriseYellow.copy(alpha = 0.05f)
-                    )
+                        colors = listOf(
+                            SunriseWhite,
+                            SunriseWhite,
+                            SunsetPeach.copy(alpha = 0.1f),
+                            SunriseYellow.copy(alpha = 0.05f)
+                        )
+
                 )
             )
             .nestedScroll(pullToRefreshState.nestedScrollConnection)

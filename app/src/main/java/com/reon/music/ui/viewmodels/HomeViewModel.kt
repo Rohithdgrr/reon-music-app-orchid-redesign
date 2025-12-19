@@ -92,6 +92,25 @@ data class HomeUiState(
     val djRemixes: List<Song> = emptyList(),
     val danceFloor: List<Song> = emptyList(),
     
+    // Mood Categories
+    val romanticSongs: List<Song> = emptyList(),
+    val partySongs: List<Song> = emptyList(),
+    val sadSongs: List<Song> = emptyList(),
+    val lofiSongs: List<Song> = emptyList(),
+    val devotionalSongs: List<Song> = emptyList(),
+    val workoutSongs: List<Song> = emptyList(),
+    val retroSongs: List<Song> = emptyList(),
+    
+    // Artist Spotlight
+    val arijitSinghSongs: List<Song> = emptyList(),
+    val arRahmanSongs: List<Song> = emptyList(),
+    val shreyaGhoshalSongs: List<Song> = emptyList(),
+    val sidSriram: List<Song> = emptyList(),
+    val anirudhSongs: List<Song> = emptyList(),
+    val kanikKapoor: List<Song> = emptyList(),
+    val badshah: List<Song> = emptyList(),
+    val honeysingh: List<Song> = emptyList(),
+    
     // Telugu Playlists (YouTube-only)
     val teluguPlaylistsYoutube: List<Playlist> = emptyList(),
     val teluguSongsYoutube: List<Song> = emptyList(),

@@ -694,7 +694,9 @@ private fun QueueBottomSheet(
                     )
                     // Similar Songs Button
                     TextButton(
-                        onClick = { playerViewModel.addSimilarSongs() },
+                        onClick = { 
+                            // Similar songs logic
+                        },
                         contentPadding = PaddingValues(0.dp),
                         modifier = Modifier.height(32.dp)
                     ) {
