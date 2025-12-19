@@ -528,7 +528,6 @@ fun NowPlayingScreen(
                 currentSong = currentSong,
                 queue = playerState.queue,
                 currentIndex = playerState.currentIndex,
-                playerViewModel = playerViewModel,
                 onDismiss = { showQueueSheet = false },
                 onSongClick = { index -> playerViewModel.playFromQueue(index) },
                 onRemove = { index -> playerViewModel.removeFromQueue(index) }
@@ -643,7 +642,6 @@ private fun QueueBottomSheet(
     currentSong: Song?,
     queue: List<Song>,
     currentIndex: Int,
-    playerViewModel: com.reon.music.ui.viewmodels.PlayerViewModel,
     onDismiss: () -> Unit,
     onSongClick: (Int) -> Unit,
     onRemove: (Int) -> Unit

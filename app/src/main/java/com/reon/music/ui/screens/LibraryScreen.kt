@@ -576,8 +576,7 @@ private fun LibraryOverviewContent(
     selectedQuickCategory: LibraryQuickCategory,
     onQuickCategorySelected: (LibraryQuickCategory) -> Unit,
     onQuickCategoryClear: () -> Unit,
-    onPlaylistClick: (PlaylistEntity) -> Unit,
-    searchQuery: String = ""
+    onPlaylistClick: (PlaylistEntity) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
