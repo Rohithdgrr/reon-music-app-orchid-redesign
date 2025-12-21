@@ -11,28 +11,29 @@ import androidx.compose.material3.Shapes
 import androidx.compose.ui.unit.dp
 
 /**
- * REON Shape Scale
+ * REON Shape Scale - Sunset Redesign
+ * Very rounded corners as per image reference
  */
 val ReonShapes = Shapes(
     // Extra Small - chips, small buttons
-    extraSmall = RoundedCornerShape(4.dp),
+    extraSmall = RoundedCornerShape(8.dp),
     
     // Small - text fields, small cards
-    small = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
     
     // Medium - cards, dialogs
-    medium = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(20.dp),
     
     // Large - large cards, sheets
-    large = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(28.dp),
     
     // Extra Large - modals, bottom sheets
-    extraLarge = RoundedCornerShape(24.dp)
+    extraLarge = RoundedCornerShape(32.dp)
 )
 
 // Custom shapes
-val AlbumArtShape = RoundedCornerShape(12.dp)
-val MiniPlayerShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
-val BottomSheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+val AlbumArtShape = RoundedCornerShape(20.dp)
+val MiniPlayerShape = RoundedCornerShape(24.dp)
+val BottomSheetShape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
 val ChipShape = RoundedCornerShape(50)
-val ButtonShape = RoundedCornerShape(24.dp)
+val ButtonShape = RoundedCornerShape(28.dp)

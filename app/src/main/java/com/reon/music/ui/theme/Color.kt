@@ -9,70 +9,49 @@ package com.reon.music.ui.theme
 import androidx.compose.ui.graphics.Color
 
 // ========================================
-// PRIMARY BRAND COLORS - Red Palette
+// PRIMARY BRAND COLORS - Sunset Redesign
 // ========================================
-val ReonPrimary = Color(0xFFE53935)          // Main red accent
-val ReonPrimaryDark = Color(0xFFC62828)      // Darker red for emphasis
-val ReonPrimaryLight = Color(0xFFFFEBEE)     // Light red tint
-val ReonPrimaryVariant = Color(0xFFFF5252)   // Vibrant red variant
+val ReonPrimary = Color(0xFFFF7043)          // Sunrise Orange
+val ReonPrimaryDark = Color(0xFFBF360C)      // Deep Sunset Red
+val ReonPrimaryLight = Color(0xFFFFAB91)     // Peach
+val ReonPrimaryVariant = Color(0xFFFF5722)   // Vibrant Orange
 
-// NEW: Sunrise/Sunset Palette
-val SunriseWhite = Color(0xFFFFFFFF)
-val SunriseYellow = Color(0xFFFFD54F)
-val SunriseOrange = Color(0xFFFF9800)
-val SunriseRed = Color(0xFFE53935)
-val SunsetDeepRed = Color(0xFFB71C1C)
-val SunsetPurple = Color(0xFF4A148C)
-val SunsetGold = Color(0xFFFFD700)
+// Sunset Redesign Specific Palette
+val SunsetDeepBrown = Color(0xFF1A0F0F)
+val SunsetWarmBrown = Color(0xFF2D1B1B)
+val SunsetOrange = Color(0xFFFF7043)
 val SunsetPeach = Color(0xFFFFAB91)
-val SunrisePeach = Color(0xFFFFAB91) // Added for compatibility
+val SunsetGold = Color(0xFFFFD540)
+val SunsetWhite = Color(0xFFFFEFEC)
 
-val SunriseGradient = listOf(SunriseWhite, SunriseYellow, SunriseOrange, SunriseRed)
-val SunsetGradient = listOf(SunriseRed, SunsetDeepRed, SunsetPurple)
-val SunriseSunsetGradient = listOf(SunriseYellow, SunriseOrange, SunriseRed, SunsetDeepRed)
-
-// Keep for compatibility
-val ReonGreen = ReonPrimary
-val ReonGreenDark = ReonPrimaryDark
-val ReonGreenLight = ReonPrimaryLight
+val SunsetBackgroundGradient = listOf(Color(0xFF3D1910), Color(0xFF1A0F0F))
+val SunsetCardGradient = listOf(Color(0x4DFFAB91), Color(0x1AFF7043)) // Semi-transparent peach to orange
 
 // ========================================
-// ACCENT COLORS - For Visual Interest
+// BACKGROUND & SURFACE - Sunset Theme
 // ========================================
-val AccentRed = Color(0xFFE53935)          // Primary red accent
-val AccentRedSecondary = Color(0xFFFF6B6B) // Secondary red accent
-val AccentOrange = Color(0xFFFF7043)
-val AccentPink = Color(0xFFEC407A)
-val AccentPurple = Color(0xFFAB47BC)
-val AccentBlue = Color(0xFF42A5F5)
-val AccentTeal = Color(0xFF26A69A)
-val AccentGreen = Color(0xFF66BB6A)
-val AccentYellow = Color(0xFFFFCA28)
-
-// ========================================
-// BACKGROUND & SURFACE - Clean Light Theme
-// ========================================
-val ReonBackground = Color(0xFFFFFFFF)       // Pure white background - SimpMusic spec
-val ReonSurface = Color(0xFFFAFAFA)          // Light gray surface - SimpMusic spec
-val ReonSurfaceVariant = Color(0xFFF8F9FA)   // Subtle gray for cards
-val ReonSurfaceElevated = Color(0xFFFFFFFF)  // Elevated surfaces
-val ReonSurfaceDim = Color(0xFFF1F3F4)       // Dimmed surface
+val ReonBackground = SunsetWarmBrown
+val ReonSurface = Color(0xFF352424)
+val ReonSurfaceVariant = Color(0xFF3D2B2B)
+val ReonSurfaceElevated = Color(0xFF453232)
+val ReonSurfaceDim = Color(0xFF251616)
 
 // Card Backgrounds
-val CardBackground = Color(0xFFFFFFFF)
-val CardBackgroundHover = Color(0xFFFAFAFA)
-val CardBackgroundPressed = Color(0xFFF5F5F5)
+val CardBackground = Color(0x1AFFFFFF) // Glassmorphism effect
+val CardBackgroundHover = Color(0x33FFFFFF)
+val CardBackgroundPressed = Color(0x4DFFFFFF)
 
 // ========================================
 // TEXT COLORS - Hierarchy
 // ========================================
-val ReonOnSurface = Color(0xFF1C1C1C)        // Primary text - SimpMusic spec
-val ReonOnSurfaceVariant = Color(0xFF757575) // Secondary text - SimpMusic spec
-val ReonOnSurfaceDisabled = Color(0xFF9AA0A6) // Disabled text
+val ReonOnSurface = Color(0xFFFFEFEC)        // Cream white
+val ReonOnSurfaceVariant = Color(0xFFD7CCC8) // Light warm gray
+val ReonOnSurfaceDisabled = Color(0xFF8D6E63) // Muted warm brown
 val TextPrimary = ReonOnSurface
 val TextSecondary = ReonOnSurfaceVariant
-val TextTertiary = Color(0xFF80868B)
-val TextOnAccent = Color(0xFFFFFFFF)         // White text on colored backgrounds
+val TextTertiary = Color(0xFFA1887F)
+val TextOnAccent = Color(0xFF1A0F0F)         // Dark text on bright accents
+
 
 // ========================================
 // OUTLINE & DIVIDER

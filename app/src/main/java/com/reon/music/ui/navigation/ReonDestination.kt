@@ -35,6 +35,13 @@ sealed class ReonDestination(
         unselectedIcon = Icons.Outlined.Home
     )
     
+    data object Search : ReonDestination(
+        route = "search",
+        title = "Search",
+        selectedIcon = Icons.Filled.Search,
+        unselectedIcon = Icons.Outlined.Search
+    )
+    
     data object Artists : ReonDestination(
         route = "artists",
         title = "Artists",
@@ -139,6 +146,6 @@ sealed class ReonDestination(
     )
     
     companion object {
-        val bottomNavDestinations = listOf(Home, Artists, Library, Downloads)
+        val bottomNavDestinations = listOf(Home, Search, Artists, Library, Downloads)
     }
 }

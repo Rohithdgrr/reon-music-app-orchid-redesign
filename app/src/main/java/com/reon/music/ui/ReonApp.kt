@@ -235,6 +235,22 @@ fun ReonApp(
                             )
                         }
                         
+                        composable(ReonDestination.Search.route) {
+                            SearchScreen(
+                                playerViewModel = playerViewModel,
+                                onArtistClick = { artist ->
+                                    navController.navigate(
+                                        ReonDestination.ArtistDetail.createRoute(artist.id, artist.name)
+                                    )
+                                },
+                                onAlbumClick = { album ->
+                                    navController.navigate(
+                                        ReonDestination.PlaylistDetail.createRoute(album.id, album.name)
+                                    )
+                                }
+                            )
+                        }
+                        
                         composable(ReonDestination.Artists.route) {
                             ChartDetailScreen(
                                 chartTitle = "Artists",
