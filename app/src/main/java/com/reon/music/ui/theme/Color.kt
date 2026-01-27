@@ -16,6 +16,12 @@ val ReonPrimaryDark = Color(0xFFBF360C)      // Deep Sunset Red
 val ReonPrimaryLight = Color(0xFFFFAB91)     // Peach
 val ReonPrimaryVariant = Color(0xFFFF5722)   // Vibrant Orange
 
+// Additional accent colors
+val AccentPink = Color(0xFFE91E63)          // Material Pink
+val ReonGreen = Color(0xFF4CAF50)           // Material Green
+val ReonGreenDark = Color(0xFF2E7D32)        // Dark Green
+val ReonGreenLight = Color(0xFF81C784)       // Light Green
+
 // Sunset Redesign Specific Palette
 val SunsetDeepBrown = Color(0xFF1A0F0F)
 val SunsetWarmBrown = Color(0xFF2D1B1B)

@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,9 +45,14 @@ import kotlin.math.cos
 import kotlin.math.sin
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
-import com.reon.music.core.model.*
-import com.reon.music.ui.components.*
-import com.reon.music.ui.theme.*
+import coil.request.CachePolicy
+import coil.request.ImageRequest
+import com.reon.music.core.model.Album
+import com.reon.music.core.model.Artist
+import com.reon.music.core.model.Playlist
+import com.reon.music.core.model.Song
+import com.reon.music.ui.components.HomeScreenSkeleton
+import com.reon.music.ui.components.SongOptionsSheet
 import com.reon.music.ui.viewmodels.ChartSection
 import com.reon.music.ui.viewmodels.HomeViewModel
 import com.reon.music.ui.viewmodels.LibraryViewModel
@@ -54,15 +60,20 @@ import com.reon.music.ui.viewmodels.PlayerViewModel
 import com.reon.music.services.DownloadStatus
 import java.util.*
 
-// SimpMusic Color Palette
+// White Background Color Palette
 private val BackgroundWhite = Color(0xFFFFFFFF)
-private val SurfaceLight = Color(0xFFFAFAFA)
-private val TextPrimary = Color(0xFF1C1C1C)
-private val TextSecondary = Color(0xFF757575)
+private val SurfaceLight = Color(0xFFF8F9FA)
+private val TextPrimary = Color(0xFF1A1A1A)
+private val TextSecondary = Color(0xFF666666)
 private val AccentRed = Color(0xFFE53935)
 private val AccentRedSecondary = Color(0xFFFF6B6B)
 private val ChipSelectedBg = Color(0xFFE53935)
 private val ChipUnselectedBg = Color(0xFFF1F3F4)
+
+// Missing gradient colors
+private val SunriseWhite = Color(0xFFFFEFEC)
+private val SunriseYellow = Color(0xFFFFD540)
+private val SunsetPeach = Color(0xFFFFAB91)
 
 // Category colors for gradient bars
 private val GradientColors = listOf(
@@ -1678,25 +1689,15 @@ private fun SongCard(
                     )
             ) {
                 AsyncImage(
-                    model = song.getHighQualityArtwork(),
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(song.getHighQualityArtwork())
+                        .crossfade(true)
+                        .memoryCachePolicy(CachePolicy.DISABLED)
+                        .diskCachePolicy(CachePolicy.DISABLED)
+                        .build(),
                     contentDescription = song.title,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
-                )
-                
-                // Gradient overlay for depth
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            brush = Brush.radialGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    Color.Black.copy(alpha = 0.35f)
-                                ),
-                                radius = 500f
-                            )
-                        )
                 )
             }
             
@@ -2491,9 +2492,8 @@ private fun PlaylistCard(
         
         Text(
             text = playlist.name,
-            style = MaterialTheme.typography.bodyMedium.copy(
-                fontWeight = FontWeight.Medium
-            ),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
             color = TextPrimary,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis

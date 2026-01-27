@@ -45,11 +45,11 @@ import com.reon.music.data.database.entities.PlaylistEntity
 import com.reon.music.ui.viewmodels.SettingsViewModel
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 
-// SimpMusic Color Palette
+// White Background Color Palette
 private val BackgroundWhite = Color(0xFFFFFFFF)
-private val SurfaceLight = Color(0xFFFAFAFA)
-private val TextPrimary = Color(0xFF1C1C1C)
-private val TextSecondary = Color(0xFF757575)
+private val SurfaceLight = Color(0xFFF8F9FA)
+private val TextPrimary = Color(0xFF1A1A1A)
+private val TextSecondary = Color(0xFF666666)
 private val AccentRed = Color(0xFFE53935)
 private val AccentGreen = Color(0xFF43A047)
 private val AccentOrange = Color(0xFFFF9800)

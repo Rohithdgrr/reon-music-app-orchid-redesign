@@ -206,47 +206,18 @@ fun ReonApp(
                                     navController.navigate(
                                         ReonDestination.ChartDetail.createRoute(chartType, chartTitle)
                                     )
-                                },
-                                onPlaylistClick = { playlist ->
-                                    navController.navigate(
-                                        ReonDestination.PlaylistDetail.createRoute(playlist.id, playlist.name)
-                                    )
-                                },
-                                onSeeAllClick = { section ->
-                                    // Navigate to appropriate screen based on section
-                                    val (route, title) = when (section) {
-                                        "artists" -> "chart/artists/Artists" to "Artists"
-                                        "featured" -> "chart/featured/Featured Playlists" to "Featured Playlists"
-                                        "mood" -> "chart/mood/Mood & Vibes" to "Mood & Vibes"
-                                        "telugu" -> "chart/telugu/Telugu Hits" to "Telugu Hits"
-                                        "hindi" -> "chart/hindi/Hindi Hits" to "Hindi Hits"
-                                        "english" -> "chart/english/English Hits" to "English Hits"
-                                        "new" -> "chart/new/New Releases" to "New Releases"
-                                        "albums" -> "chart/albums/Trending Albums" to "Trending Albums"
-                                        else -> "chart/$section/$section" to section.replaceFirstChar { it.uppercase() }
-                                    }
-                                    navController.navigate(
-                                        ReonDestination.ChartDetail.createRoute(route.split("/").getOrNull(1) ?: section, title)
-                                    )
-                                },
-                                onSongClick = { song ->
-                                    playerViewModel.playSong(song)
                                 }
                             )
                         }
                         
                         composable(ReonDestination.Search.route) {
                             SearchScreen(
-                                playerViewModel = playerViewModel,
-                                onArtistClick = { artist ->
-                                    navController.navigate(
-                                        ReonDestination.ArtistDetail.createRoute(artist.id, artist.name)
-                                    )
+                                modifier = Modifier,
+                                onNavigateToPlayer = { songId ->
+                                    // Handle navigation to player
                                 },
-                                onAlbumClick = { album ->
-                                    navController.navigate(
-                                        ReonDestination.PlaylistDetail.createRoute(album.id, album.name)
-                                    )
+                                onNavigateToLibrary = {
+                                    navController.navigate(ReonDestination.Library.route)
                                 }
                             )
                         }

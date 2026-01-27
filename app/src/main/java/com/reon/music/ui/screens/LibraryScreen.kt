@@ -49,9 +49,9 @@ import com.reon.music.services.DownloadStatus
 
 // SimpMusic Color Palette
 private val BackgroundWhite = Color(0xFFFFFFFF)
-private val SurfaceLight = Color(0xFFFAFAFA)
-private val TextPrimary = Color(0xFF1C1C1C)
-private val TextSecondary = Color(0xFF757575)
+private val SurfaceLight = Color(0xFFF8F9FA)
+private val TextPrimary = Color(0xFF1A1A1A)
+private val TextSecondary = Color(0xFF666666)
 private val AccentRed = Color(0xFFE53935)
 
 // Category colors from theme

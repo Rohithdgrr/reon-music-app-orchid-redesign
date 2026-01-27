@@ -132,62 +132,160 @@ class SettingsViewModel @Inject constructor(
     
     private fun loadSettings() {
         viewModelScope.launch {
-            combine(
+            val playbackFlow = combine(
                 userPreferences.audioQuality,
                 userPreferences.crossfadeDuration,
                 userPreferences.gaplessPlayback,
-                userPreferences.normalizeAudio,
+                userPreferences.normalizeAudio
+            ) { quality, crossfade, gapless, normalize ->
+                PlaybackSettings(quality, crossfade, gapless, normalize)
+            }
+            
+            val appearanceFlow = combine(
                 userPreferences.theme,
                 userPreferences.pureBlack,
-                userPreferences.dynamicColors,
+                userPreferences.dynamicColors
+            ) { theme, pureBlack, dynamic ->
+                AppearanceSettings(theme, pureBlack, dynamic)
+            }
+            
+            val downloadFlow = combine(
                 userPreferences.downloadQuality,
                 userPreferences.downloadWifiOnly,
-                userPreferences.showLyricsDefault,
+                userPreferences.showLyricsDefault
+            ) { quality, wifiOnly, lyrics ->
+                DownloadSettings(quality, wifiOnly, lyrics)
+            }
+            
+            val privacyFlow = combine(
                 userPreferences.saveHistory,
                 userPreferences.incognitoMode,
                 userPreferences.cloudSyncEnabled,
                 userPreferences.lastSyncTime,
-                userPreferences.preferredSource,
+                userPreferences.preferredSource
+            ) { saveHistory, incognito, cloudSync, lastSync, source ->
+                PrivacySettings(saveHistory, incognito, cloudSync, lastSync, source)
+            }
+            
+            val interestsFlow = combine(
                 userPreferences.interestedArtists,
                 userPreferences.notInterestedArtists,
                 userPreferences.interestedRegions,
-                userPreferences.notInterestedRegions,
+                userPreferences.notInterestedRegions
+            ) { intArtists, notIntArtists, intRegions, notIntRegions ->
+                InterestsA(intArtists, notIntArtists, intRegions, notIntRegions)
+            }
+            
+            val interests2Flow = combine(
                 userPreferences.interestedLanguages,
                 userPreferences.notInterestedLanguages,
                 userPreferences.interestedCategories,
                 userPreferences.notInterestedCategories
-            ) { values ->
-                @Suppress("UNCHECKED_CAST")
+            ) { intLang, notIntLang, intCat, notIntCat ->
+                InterestsB(intLang, notIntLang, intCat, notIntCat)
+            }
+            
+            // Combine all flows step by step for compatibility
+            combine(playbackFlow, appearanceFlow) { playback, appearance ->
+                Pair(playback, appearance)
+            }.combine(downloadFlow) { (playback, appearance), download ->
+                Triple(playback, appearance, download)
+            }.combine(privacyFlow) { (playback, appearance, download), privacy ->
+                Quartet(playback, appearance, download, privacy)
+            }.combine(interestsFlow) { (playback, appearance, download, privacy), interestsA ->
+                Quintuple(playback, appearance, download, privacy, interestsA)
+            }.combine(interests2Flow) { (playback, appearance, download, privacy, interestsA), interestsB ->
                 SettingsUiState(
-                    audioQuality = values[0] as AudioQuality,
-                    crossfadeDuration = values[1] as Int,
-                    gaplessPlayback = values[2] as Boolean,
-                    normalizeAudio = values[3] as Boolean,
-                    theme = values[4] as AppTheme,
-                    pureBlack = values[5] as Boolean,
-                    dynamicColors = values[6] as Boolean,
-                    downloadQuality = values[7] as AudioQuality,
-                    downloadWifiOnly = values[8] as Boolean,
-                    showLyricsDefault = values[9] as Boolean,
-                    saveHistory = values[10] as Boolean,
-                    incognitoMode = values[11] as Boolean,
-                    cloudSyncEnabled = values[12] as Boolean,
-                    lastSyncTime = values[13] as Long,
-                    preferredSource = values[14] as MusicSource,
-                    interestedArtists = values[15] as Set<String>,
-                    notInterestedArtists = values[16] as Set<String>,
-                    interestedRegions = values[17] as Set<String>,
-                    notInterestedRegions = values[18] as Set<String>,
-                    interestedLanguages = values[19] as Set<String>,
-                    notInterestedLanguages = values[20] as Set<String>,
-                    interestedCategories = values[21] as Set<String>,
-                    notInterestedCategories = values[22] as Set<String>
+                    audioQuality = playback.audioQuality,
+                    crossfadeDuration = playback.crossfadeDuration,
+                    gaplessPlayback = playback.gaplessPlayback,
+                    normalizeAudio = playback.normalizeAudio,
+                    skipSilence = false,
+                    playbackSpeed = 1.0f,
+                    autoPlaySimilar = true,
+                    
+                    // Appearance
+                    theme = appearance.theme,
+                    pureBlack = appearance.pureBlack,
+                    dynamicColors = appearance.dynamicColors,
+                    themePresetId = null,
+                    fontPresetId = null,
+                    fontSizePreset = com.reon.music.ui.theme.FontSizePreset.MEDIUM,
+                    
+                    // Downloads
+                    downloadQuality = download.downloadQuality,
+                    downloadWifiOnly = download.downloadWifiOnly,
+                    showLyricsDefault = download.showLyricsDefault,
+                    
+                    // Privacy
+                    saveHistory = privacy.saveHistory,
+                    incognitoMode = privacy.incognitoMode,
+                    cloudSyncEnabled = privacy.cloudSyncEnabled,
+                    lastSyncTime = privacy.lastSyncTime,
+                    preferredSource = privacy.preferredSource,
+                    
+                    // Interests
+                    interestedArtists = interestsA.interestedArtists,
+                    notInterestedArtists = interestsA.notInterestedArtists,
+                    interestedRegions = interestsA.interestedRegions,
+                    notInterestedRegions = interestsA.notInterestedRegions,
+                    interestedLanguages = interestsB.interestedLanguages,
+                    notInterestedLanguages = interestsB.notInterestedLanguages,
+                    interestedCategories = interestsB.interestedCategories,
+                    notInterestedCategories = interestsB.notInterestedCategories
                 )
             }.collect { state ->
                 _uiState.value = state
             }
         }
     }
+    
+    private data class PlaybackSettings(
+        val audioQuality: AudioQuality,
+        val crossfadeDuration: Int,
+        val gaplessPlayback: Boolean,
+        val normalizeAudio: Boolean
+    )
+    
+    private data class AppearanceSettings(
+        val theme: AppTheme,
+        val pureBlack: Boolean,
+        val dynamicColors: Boolean
+    )
+    
+    private data class DownloadSettings(
+        val downloadQuality: AudioQuality,
+        val downloadWifiOnly: Boolean,
+        val showLyricsDefault: Boolean
+    )
+    
+    private data class PrivacySettings(
+        val saveHistory: Boolean,
+        val incognitoMode: Boolean,
+        val cloudSyncEnabled: Boolean,
+        val lastSyncTime: Long,
+        val preferredSource: MusicSource
+    )
+    
+    private data class InterestsA(
+        val interestedArtists: Set<String>,
+        val notInterestedArtists: Set<String>,
+        val interestedRegions: Set<String>,
+        val notInterestedRegions: Set<String>
+    )
+    
+    private data class InterestsB(
+        val interestedLanguages: Set<String>,
+        val notInterestedLanguages: Set<String>,
+        val interestedCategories: Set<String>,
+        val notInterestedCategories: Set<String>
+    )
+    
+    // Helper data classes for combining flows
+    private data class Pair<A, B>(val first: A, val second: B)
+    private data class Triple<A, B, C>(val first: A, val second: B, val third: C)
+    private data class Quartet<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
+    private data class Quintuple<A, B, C, D, E>(val first: A, val second: B, val third: C, val fourth: D, val fifth: E)
     
     // Playback settings
     fun setAudioQuality(quality: AudioQuality) {
