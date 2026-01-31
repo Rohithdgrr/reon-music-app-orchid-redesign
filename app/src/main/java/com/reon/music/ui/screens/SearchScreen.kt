@@ -23,12 +23,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.reon.music.ui.search.*
+import com.reon.music.core.model.Song
 import kotlinx.coroutines.launch
 
 @Composable
 fun EnhancedSearchScreen(
     modifier: Modifier = Modifier,
-    onNavigateToPlayer: (String) -> Unit = {},
+    onNavigateToPlayer: (Song) -> Unit = {},
     onNavigateToLibrary: () -> Unit = {}
 ) {
     YouTubeMusicStyleSearchScreen(
@@ -40,7 +41,7 @@ fun EnhancedSearchScreen(
 @Composable
 fun SearchScreen(
     modifier: Modifier = Modifier,
-    onNavigateToPlayer: (String) -> Unit = {},
+    onNavigateToPlayer: (Song) -> Unit = {},
     onNavigateToLibrary: () -> Unit = {},
     onDismiss: () -> Unit = {}
 ) {

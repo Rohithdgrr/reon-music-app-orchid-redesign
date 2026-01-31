@@ -41,9 +41,12 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
     
-    // Hilt
+// Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
+
+    // Coil for image loading
+    implementation(libs.coil.compose)
     
     // Crypto for URL decryption
     implementation(libs.bouncycastle)

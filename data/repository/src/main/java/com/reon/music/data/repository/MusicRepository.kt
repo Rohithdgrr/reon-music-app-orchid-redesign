@@ -355,18 +355,40 @@ class MusicRepository @Inject constructor(
      * Search songs with custom limit - Enhanced to search both sources for endless results
      */
     suspend fun searchSongsWithLimit(query: String, limit: Int): Result<List<Song>> = coroutineScope {
-        val youtubeDeferred = async { youtubeMusicClient.searchSongs(query) }
-        
-        val allSongs = mutableListOf<Song>()
-        
-        youtubeDeferred.await().getOrNull()?.let { songs ->
-            allSongs.addAll(songs.take(limit))
+        try {
+            val youtubeDeferred = async { youtubeMusicClient.searchSongs(query) }
+            
+            val allSongs = mutableListOf<Song>()
+            
+            youtubeDeferred.await().getOrNull()?.let { songs ->
+                allSongs.addAll(songs.take(limit))
+            }
+            
+            if (allSongs.isEmpty()) {
+                Result.Success(emptyList())
+            } else {
+                Result.Success(allSongs.distinctBy { it.id }.take(limit))
+            }
+        } catch (e: Exception) {
+            Result.Error(Exception("Search failed: ${e.message}"))
         }
-        
-        if (allSongs.isEmpty()) {
-            Result.Success(emptyList())
-        } else {
-            Result.Success(allSongs.distinctBy { it.id }.take(limit))
+    }
+    
+    /**
+     * Search songs with live data streaming - emits results as they arrive
+     */
+    fun searchSongsLive(query: String, limit: Int = 30): Flow<List<Song>> = flow {
+        try {
+            // Emit initial results from YouTube Music
+            val result = youtubeMusicClient.searchSongs(query)
+            result.getOrNull()?.let { songs ->
+                val limited = songs.distinctBy { it.id }.take(limit)
+                if (limited.isNotEmpty()) {
+                    emit(limited)
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MusicRepository", "Live search error: ${e.message}", e)
         }
     }
     

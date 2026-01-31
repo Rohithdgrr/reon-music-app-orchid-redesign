@@ -43,6 +43,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.reon.music.core.model.Artist
+import com.reon.music.core.model.Song
 import com.reon.music.ui.components.MiniPlayer
 import com.reon.music.ui.components.ReonBottomNavigation
 import com.reon.music.ui.navigation.ReonDestination
@@ -213,8 +214,9 @@ fun ReonApp(
                         composable(ReonDestination.Search.route) {
                             SearchScreen(
                                 modifier = Modifier,
-                                onNavigateToPlayer = { songId ->
-                                    // Handle navigation to player
+                                onNavigateToPlayer = { song ->
+                                    playerViewModel.playSong(song)
+                                    showNowPlaying = true
                                 },
                                 onNavigateToLibrary = {
                                     navController.navigate(ReonDestination.Library.route)

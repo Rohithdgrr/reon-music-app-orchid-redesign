@@ -576,7 +576,7 @@ class YouTubeMusicClient @Inject constructor(
                 title = title,
                 artist = artist,
                 album = albumOrMovie ?: "",
-                artworkUrl = thumbnail?.replace("w60-h60", "w500-h500"),
+                artworkUrl = validateThumbnailUrl(thumbnail)?.replace("w60-h60", "w500-h500"),
                 duration = parseDuration(durationText),
                 source = "youtube",
                 channelName = channelName,
@@ -623,12 +623,12 @@ class YouTubeMusicClient @Inject constructor(
             val description = videoDetails["shortDescription"]?.jsonPrimitive?.content ?: ""
             val metadata = parseMetadataFromDescription(description)
             
-            Song(
+Song(
                 id = videoId,
                 title = title,
                 artist = author,
                 album = metadata["album"] ?: metadata["movie"] ?: "",
-                artworkUrl = thumbnail,
+                artworkUrl = validateThumbnailUrl(thumbnail),
                 duration = lengthSeconds,
                 source = "youtube",
                 channelName = author,
@@ -775,7 +775,7 @@ class YouTubeMusicClient @Inject constructor(
                 id = videoId,
                 title = title,
                 artist = artist,
-                artworkUrl = thumbnail?.replace("w60-h60", "w500-h500"),
+                artworkUrl = validateThumbnailUrl(thumbnail)?.replace("w60-h60", "w500-h500"),
                 duration = parseDuration(durationText),
                 source = "youtube"
             )
@@ -936,10 +936,10 @@ class YouTubeMusicClient @Inject constructor(
             
             val songCount = subtitle.filter { it.isDigit() }.toIntOrNull() ?: 0
             
-            com.reon.music.core.model.Playlist(
+com.reon.music.core.model.Playlist(
                 id = playlistId,
                 name = title,
-                artworkUrl = thumbnail,
+                artworkUrl = validateThumbnailUrl(thumbnail),
                 songCount = songCount,
                 description = subtitle
             )
@@ -958,10 +958,15 @@ class YouTubeMusicClient @Inject constructor(
         val playlists = if (playlistsResult is Result.Success) playlistsResult.data else emptyList()
         com.reon.music.core.model.SearchResult(
             songs = songs,
-            albums = emptyList(),
+albums = emptyList(),
             artists = emptyList(),
             playlists = playlists
         )
+    }
+
+    private fun validateThumbnailUrl(url: String?): String? {
+        if (url.isNullOrBlank()) return null
+        return if (url.startsWith("http://") || url.startsWith("https://")) url else null
     }
 }
 

@@ -363,6 +363,7 @@ class SearchViewModel @Inject constructor(
     /**
      * POWER SEARCH - Multi-language, multi-source comprehensive search
      * Prioritizes Indian languages and searches by song, artist, album/movie
+     * Now with live streaming and better null safety
      */
     private suspend fun performPowerSearch(query: String) {
         _uiState.value = _uiState.value.copy(
@@ -370,132 +371,113 @@ class SearchViewModel @Inject constructor(
             hasSearched = true,
             hasMore = true,
             currentPage = 1,
-            error = null
+            error = null,
+            songs = emptyList() // Clear previous results
         )
         allSearchResults.clear()
         
         try {
-            // Build comprehensive search queries
-            val searchQueries = buildPowerSearchQueries(query)
-            
-            // Perform parallel searches in chunks to avoid resource exhaustion
-            val allSongs = mutableListOf<Song>()
-            
-            // Limit total queries to prevent overload
-            val limitedQueries = searchQueries.take(12) 
-            
-            // Process in batches of 4
-            limitedQueries.chunked(4).forEach { batch ->
-                val batchResults = batch.map { searchQuery ->
-                    viewModelScope.async {
-                        try {
-                            // Add a small random delay to prevent thundering herd
-                            delay((10..50).random().toLong())
-                            val result = youTubeClient.searchSongs(searchQuery)
-                            when (result) {
-                                is Result.Success -> result.data
-                                else -> emptyList()
-                            }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Search query failed: $searchQuery", e)
-                            emptyList()
+            // Stream live results from repository
+            repository.searchSongsLive(query, limit = INITIAL_SEARCH_LIMIT)
+                .collect { liveResults ->
+                    try {
+                        val filteredResults = liveResults.filter { 
+                            it.id.isNotBlank() && it.title.isNotBlank() 
                         }
+                        
+                        if (filteredResults.isNotEmpty()) {
+                            // Rank results
+                            val rankedSongs = filteredResults.sortedByDescending { song ->
+                                val relevanceScore = calculateBasicRelevanceScore(query, song)
+                                val viewScore = (song.viewCount / 1000000).coerceAtMost(50)
+                                relevanceScore + viewScore
+                            }
+                            
+                            allSearchResults.clear()
+                            allSearchResults.addAll(rankedSongs)
+                            
+                            // Extract artists with safe defaults
+                            val artists = rankedSongs
+                                .groupBy { it.artist.lowercase() }
+                                .mapNotNull { (name, songs) ->
+                                    if (songs.isEmpty() || name.isBlank()) return@mapNotNull null
+                                    val representative = songs.first()
+                                    Artist(
+                                        id = name.hashCode().toString(),
+                                        name = representative.artist.ifBlank { "Unknown" },
+                                        artworkUrl = representative.artworkUrl ?: "",
+                                        followerCount = representative.channelSubscriberCount.toInt().coerceAtLeast(0),
+                                        topSongs = songs.take(5)
+                                    )
+                                }
+                                .sortedByDescending { it.followerCount }
+                                .take(10)
+                            
+                            // Extract albums with safe defaults
+                            val albums = rankedSongs
+                                .filter { it.album.isNotBlank() }
+                                .groupBy { it.album.lowercase() }
+                                .mapNotNull { (name, songs) ->
+                                    if (songs.isEmpty() || name.isBlank()) return@mapNotNull null
+                                    val representative = songs.first()
+                                    Album(
+                                        id = name.hashCode().toString(),
+                                        name = representative.album.ifBlank { "Unknown Album" },
+                                        artist = representative.artist.ifBlank { "Unknown" },
+                                        artworkUrl = representative.artworkUrl ?: "",
+                                        songs = songs.take(5)
+                                    )
+                                }
+                                .sortedByDescending { it.songs.size }
+                                .take(10)
+                            
+                            // Extract movies if available
+                            val movies = rankedSongs
+                                .filter { it.movieName.isNotBlank() }
+                                .groupBy { it.movieName.lowercase() }
+                                .mapNotNull { (name, songs) ->
+                                    if (songs.isEmpty() || name.isBlank()) return@mapNotNull null
+                                    val representative = songs.first()
+                                    Album(
+                                        id = ("movie_" + name).hashCode().toString(),
+                                        name = representative.movieName.ifBlank { "Unknown Movie" },
+                                        artist = representative.heroName.ifBlank { representative.artist },
+                                        artworkUrl = representative.artworkUrl ?: "",
+                                        songs = songs.take(5)
+                                    )
+                                }
+                                .sortedByDescending { it.songs.size }
+                                .take(5)
+                            
+                            // Update UI with live results
+                            _uiState.value = _uiState.value.copy(
+                                songs = rankedSongs.take(INITIAL_SEARCH_LIMIT),
+                                albums = albums,
+                                artists = artists,
+                                movies = movies,
+                                isLoading = false,
+                                hasMore = rankedSongs.size > INITIAL_SEARCH_LIMIT,
+                                error = null
+                            )
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error processing live search results", e)
                     }
                 }
-                
-                // Wait for this batch to complete before starting next
-                batchResults.awaitAll().forEach { songs ->
-                    allSongs.addAll(songs)
-                }
-            }
             
-            // Remove duplicates then enrich + re-rank similar to YouTube ordering
-            val uniqueSongs = allSongs.distinctBy { it.id }
-            val enrichedTop = repository.enhanceSongsWithMetadata(uniqueSongs.take(180))
-            val mergedSongs = (enrichedTop + uniqueSongs.drop(180)).distinctBy { it.id }
-            val rankedSongs = reRankWithYouTubeSignals(query, mergedSongs).take(MAX_RESULTS)
-            
-            allSearchResults.addAll(rankedSongs)
-            
-            // Extract unique artists from songs
-            val artists = rankedSongs
-                .map { song ->
-                    val normalizedArtist = normalizeChannelName(song.artist)
-                    val meta = CHANNEL_PRIORITY_MAP[normalizedArtist]
-                    Artist(
-                        id = song.artist.lowercase(Locale.US).hashCode().toString(),
-                        name = song.artist,
-                        artworkUrl = song.artworkUrl,
-                        followerCount = maxOf(song.channelSubscriberCount.toInt(), meta?.weight?.times(1000000 / 10) ?: 0),
-                        topSongs = emptyList()
-                    )
-                }
-                .distinctBy { it.name.lowercase() }
-                .sortedByDescending { it.followerCount }
-                .take(20)
-            
-            // Extract unique albums from songs
-            val albumBuckets = rankedSongs
-                .filter { it.album.isNotBlank() || it.movieName.isNotBlank() }
-                .groupBy { (it.album.takeIf { album -> album.isNotBlank() } ?: it.movieName).lowercase() }
-            val albums = albumBuckets.map { (key, songs) ->
-                val representative = songs.first()
-                Album(
-                    id = key.hashCode().toString(),
-                    name = representative.album.takeIf { it.isNotBlank() } ?: representative.movieName,
-                    artist = representative.artist,
-                    artworkUrl = representative.artworkUrl,
-                    songs = songs.take(10)
+            // If no results after stream completes
+            if (allSearchResults.isEmpty()) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = "No results found. Try searching with different keywords."
                 )
-            }.sortedByDescending { it.songs.size }.take(20)
-            
-            val movieResults = rankedSongs
-                .filter { it.movieName.isNotBlank() || it.album.contains("(From", ignoreCase = true) || it.album.contains("Original Motion", ignoreCase = true) }
-                .groupBy { it.movieName.lowercase() }
-                .map { (name, songs) ->
-                    Album(
-                        id = ("movie_" + name).hashCode().toString(),
-                        name = songs.first().movieName,
-                        artist = songs.first().heroName.ifBlank { songs.first().artist },
-                        artworkUrl = songs.first().artworkUrl,
-                        songs = songs
-                    )
-                }
-                .sortedByDescending { it.songs.size }
-                .take(20)
-            
-            val artistDetails = rankedSongs
-                .groupBy { it.artist.lowercase() }
-                .map { (name, songs) ->
-                    val representative = songs.first()
-                    Artist(
-                        id = name.hashCode().toString(),
-                        name = representative.artist,
-                        artworkUrl = representative.artworkUrl,
-                        followerCount = representative.channelSubscriberCount.toInt(),
-                        topSongs = songs.take(10)
-                    )
-                }
-                .sortedByDescending { it.followerCount }
-                .take(25)
-            
-            _uiState.value = _uiState.value.copy(
-                songs = rankedSongs.take(INITIAL_SEARCH_LIMIT),
-                albums = albums,
-                artists = artistDetails,
-                movies = movieResults.take(15),
-                isLoading = false,
-                hasMore = rankedSongs.size > INITIAL_SEARCH_LIMIT,
-                error = if (rankedSongs.isEmpty()) "No results found. Try searching with different keywords." else null
-            )
-            
-            Log.d(TAG, "Power search completed: ${rankedSongs.size} songs found for '$query'")
+            }
             
         } catch (e: Exception) {
             Log.e(TAG, "Search error", e)
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
-                error = e.message ?: "Search failed"
+                error = "Search failed: ${e.message ?: "Unknown error"}"
             )
         }
     }
@@ -601,162 +583,55 @@ class SearchViewModel @Inject constructor(
     }
     
     /**
-     * Calculate relevance score for sorting results
-     * Enhanced algorithm for multi-field searching with better ranking
-     * Considers: title, artist, album, movie name, hero/heroine, director, metadata
+     * Simplified relevance score for basic sorting
+     * Focuses on title and artist matching with basic popularity scoring
      */
-    private fun calculateRelevanceScore(query: String, song: Song): Int {
+    private fun calculateBasicRelevanceScore(query: String, song: Song): Int {
         var score = 0
         val lowerQuery = query.lowercase()
-        val lowerTitle = song.title.lowercase()
-        val lowerArtist = song.artist.lowercase()
-        val lowerAlbum = song.album.lowercase()
-        val lowerMovieName = song.movieName.lowercase()
-        val lowerHero = song.heroName.lowercase()
-        val lowerHeroine = song.heroineName.lowercase()
-        val lowerDirector = song.director.lowercase()
-        val lowerProducer = song.producer.lowercase()
-        val lowerGenre = song.genre.lowercase()
-        val lowerDescription = song.description.lowercase()
         
-        // === TITLE MATCHING (Highest Priority - 200 base points) ===
+        // Safe field access with null checks
+        val lowerTitle = song.title?.lowercase() ?: ""
+        val lowerArtist = song.artist?.lowercase() ?: ""
+        val lowerAlbum = song.album?.lowercase() ?: ""
+        
+        // === TITLE MATCHING (Highest Priority) ===
         when {
-            lowerTitle == lowerQuery -> score += 200 // Exact match
-            lowerTitle.startsWith(lowerQuery) -> score += 180 // Starts with query
-            lowerTitle.contains(" $lowerQuery ") -> score += 160 // Word boundary match
-            lowerTitle.contains(lowerQuery) -> score += 120 // Contains query
-            lowerTitle.split(" ").any { it == lowerQuery } -> score += 140 // Complete word match
+            lowerTitle == lowerQuery -> score += 100 // Exact match
+            lowerTitle.startsWith(lowerQuery) -> score += 80 // Starts with query
+            lowerTitle.contains(lowerQuery) -> score += 60 // Contains query
         }
         
-        // === ARTIST MATCHING (160 base points) ===
+        // === ARTIST MATCHING ===
         when {
-            lowerArtist == lowerQuery -> score += 160 // Exact artist match
-            lowerArtist.startsWith(lowerQuery) -> score += 130 // Artist starts with query
-            lowerArtist.contains(lowerQuery) -> score += 100 // Artist contains query
-            lowerArtist.split(",").any { it.trim() == lowerQuery } -> score += 140 // Multiple artists
+            lowerArtist == lowerQuery -> score += 90 // Exact artist match
+            lowerArtist.startsWith(lowerQuery) -> score += 70 // Artist starts with query
+            lowerArtist.contains(lowerQuery) -> score += 50 // Artist contains query
         }
         
-        // === ALBUM/MOVIE MATCHING (140 base points) ===
-        // Album search
+        // === ALBUM MATCHING ===
         when {
-            lowerAlbum == lowerQuery -> score += 140 // Exact album match
-            lowerAlbum.startsWith(lowerQuery) -> score += 110 // Album starts with query
-            lowerAlbum.contains(lowerQuery) -> score += 80 // Album contains query
+            lowerAlbum == lowerQuery -> score += 70 // Exact album match
+            lowerAlbum.startsWith(lowerQuery) -> score += 50 // Album starts with query
+            lowerAlbum.contains(lowerQuery) -> score += 30 // Album contains query
         }
         
-        // Movie name search (130 base points - high priority for film songs)
-        when {
-            lowerMovieName == lowerQuery -> score += 130 // Exact movie match
-            lowerMovieName.startsWith(lowerQuery) -> score += 110 // Movie starts with query
-            lowerMovieName.contains(lowerQuery) -> score += 85 // Movie contains query
+        // === BASIC POPULARITY BONUS ===
+        // Safe access to view count with default value
+        val viewCount = try {
+            song.viewCount.coerceAtLeast(0)
+        } catch (e: Exception) {
+            0L
         }
         
-        // === HERO/HEROINE/ACTOR SEARCHES (120 base points) ===
-        // Helps find songs from movies by searching lead actor names
-        when {
-            lowerHero == lowerQuery -> score += 120 // Exact hero match
-            lowerHero.startsWith(lowerQuery) -> score += 100 // Hero starts with query
-            lowerHero.contains(lowerQuery) -> score += 75 // Hero contains query
+        // Add view count bonus (normalized)
+        val viewBonus = (viewCount / 1000000).toInt().coerceAtMost(20)
+        score += viewBonus
+        
+        // === OFFICIAL CHANNEL BONUS ===
+        if (song.channelName?.contains("official", ignoreCase = true) == true) {
+            score += 10
         }
-        
-        when {
-            lowerHeroine == lowerQuery -> score += 120 // Exact heroine match
-            lowerHeroine.startsWith(lowerQuery) -> score += 100 // Heroine starts with query
-            lowerHeroine.contains(lowerQuery) -> score += 75 // Heroine contains query
-        }
-        
-        // === DIRECTOR/PRODUCER/CREW SEARCHES (90 base points) ===
-        when {
-            lowerDirector == lowerQuery -> score += 90 // Exact director match
-            lowerDirector.contains(lowerQuery) -> score += 60 // Director contains query
-        }
-        
-        when {
-            lowerProducer == lowerQuery -> score += 80 // Exact producer match
-            lowerProducer.contains(lowerQuery) -> score += 50 // Producer contains query
-        }
-        
-        // === METADATA SEARCHES (Genre, Description - 70 base points) ===
-        if (lowerGenre.isNotBlank()) {
-            when {
-                lowerGenre == lowerQuery -> score += 70 // Exact genre match
-                lowerGenre.contains(lowerQuery) -> score += 50 // Genre contains query
-                lowerQuery in lowerGenre.split(",").map { it.trim() } -> score += 60
-            }
-        }
-        
-        // Movie genre search (for songs from specific genre movies)
-        if (song.movieGenre.isNotBlank() && lowerQuery.contains("movie")) {
-            val lowerMovieGenre = song.movieGenre.lowercase()
-            when {
-                lowerMovieGenre.contains(lowerQuery.replace("movie", "").trim()) -> score += 50
-            }
-        }
-        
-        // Description/metadata search
-        if (lowerDescription.isNotBlank()) {
-            if (lowerDescription.contains(lowerQuery)) {
-                score += 40 // Description contains query
-            }
-        }
-        
-        // === POPULARITY SCORING (Max 105 points) ===
-        // View count (normalized, max 50 points)
-        val viewScore = (song.viewCount / 1000000).toInt().coerceAtMost(50)
-        score += viewScore
-        
-        // Like count (normalized, max 30 points)
-        val likeScore = (song.likeCount / 100000).toInt().coerceAtMost(30)
-        score += likeScore
-        
-        // Channel subscriber count (max 25 points)
-        val channelScore = (song.channelSubscriberCount / 1000000).toInt().coerceAtMost(25)
-        score += channelScore
-        
-        // === QUALITY SCORING (Max 60 points) ===
-        if (song.is320kbps) score += 25 // High quality audio (most important)
-        if (song.quality.contains("HD", ignoreCase = true)) score += 20
-        if (song.quality.contains("4K", ignoreCase = true)) score += 35
-        
-        // === LANGUAGE PREFERENCE (Max 25 points) ===
-        val language = song.language.lowercase()
-        when {
-            language.contains("telugu") -> score += 25 // Telugu highest priority
-            language.contains("hindi") -> score += 20 // Hindi second
-            language.contains("tamil") -> score += 18 // Tamil third
-            language.contains("kannada") -> score += 16 // Kannada
-            language.contains("malayalam") -> score += 14 // Malayalam
-            INDIAN_LANGUAGES.contains(language) -> score += 12 // Other Indian languages
-        }
-        
-        // === METADATA COMPLETENESS (Max 30 points) ===
-        // Prefer songs with richer metadata (more fields filled = better quality result)
-        if (song.album.isNotBlank()) score += 5
-        if (song.artist.isNotBlank()) score += 5
-        if (song.movieName.isNotBlank()) score += 8 // Film songs get bonus for complete movie info
-        if (song.heroName.isNotBlank()) score += 4
-        if (song.heroineName.isNotBlank()) score += 4
-        if (song.director.isNotBlank()) score += 2
-        if (song.genre.isNotBlank()) score += 2
-        
-        // === RECENCY BONUS (Max 10 points) ===
-        // Newer uploads get slight boost
-        if (song.uploadDate.isNotBlank()) {
-            try {
-                // Boost recent uploads (within last 6 months)
-                val uploadYear = song.uploadDate.takeLast(4).toIntOrNull() ?: 0
-                val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
-                if (uploadYear >= currentYear - 1) score += 10
-            } catch (e: Exception) {
-                // Ignore parsing errors
-            }
-        }
-        
-        // === CHANNEL QUALITY BONUS ===
-        // Boost results from official channels or popular creators
-        if (song.channelName.contains("official", ignoreCase = true)) score += 15
-        if (song.channelName.contains("music", ignoreCase = true)) score += 10
-        if (song.channelSubscriberCount > 10000000) score += 8 // Mega channels
         
         return score
     }
@@ -974,6 +849,82 @@ class SearchViewModel @Inject constructor(
             }
             .sortedByDescending { it.second }
             .map { it.first }
+    }
+    
+    /**
+     * Calculate relevance score for a song based on query match
+     * Higher score = more relevant
+     */
+    private fun calculateRelevanceScore(query: String, song: Song): Int {
+        var score = 0
+        val lowerQuery = query.lowercase().trim()
+        
+        // Safe field access with null checks
+        val lowerTitle = song.title?.lowercase()?.trim() ?: ""
+        val lowerArtist = song.artist?.lowercase()?.trim() ?: ""
+        val lowerChannel = song.channelName?.lowercase()?.trim() ?: ""
+        
+        // === EXACT TITLE MATCH (Highest Score) ===
+        if (lowerTitle == lowerQuery) {
+            score += 100
+        }
+        
+        // === TITLE STARTS WITH QUERY ===
+        if (lowerTitle.startsWith(lowerQuery)) {
+            score += 80
+        }
+        
+        // === PARTIAL TITLE MATCH ===
+        if (lowerTitle.contains(lowerQuery)) {
+            score += 60
+        }
+        
+        // === ARTIST EXACT MATCH ===
+        if (lowerArtist == lowerQuery) {
+            score += 90
+        }
+        
+        // === ARTIST PARTIAL MATCH ===
+        if (lowerArtist.contains(lowerQuery)) {
+            score += 50
+        }
+        
+        // === CHANNEL NAME MATCH ===
+        if (lowerChannel.contains(lowerQuery)) {
+            score += 40
+        }
+        
+        // === WORD-BY-WORD MATCHING ===
+        val queryWords = lowerQuery.split(" ").filter { it.length > 2 }
+        val titleWords = lowerTitle.split(" ")
+        val artistWords = lowerArtist.split(" ")
+        
+        queryWords.forEach { word ->
+            // Word in title
+            if (titleWords.any { it == word }) {
+                score += 20
+            } else if (titleWords.any { it.contains(word) }) {
+                score += 10
+            }
+            
+            // Word in artist
+            if (artistWords.any { it == word }) {
+                score += 15
+            } else if (artistWords.any { it.contains(word) }) {
+                score += 8
+            }
+        }
+        
+        // === POPULARITY BOOST ===
+        val viewBonus = (song.viewCount / 1000000).toInt().coerceAtMost(30)
+        score += viewBonus
+        
+        // === OFFICIAL CHANNEL BONUS ===
+        if (lowerChannel.contains("official") || lowerChannel.contains("music")) {
+            score += 15
+        }
+        
+        return score
     }
     
     /**
