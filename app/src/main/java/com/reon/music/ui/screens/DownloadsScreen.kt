@@ -1,13 +1,11 @@
 /*
- * REON Music App - SimpMusic-Inspired Downloads Screen
+ * REON Music App - Simplified Downloads Screen
  * Copyright (c) 2024 REON
- * Modern, Clean Design with Red Palette Light Theme
+ * Shows only downloaded songs for offline playback
  */
 
 package com.reon.music.ui.screens
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -36,9 +34,7 @@ import coil.compose.AsyncImage
 import com.reon.music.core.model.Song
 import com.reon.music.ui.viewmodels.LibraryViewModel
 import com.reon.music.ui.viewmodels.PlayerViewModel
-import java.io.File
 import android.content.Intent
-import android.os.Environment
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.platform.LocalContext
 import com.reon.music.data.database.entities.PlaylistEntity
@@ -73,12 +69,6 @@ fun DownloadsScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("All Songs", "By Artist", "By Album")
     
-    // collect download progress
-    val downloadProgressMap by playerViewModel.downloadProgress.collectAsState()
-    val activeDownloads = remember(downloadProgressMap) {
-        downloadProgressMap.values.filter { it.status == com.reon.music.services.DownloadStatus.DOWNLOADING || it.status == com.reon.music.services.DownloadStatus.QUEUED }
-    }
-    
     // Song options state
     var showSongOptions by remember { mutableStateOf(false) }
     var selectedSong by remember { mutableStateOf<Song?>(null) }
@@ -89,18 +79,12 @@ fun DownloadsScreen(
     var showSearch by remember { mutableStateOf(false) }
     
     // Filter downloaded songs based on tab and search
-    val filteredSongs = remember(uiState.downloadedSongs, selectedTab, searchQuery, activeDownloads) {
-        val activeIds = activeDownloads.map { it.songId }.toSet()
-        
-        // Strictly allow only songs that are marked as DOWNLOADED and NOT currently active
-        val downloadedOnly = uiState.downloadedSongs.filter { song ->
-            !activeIds.contains(song.id)
-        }
-        
+    // Note: downloadedSongs from LibraryViewModel already filters for downloadState = 2 (DOWNLOADED)
+    val filteredSongs = remember(uiState.downloadedSongs, selectedTab, searchQuery) {
         val filtered = if (searchQuery.isEmpty()) {
-            downloadedOnly
+            uiState.downloadedSongs
         } else {
-            downloadedOnly.filter { song ->
+            uiState.downloadedSongs.filter { song ->
                 song.title.contains(searchQuery, ignoreCase = true) ||
                 song.artist.contains(searchQuery, ignoreCase = true) ||
                 song.album.contains(searchQuery, ignoreCase = true)
@@ -181,45 +165,6 @@ fun DownloadsScreen(
             if (uiState.downloadedSongs.isEmpty()) {
                 EmptyDownloadsState()
             } else {
-                // Active Downloads Section
-                if (activeDownloads.isNotEmpty()) {
-                    ActiveDownloadsSection(activeDownloads)
-                }
-                
-                // NEW: Action Row with Local Songs (Image 4)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Local Songs Button
-                    Card(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(56.dp)
-                            .clickable { /* TODO: Open local files picker or screen */ },
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceLight),
-                        border = BorderStroke(1.dp, AccentRed.copy(alpha = 0.1f))
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(Icons.Default.Folder, contentDescription = null, tint = AccentRed)
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                "Local Songs",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = TextPrimary
-                            )
-                        }
-                    }
-                }
-                
                 // Tab Row for grouping
                 TabRow(
                     selectedTabIndex = selectedTab,
@@ -448,50 +393,6 @@ private fun SearchTopBar(
             containerColor = BackgroundWhite
         )
     )
-}
-
-@Composable
-private fun StorageIndicator(
-    usedMB: Long,
-    totalMB: Long
-) {
-    val percentage = (usedMB.toFloat() / totalMB.toFloat()).coerceIn(0f, 1f)
-    
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 16.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "${usedMB}MB of ${totalMB}MB used",
-                style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary
-            )
-            Text(
-                text = "${(percentage * 100).toInt()}%",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = TextPrimary
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        LinearProgressIndicator(
-            progress = { percentage },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(6.dp)
-                .clip(RoundedCornerShape(3.dp)),
-            color = AccentRed,
-            trackColor = SurfaceLight
-        )
-    }
 }
 
 @Composable
@@ -740,94 +641,6 @@ private fun EmptyDownloadsState() {
             Spacer(modifier = Modifier.width(8.dp))
             Text("Browse & Download")
         }
-    }
-}
-
-@Composable
-private fun ActiveDownloadsSection(downloads: List<com.reon.music.services.DownloadProgress>) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(SurfaceLight)
-            .padding(vertical = 8.dp)
-    ) {
-        Text(
-            text = "Active Downloads (${downloads.size})",
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = TextPrimary,
-            modifier = Modifier.padding(start = 20.dp, bottom = 4.dp)
-        )
-        downloads.forEach { dp ->
-            val animatedProgress by animateFloatAsState(
-                targetValue = (dp.progress.coerceIn(0, 100) / 100f),
-                animationSpec = tween(durationMillis = 300),
-                label = "active_download_progress"
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                CircularProgressIndicator(
-                    progress = animatedProgress,
-                    modifier = Modifier.size(20.dp),
-                    strokeWidth = 2.dp,
-                    color = AccentRed
-                )
-                Text(
-                    text = "${dp.progress}%",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary
-                )
-                Text(
-                    text = dp.songId.take(20),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-    }
-}
-
-private fun calculateStorageUsed(songs: List<Song>): Long {
-    var totalBytes = 0L
-    try {
-        val downloadsDir = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "ReonMusic")
-        if (downloadsDir.exists()) {
-            downloadsDir.walkTopDown().forEach { file ->
-                if (file.isFile) {
-                    totalBytes += file.length()
-                }
-            }
-        }
-        // Also check app-specific external files directory
-        val appDir = File(android.os.Environment.getExternalStorageDirectory(), "Android/data/com.reon.music/files/downloads")
-        if (appDir.exists()) {
-            appDir.walkTopDown().forEach { file ->
-                if (file.isFile) {
-                    totalBytes += file.length()
-                }
-            }
-        }
-    } catch (e: Exception) {
-        // Fallback: estimate based on number of songs
-        return songs.size * 3L
-    }
-    return totalBytes / (1024 * 1024) // Convert to MB
-}
-
-private fun formatFileSize(bytes: Long): String {
-    return when {
-        bytes < 1024 -> "$bytes B"
-        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-        bytes < 1024 * 1024 * 1024 -> "${bytes / (1024 * 1024)} MB"
-        else -> "${bytes / (1024 * 1024 * 1024)} GB"
     }
 }
 

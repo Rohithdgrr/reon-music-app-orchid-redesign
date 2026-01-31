@@ -79,7 +79,8 @@ data class SongEntity(
 object DownloadState {
     const val NOT_DOWNLOADED = 0
     const val DOWNLOADING = 1
-    const val DOWNLOADED = 2
+    const val DOWNLOADED = 2  // Only user-initiated downloads
     const val FAILED = 3
     const val PAUSED = 4
+    const val AUTO_CACHED = 5 // For smart offline cache only, NOT user downloads
 }

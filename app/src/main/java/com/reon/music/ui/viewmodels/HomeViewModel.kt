@@ -260,7 +260,10 @@ class HomeViewModel @Inject constructor(
     
     companion object {
         private const val TAG = "HomeViewModel"
+        private const val AUTO_UPDATE_INTERVAL_MS = 24 * 60 * 60 * 1000L // 24 hours
     }
+    
+    private var lastUpdateTime: Long = 0L
     
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
@@ -272,6 +275,31 @@ class HomeViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(preferredSource = source)
             }
         }
+        // Check if auto-update is needed on init
+        checkAndLoadHomeContent()
+    }
+    
+    /**
+     * Check if content needs to be refreshed (24 hours elapsed) and load if needed
+     */
+    private fun checkAndLoadHomeContent() {
+        val currentTime = System.currentTimeMillis()
+        val timeSinceLastUpdate = currentTime - lastUpdateTime
+        
+        // Load if first time (lastUpdateTime == 0) or if 24 hours have passed
+        if (lastUpdateTime == 0L || timeSinceLastUpdate >= AUTO_UPDATE_INTERVAL_MS) {
+            Log.d(TAG, "Auto-updating home content. Time since last update: ${timeSinceLastUpdate / 1000 / 60 / 60} hours")
+            loadHomeContent()
+        } else {
+            Log.d(TAG, "Skipping auto-update. Content is fresh. Time since last update: ${timeSinceLastUpdate / 1000 / 60 / 60} hours")
+        }
+    }
+    
+    /**
+     * Public refresh function - forces reload of home content
+     */
+    fun refresh() {
+        Log.d(TAG, "Manual refresh triggered")
         loadHomeContent()
     }
     
@@ -314,6 +342,9 @@ class HomeViewModel @Inject constructor(
                 )
                 
                 Log.d(TAG, "Primary content loaded")
+                
+                // Update last update time after successful load
+                lastUpdateTime = System.currentTimeMillis()
                 
                 // Load secondary sections in background
                 loadSecondarySections()
@@ -937,10 +968,6 @@ class HomeViewModel @Inject constructor(
     
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
-    }
-    
-    fun refresh() {
-        loadHomeContent()
     }
     
     /**

@@ -62,27 +62,39 @@ object ThumbnailOptimizer {
                 return getHighestQualityThumbnail(videoIdFromUrl)
             }
 
-            // Fallback: optimize current URL
+            // Fallback: optimize current URL string replacements
             return url
-                .replace(Regex("w\\d+-h\\d+"), "")  // Remove size parameters
-                .replace("default.jpg", "maxresdefault.jpg")
+                .replace(Regex("w\\d+-h\\d+"), "w1200-h1200")  // Upgrade size parameters
                 .replace("mqdefault.jpg", "maxresdefault.jpg")
+                .replace("default.jpg", "maxresdefault.jpg")
                 .replace("hqdefault.jpg", "maxresdefault.jpg")
                 .replace("sddefault.jpg", "maxresdefault.jpg")
                 // Ensure we end up with maxresdefault if no filename extension
                 .let {
-                    if (!it.contains("maxresdefault") && !it.contains(".jpg")) {
-                        "$it/maxresdefault.jpg"
+                    if (!it.contains("maxresdefault") && !it.contains(".jpg") && it.endsWith("/")) {
+                        "${it}maxresdefault.jpg"
                     } else {
                         it
                     }
                 }
         }
 
-        // For other CDNs, return as-is
-        return url
+        // For other CDNs, return as-is with https upgrade
+        return url.replace("http:", "https:")
     }
     
+    /**
+     * Check if a YouTube video has maxresdefault thumbnail available
+     * Note: This requires a network request and should be used sparingly
+     * Most music videos from official channels have maxresdefault
+     */
+    fun hasMaxResDefault(videoId: String): Boolean {
+        // maxresdefault is typically available for videos 720p and higher
+        // Most official music videos have it, but user uploads may not
+        // For now, we assume it exists and let the UI handle 404 fallback
+        return true
+    }
+
     /**
      * Extract video ID from various YouTube URL patterns
      */

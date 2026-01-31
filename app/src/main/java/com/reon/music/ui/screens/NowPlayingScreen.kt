@@ -21,6 +21,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.material.icons.automirrored.outlined.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -42,7 +44,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.reon.music.core.model.Song
+import com.reon.music.services.DownloadStatus
+import com.reon.music.services.DownloadProgress
 import com.reon.music.ui.viewmodels.PlayerViewModel
+import com.reon.music.ui.screens.nowplaying.DownloadButton
 
 // Pure White Theme Colors - Clean Premium Design
 private val PureWhiteBackground = Color(0xFFFFFFFF)
@@ -62,9 +67,11 @@ fun NowPlayingScreen(
     playerViewModel: PlayerViewModel,
     onDismiss: () -> Unit
 ) {
-    val playerState by playerViewModel.playerState.collectAsState()
+val playerState by playerViewModel.playerState.collectAsState()
     val uiState by playerViewModel.uiState.collectAsState()
     val currentPosition by playerViewModel.currentPosition.collectAsState()
+    val downloadProgressMap by playerViewModel.downloadProgress.collectAsState()
+    val downloadedSongs by playerViewModel.downloadedSongs.collectAsState()
     val context = LocalContext.current
     
     var showQueueSheet by remember { mutableStateOf(false) }
@@ -188,10 +195,12 @@ fun NowPlayingScreen(
                     )
                     .clip(RoundedCornerShape(20.dp))
             ) {
-                AsyncImage(
-                    model = currentSong?.artworkUrl ?: currentSong?.getHighQualityArtwork(),
+                com.reon.music.ui.components.OptimizedAsyncImage(
+                    imageUrl = currentSong?.getHighQualityArtwork() ?: currentSong?.artworkUrl,
                     contentDescription = "Album Art",
                     modifier = Modifier.fillMaxSize(),
+                    quality = com.reon.music.ui.components.ImageQuality.HIGH,
+                    shape = RoundedCornerShape(20.dp),
                     contentScale = ContentScale.Crop
                 )
             }
@@ -390,22 +399,22 @@ fun NowPlayingScreen(
                     )
                 }
                 
-                // Download Button
-                IconButton(
-                    onClick = { 
-                        currentSong?.let { 
+// Download Button
+                val currentSongId = currentSong?.id
+                val downloadProgress = currentSongId?.let { downloadProgressMap[it] }
+                val isDownloading = downloadProgress?.status == DownloadStatus.DOWNLOADING || downloadProgress?.status == DownloadStatus.QUEUED
+                val isDownloaded = downloadedSongs.any { it.id == currentSongId }
+                DownloadButton(
+                    song = currentSong,
+                    downloadProgress = downloadProgress?.progress,
+                    isDownloaded = isDownloaded,
+                    isDownloading = isDownloading,
+                    onDownloadClick = {
+                        currentSong?.let {
                             playerViewModel.downloadSong(it)
                         }
-                    },
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Download,
-                        contentDescription = "Download",
-                        tint = TextSecondary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
+                    }
+                )
                 
                 // Add to Playlist Button
                 IconButton(
@@ -439,7 +448,7 @@ fun NowPlayingScreen(
                     modifier = Modifier.size(40.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.QueueMusic,
+                        imageVector = Icons.AutoMirrored.Filled.QueueMusic,
                         contentDescription = "Queue",
                         tint = TextSecondary,
                         modifier = Modifier.size(22.dp)
@@ -747,7 +756,7 @@ private fun QueueBottomSheet(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Icon(
-                            imageVector = Icons.Default.QueueMusic,
+                            imageVector = Icons.AutoMirrored.Filled.QueueMusic,
                             contentDescription = null,
                             tint = TextSecondary,
                             modifier = Modifier.size(48.dp)
@@ -995,7 +1004,7 @@ private fun OptionsBottomSheet(
             
             // Options
             OptionItem(icon = Icons.Outlined.Download, title = "Download", onClick = onDownload)
-            OptionItem(icon = Icons.Outlined.PlaylistAdd, title = "Add to Playlist", onClick = onAddToPlaylist)
+            OptionItem(icon = Icons.AutoMirrored.Outlined.PlaylistAdd, title = "Add to Playlist", onClick = onAddToPlaylist)
             OptionItem(icon = Icons.Outlined.Person, title = "View Artist", onClick = onViewArtist)
             OptionItem(icon = Icons.Outlined.Album, title = "View Album", onClick = onViewAlbum)
             OptionItem(icon = Icons.Outlined.Share, title = "Share", onClick = onShare)
@@ -1109,7 +1118,7 @@ private fun AddToPlaylistBottomSheet(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
-                            imageVector = Icons.Default.PlaylistPlay,
+                            imageVector = Icons.AutoMirrored.Default.PlaylistPlay,
                             contentDescription = null,
                             tint = TextSecondary,
                             modifier = Modifier.size(48.dp)
@@ -1165,7 +1174,7 @@ private fun AddToPlaylistBottomSheet(
                                     )
                                 } else {
                                     Icon(
-                                        Icons.Default.PlaylistPlay,
+                                        Icons.AutoMirrored.Default.PlaylistPlay,
                                         contentDescription = null,
                                         tint = TextSecondary,
                                         modifier = Modifier.size(28.dp)

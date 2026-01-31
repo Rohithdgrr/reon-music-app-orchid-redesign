@@ -6,12 +6,9 @@
 
 package com.reon.music.ui.screens.nowplaying
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -22,11 +19,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.reon.music.core.model.Song
+import kotlinx.coroutines.delay
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Downloading
 
 @Composable
 fun QueueSongItem(
@@ -203,5 +208,152 @@ fun InfoRow(label: String, value: String) {
             color = Color.White,
             fontWeight = FontWeight.Medium
         )
+    }
+}
+
+@Composable
+fun DownloadButton(
+    song: Song?,
+    downloadProgress: Int?,
+    isDownloaded: Boolean,
+    isDownloading: Boolean,
+    onDownloadClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    Box(
+        modifier = modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .clickable(enabled = !isDownloaded && !isDownloading) { onDownloadClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        when {
+            isDownloaded -> {
+                // Filled download icon with checkmark overlay
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    // Background circle with accent color
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                            .background(Color(0xFFE53935).copy(alpha = 0.15f))
+                    )
+                    // Filled download icon
+                    Icon(
+                        imageVector = Icons.Filled.Download,
+                        contentDescription = "Downloaded",
+                        tint = Color(0xFFE53935),
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+            isDownloading -> {
+                // Show download progress without loading animation
+                DownloadProgressIndicator(progress = downloadProgress ?: 0)
+            }
+            else -> {
+                Icon(
+                    imageVector = Icons.Default.Download,
+                    contentDescription = "Download",
+                    tint = Color(0xFF666666),
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DownloadProgressIndicator(progress: Int) {
+    val primaryColor = Color(0xFFE53935)
+    val trackColor = Color(0xFFE0E0E0)
+    
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier.size(40.dp)
+    ) {
+        // Progress ring without loading animation
+        androidx.compose.foundation.Canvas(modifier = Modifier.size(32.dp)) {
+            // Draw track
+            drawArc(
+                color = trackColor,
+                startAngle = -90f,
+                sweepAngle = 360f,
+                useCenter = false,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f)
+            )
+            // Draw progress
+            drawArc(
+                color = primaryColor,
+                startAngle = -90f,
+                sweepAngle = (progress / 100f) * 360f,
+                useCenter = false,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f)
+            )
+        }
+        // Download icon in center
+        Icon(
+            imageVector = Icons.Default.Download,
+            contentDescription = "Downloading",
+            tint = primaryColor,
+            modifier = Modifier.size(16.dp)
+        )
+    }
+}
+
+@Composable
+private fun AnimatedCheckmark() {
+    var animationPlayed by remember { mutableStateOf(false) }
+
+    val scale by animateFloatAsState(
+        targetValue = if (animationPlayed) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "checkmark_scale"
+    )
+
+    val alpha by animateFloatAsState(
+        targetValue = if (animationPlayed) 1f else 0f,
+        animationSpec = tween(200),
+        label = "checkmark_alpha"
+    )
+
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(50)
+        animationPlayed = true
+    }
+
+    AnimatedVisibility(
+        visible = true,
+        enter = fadeIn(animationSpec = tween(200)),
+        exit = fadeOut(animationSpec = tween(200))
+    ) {
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .scale(scale)
+                .alpha(alpha)
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val strokeWidth = 3f
+                val checkmarkPath = Path().apply {
+                    moveTo(size.width * 0.25f, size.height * 0.5f)
+                    lineTo(size.width * 0.45f, size.height * 0.7f)
+                    lineTo(size.width * 0.75f, size.height * 0.3f)
+                }
+                drawPath(
+                    path = checkmarkPath,
+                    color = Color(0xFF4CAF50),
+                    style = Stroke(width = strokeWidth)
+                )
+            }
+        }
     }
 }

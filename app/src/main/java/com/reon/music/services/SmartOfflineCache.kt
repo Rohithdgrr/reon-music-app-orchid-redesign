@@ -145,13 +145,14 @@ class SmartOfflineCache @Inject constructor(
             // Download and cache
             downloadManager.downloadSong(song)
             
-            // Update database
+            // Update database - Mark as AUTO_CACHED, not DOWNLOADED
+            // This ensures auto-cached songs don't appear in the Downloads screen
             val existing = songDao.getSongById(song.id)
-            if (existing != null) {
-                // Mark as cached in database
+            if (existing != null && existing.downloadState != DownloadState.DOWNLOADED) {
+                // Only update if not already user-downloaded
                 songDao.update(
                     existing.copy(
-                        downloadState = DownloadState.DOWNLOADED,
+                        downloadState = DownloadState.AUTO_CACHED,
                         lastPlayedAt = System.currentTimeMillis()
                     )
                 )

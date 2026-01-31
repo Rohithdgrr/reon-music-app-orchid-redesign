@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -52,6 +53,13 @@ import com.reon.music.ui.components.ImageQuality
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+// White theme colors matching HomeScreen
+private val TextPrimaryLight = Color(0xFF1A1A1A)
+private val TextSecondaryLight = Color(0xFF666666)
+private val AccentRed = Color(0xFFE53935)
+private val CardBackgroundLight = Color(0xFFF5F5F5)
+private val GradientRed = listOf(Color(0xFFE53935), Color(0xFFFF7043))
+
 @Composable
 fun YouTubeMusicStyleSearchScreen(
     onNavigateToPlayer: (Song) -> Unit = {},
@@ -65,7 +73,15 @@ fun YouTubeMusicStyleSearchScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(SunsetBackgroundGradient))
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFFFFFFFF), // Pure white
+                        Color(0xFFFFF8F6), // Very light warm white
+                        Color(0xFFFFEFEC).copy(alpha = 0.3f) // Subtle sunrise tint
+                    )
+                )
+            )
     ) {
         Column(
             modifier = Modifier
@@ -159,7 +175,7 @@ private fun SearchHeaderSection(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Brush.linearGradient(GradientRedOrange)),
+                    .background(Brush.linearGradient(GradientRed)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -186,7 +202,7 @@ private fun SearchHeaderSection(
                 .fillMaxWidth()
                 .height(56.dp)
                 .clip(RoundedCornerShape(28.dp))
-                .background(CardBackground)
+                .background(CardBackgroundLight)
                 .padding(horizontal = 4.dp),
             contentAlignment = Alignment.CenterStart
         ) {
@@ -198,42 +214,42 @@ private fun SearchHeaderSection(
                     Text(
                         text = "Songs, artists, or albums...",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = TextSecondary.copy(alpha = 0.6f)
+                        color = TextSecondaryLight.copy(alpha = 0.6f)
                     )
                 },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Rounded.Search,
                         contentDescription = "Search",
-                        tint = ReonPrimary,
+                        tint = AccentRed,
                         modifier = Modifier.size(24.dp)
                     )
                 },
-                    trailingIcon = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (isLoading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    color = ReonPrimary,
-                                    strokeWidth = 2.dp
+                trailingIcon = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                color = AccentRed,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        if (query.isNotBlank()) {
+                            IconButton(
+                                onClick = onClear,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Close,
+                                    contentDescription = "Clear",
+                                    tint = TextSecondaryLight,
+                                    modifier = Modifier.size(20.dp)
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
-                            }
-                            if (query.isNotBlank()) {
-                                IconButton(
-                                    onClick = onClear,
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Close,
-                                        contentDescription = "Clear",
-                                        tint = TextSecondary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
                             }
                         }
-                    },
+                    }
+                },
                 keyboardOptions = KeyboardOptions(
                     imeAction = ImeAction.Search
                 ),
@@ -242,11 +258,11 @@ private fun SearchHeaderSection(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
                     disabledContainerColor = Color.Transparent,
-                    cursorColor = ReonPrimary,
+                    cursorColor = AccentRed,
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
+                    focusedTextColor = TextPrimaryLight,
+                    unfocusedTextColor = TextPrimaryLight
                 )
             )
         }
@@ -269,7 +285,7 @@ private fun SearchFiltersSection(
             Surface(
                 onClick = { onFilterToggle(filter) },
                 shape = RoundedCornerShape(20.dp),
-                color = if (isSelected) ReonPrimary else CardBackground,
+                color = if (isSelected) AccentRed else CardBackgroundLight,
                 modifier = Modifier.height(40.dp)
             ) {
                 Row(
@@ -281,14 +297,14 @@ private fun SearchFiltersSection(
                         imageVector = filter.icon,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
-                        tint = if (isSelected) Color.White else TextSecondary
+                        tint = if (isSelected) Color.White else TextSecondaryLight
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = filter.name,
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isSelected) Color.White else TextSecondary
+                        color = if (isSelected) Color.White else TextSecondaryLight
                     )
                 }
             }
@@ -319,7 +335,7 @@ private fun SearchResultsSection(
                     text = "Artists",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
+                    color = TextPrimaryLight,
                     modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 12.dp)
                 )
             }
@@ -341,7 +357,7 @@ private fun SearchResultsSection(
                     text = "Top Songs",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
+                    color = TextPrimaryLight,
                     modifier = Modifier.padding(start = 20.dp, top = 24.dp, bottom = 12.dp)
                 )
             }
@@ -356,7 +372,7 @@ private fun SearchResultsSection(
                     text = "Albums",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
+                    color = TextPrimaryLight,
                     modifier = Modifier.padding(start = 20.dp, top = 24.dp, bottom = 12.dp)
                 )
             }
@@ -384,44 +400,148 @@ private fun SongResultItem(
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 6.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(CardBackground)
+            .background(CardBackgroundLight)
             .clickable(onClick = onClick)
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Album Art with Shadow/Elevation effect - Optimized loading
-        OptimizedAsyncImage(
-            imageUrl = song.artworkUrl,
-            contentDescription = null,
-            modifier = Modifier
-                .size(52.dp)
-                .clip(RoundedCornerShape(8.dp)),
-            quality = ImageQuality.THUMBNAIL
-        )
+        Box(
+            modifier = Modifier.size(52.dp)
+        ) {
+            OptimizedAsyncImage(
+                imageUrl = song.artworkUrl,
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(8.dp)),
+                quality = ImageQuality.THUMBNAIL
+            )
+            
+            // Official Channel Badge
+            if (isOfficialChannel(song.channelName)) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(2.dp)
+                        .size(16.dp)
+                        .background(AccentRed, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Check,
+                        contentDescription = "Official",
+                        tint = Color.White,
+                        modifier = Modifier.size(10.dp)
+                    )
+                }
+            }
+        }
         
-        Spacer(modifier = Modifier.width(16.dp))
+        Spacer(modifier = Modifier.width(12.dp))
         
-        // Song Info
+        // Song Info with Ranking
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = song.title,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
-                color = TextPrimary,
+                color = TextPrimaryLight,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = song.artist,
-                style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            
+            // Artist and Channel Info Row
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = song.artist,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextSecondaryLight,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                
+                // Verified Badge
+                if (song.channelSubscriberCount > 1000000) {
+                    Icon(
+                        imageVector = Icons.Filled.Verified,
+                        contentDescription = "Verified",
+                        tint = Color(0xFF1DA1F2),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+            
+            // Ranking Stats Row
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(top = 2.dp)
+            ) {
+                // Views
+                if (song.viewCount > 0) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Filled.Visibility,
+                            contentDescription = null,
+                            tint = TextSecondaryLight.copy(alpha = 0.7f),
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text(
+                            text = formatViewCount(song.viewCount),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondaryLight.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+                
+                // Likes
+                if (song.likeCount > 0) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Filled.ThumbUp,
+                            contentDescription = null,
+                            tint = TextSecondaryLight.copy(alpha = 0.7f),
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text(
+                            text = formatViewCount(song.likeCount),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondaryLight.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+                
+                // HD Quality Badge
+                if (song.quality.contains("HD", ignoreCase = true) || song.quality.contains("4K", ignoreCase = true)) {
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                color = AccentRed.copy(alpha = 0.15f),
+                                shape = RoundedCornerShape(4.dp)
+                            )
+                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = song.quality.uppercase(),
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = AccentRed
+                        )
+                    }
+                }
+            }
         }
         
-        // Duration with safe formatting
+        // Duration
         val durationText = try {
             if (song.duration > 0) {
                 val minutes = song.duration / 60
@@ -438,22 +558,32 @@ private fun SongResultItem(
             Text(
                 text = durationText,
                 style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary
+                color = TextSecondaryLight
             )
-        } else {
-            // More options button
-            IconButton(
-                onClick = { /* More options */ },
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.MoreVert,
-                    contentDescription = "More",
-                    tint = TextSecondary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
         }
+    }
+}
+
+/**
+ * Check if channel is an official music channel
+ */
+private fun isOfficialChannel(channelName: String): Boolean {
+    val officialKeywords = listOf(
+        "official", "music", "records", "studio", "audio", "label",
+        "t-series", "zee", "sony", "aditya", "lahari", "mango"
+    )
+    return officialKeywords.any { channelName.lowercase().contains(it) }
+}
+
+/**
+ * Format view count to compact format (e.g., 1.2M, 456K)
+ */
+private fun formatViewCount(count: Long): String {
+    return when {
+        count >= 1_000_000_000 -> String.format("%.1fB", count / 1_000_000_000.0)
+        count >= 1_000_000 -> String.format("%.1fM", count / 1_000_000.0)
+        count >= 1_000 -> String.format("%.1fK", count / 1_000.0)
+        else -> count.toString()
     }
 }
 
@@ -474,7 +604,7 @@ private fun ArtistGridItem(
             modifier = Modifier
                 .size(100.dp)
                 .clip(RoundedCornerShape(50.dp))
-                .background(CardBackground),
+                .background(CardBackgroundLight),
             quality = ImageQuality.THUMBNAIL
         )
         Spacer(modifier = Modifier.height(8.dp))
@@ -482,7 +612,7 @@ private fun ArtistGridItem(
             text = artist.name,
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Medium,
-            color = TextPrimary,
+            color = TextPrimaryLight,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 4.dp)
@@ -507,7 +637,7 @@ private fun AlbumGridItem(
             modifier = Modifier
                 .size(140.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(CardBackground),
+                .background(CardBackgroundLight),
             quality = ImageQuality.MEDIUM
         )
         Spacer(modifier = Modifier.height(8.dp))
@@ -515,14 +645,14 @@ private fun AlbumGridItem(
             text = album.name,
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
-            color = TextPrimary,
+            color = TextPrimaryLight,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
         Text(
             text = album.artist,
             style = MaterialTheme.typography.bodySmall,
-            color = TextSecondary,
+            color = TextSecondaryLight,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -545,7 +675,7 @@ private fun SuggestionsSection(
                 text = "Trending Searches",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.ExtraBold,
-                color = TextPrimary,
+                color = TextPrimaryLight,
                 modifier = Modifier.padding(vertical = 16.dp)
             )
             
@@ -562,9 +692,9 @@ private fun SuggestionsSection(
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Icon(
-                                imageVector = Icons.Rounded.TrendingUp,
+                                imageVector = Icons.AutoMirrored.Rounded.TrendingUp,
                                 contentDescription = null,
-                                tint = ReonPrimary,
+                                tint = AccentRed,
                                 modifier = Modifier.size(24.dp)
                             )
                             Spacer(modifier = Modifier.height(12.dp))
@@ -572,7 +702,7 @@ private fun SuggestionsSection(
                                 text = suggestion.text,
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = FontWeight.Bold,
-                                color = TextPrimary,
+                                color = TextPrimaryLight,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -589,7 +719,7 @@ private fun SuggestionsSection(
                 text = "Recent Searches",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = TextPrimary,
+                color = TextPrimaryLight,
                 modifier = Modifier.padding(vertical = 12.dp)
             )
             
@@ -636,7 +766,7 @@ private fun SuggestionItem(
         Text(
             text = suggestion.text,
             style = MaterialTheme.typography.bodyLarge,
-            color = TextPrimary,
+            color = TextPrimaryLight,
             modifier = Modifier.weight(1f)
         )
         
@@ -663,7 +793,7 @@ private fun WelcomeSection() {
                 modifier = Modifier
                     .size(120.dp)
                     .clip(RoundedCornerShape(30.dp))
-                    .background(Brush.linearGradient(SunsetCardGradient)),
+                    .background(Brush.linearGradient(GradientRed)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -684,7 +814,7 @@ private fun WelcomeSection() {
             Text(
                 text = "Discover millions of tracks, artists and albums tailored just for you.",
                 style = MaterialTheme.typography.bodyLarge,
-                color = TextSecondary,
+                color = TextSecondaryLight,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
         }
@@ -697,7 +827,7 @@ private fun LoadingSection() {
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        CircularProgressIndicator(color = ReonPrimary)
+        CircularProgressIndicator(color = AccentRed)
     }
 }
 
@@ -712,7 +842,7 @@ private fun ErrorSection(error: String, onRetry: () -> Unit) {
         Spacer(modifier = Modifier.height(16.dp))
         Text(error, color = TextPrimary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         Spacer(modifier = Modifier.height(24.dp))
-        Button(onClick = onRetry, colors = ButtonDefaults.buttonColors(containerColor = ReonPrimary)) {
+        Button(onClick = onRetry, colors = ButtonDefaults.buttonColors(containerColor = AccentRed)) {
             Text("Retry", color = Color.White)
         }
     }

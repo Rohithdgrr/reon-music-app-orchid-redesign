@@ -51,33 +51,72 @@ data class Song(
 ) {
     /**
      * Get high quality artwork URL
+     * Returns the highest quality version of the thumbnail URL
+     * For YouTube: uses maxresdefault.jpg (1920x1080) or sddefault.jpg (640x480) as fallback
      */
     fun getHighQualityArtwork(): String? {
-        if (artworkUrl == null) return null
+        if (artworkUrl.isNullOrBlank()) return null
         
-        // Handle YouTube URLs
-        if (artworkUrl.contains("ytimg.com") || artworkUrl.contains("googleusercontent.com")) {
-            // If it's a standard YouTube thumbnail URL
+        // Validate URL
+        if (!artworkUrl.startsWith("http://") && !artworkUrl.startsWith("https://")) {
+            return null
+        }
+        
+        // Handle YouTube URLs (ytimg.com or googleusercontent.com)
+        if (artworkUrl.contains("ytimg.com") || artworkUrl.contains("googleusercontent.com") || 
+            artworkUrl.contains("ggpht.com")) {
+            
+            // If already maxresdefault, return as-is
+            if (artworkUrl.contains("maxresdefault")) {
+                return artworkUrl.replace("http:", "https:")
+            }
+            
+            // If it's a standard YouTube thumbnail URL with quality suffix
             if (artworkUrl.contains("default.jpg")) {
-                return artworkUrl.replace("default.jpg", "maxresdefault.jpg")
+                // Upgrade to maxresdefault for best quality
+                // Note: Not all videos have maxresdefault, the UI should handle 404s with fallback
+                return artworkUrl
+                    .replace("default.jpg", "maxresdefault.jpg")
                     .replace("hqdefault.jpg", "maxresdefault.jpg")
                     .replace("mqdefault.jpg", "maxresdefault.jpg")
                     .replace("sddefault.jpg", "maxresdefault.jpg")
+                    .replace("http:", "https:")
             }
-            // Handle googleusercontent URLs (often dynamic resizing)
-            if (artworkUrl.contains("w60-h60") || artworkUrl.contains("w120-h120")) {
-                return artworkUrl.replace("w60-h60", "w1200-h1200") // Request much larger size
-                    .replace("w120-h120", "w1200-h1200")
-                    .replace("=w", "=w1200") // resizing param
-                    .replace("-h", "-h1200")
+            
+            // Handle googleusercontent URLs with dynamic sizing (w60-h60, w120-h120, etc.)
+            if (artworkUrl.contains(Regex("w\\d+-h\\d+"))) {
+                // Request high resolution version
+                return artworkUrl
+                    .replace(Regex("w\\d+-h\\d+"), "w1200-h1200")
+                    .replace("=w\\d+", "=w1200")
+                    .replace("http:", "https:")
             }
         }
         
-        // Fallback or other providers
-        return artworkUrl
+        // For JioSaavn and other providers - upgrade low-res URLs
+        var optimizedUrl = artworkUrl
+            .replace("http:", "https:")
             .replace("50x50", "500x500")
             .replace("150x150", "500x500")
-            .replace("http:", "https:")
+            .replace("/50/", "/500/")
+            .replace("/150/", "/500/")
+        
+        return optimizedUrl
+    }
+    
+    /**
+     * Get medium quality artwork URL (good balance of quality and load speed)
+     * For YouTube: uses hqdefault.jpg (480x360) which is more reliably available than maxresdefault
+     */
+    fun getMediumQualityArtwork(): String? {
+        val highQuality = getHighQualityArtwork() ?: return null
+        
+        // If it's a YouTube maxresdefault URL, provide a medium quality alternative
+        if (highQuality.contains("maxresdefault")) {
+            return highQuality.replace("maxresdefault.jpg", "hqdefault.jpg")
+        }
+        
+        return highQuality
     }
     
     /**

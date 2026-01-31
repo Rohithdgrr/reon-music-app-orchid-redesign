@@ -67,16 +67,28 @@ class PlayerViewModel @Inject constructor(
     
     private val _currentPosition = MutableStateFlow(0L)
     val currentPosition: StateFlow<Long> = _currentPosition.asStateFlow()
-    private val _downloadProgress = MutableStateFlow<Map<String, DownloadProgress>>(emptyMap())
+private val _downloadProgress = MutableStateFlow<Map<String, DownloadProgress>>(emptyMap())
     val downloadProgress: StateFlow<Map<String, DownloadProgress>> = _downloadProgress.asStateFlow()
+
+    private val _downloadedSongs = MutableStateFlow<List<Song>>(emptyList())
+    val downloadedSongs: StateFlow<List<Song>> = _downloadedSongs.asStateFlow()
     
     private var positionUpdateJob: Job? = null
     
-    init {
+init {
         startPositionUpdates()
         observeCurrentSong()
         loadPlaylists()
         observeDiscordPresence()
+        observeDownloadedSongs()
+    }
+
+    private fun observeDownloadedSongs() {
+        viewModelScope.launch {
+            songDao.getDownloadedSongs().collect { entities ->
+                _downloadedSongs.value = entities.map { entity -> entity.toSong() }
+            }
+        }
     }
 
     // ===== QUEUE DEDUP HELPERS =====

@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.material.icons.automirrored.outlined.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -33,7 +35,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
+import com.reon.music.ui.components.OptimizedAsyncImage
+import com.reon.music.ui.components.ImageQuality
 import com.reon.music.core.model.Album
 import com.reon.music.core.model.Artist
 import com.reon.music.core.model.Playlist
@@ -328,13 +331,13 @@ private fun ArtistHeader(
             .fillMaxWidth()
             .height(320.dp)
     ) {
-        // Background Image without blur for clarity
-        AsyncImage(
-            model = artist.artworkUrl,
+        // Background Image with high quality
+        OptimizedAsyncImage(
+            imageUrl = artist.artworkUrl,
             contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
+            quality = ImageQuality.HIGH,
+            contentScale = ContentScale.Crop
         )
         
         // Gradient Overlay
@@ -361,7 +364,7 @@ private fun ArtistHeader(
                 .background(Color.Black.copy(alpha = 0.3f), CircleShape)
         ) {
             Icon(
-                imageVector = Icons.Default.ArrowBack,
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
                 tint = Color.White
             )
@@ -375,17 +378,18 @@ private fun ArtistHeader(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Artist Image (Circular)
+            // Artist Image (Circular) with high quality
             Card(
                 modifier = Modifier.size(100.dp),
                 shape = CircleShape,
                 elevation = CardDefaults.cardElevation(8.dp)
             ) {
-                AsyncImage(
-                    model = artist.artworkUrl,
+                OptimizedAsyncImage(
+                    imageUrl = artist.artworkUrl,
                     contentDescription = artist.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    quality = ImageQuality.HIGH,
+                    contentScale = ContentScale.Crop
                 )
             }
             
@@ -589,12 +593,12 @@ private fun ArtistSongItem(
             shape = RoundedCornerShape(6.dp),
             elevation = CardDefaults.cardElevation(3.dp)
         ) {
-            AsyncImage(
-                model = song.artworkUrl ?: song.getHighQualityArtwork(),
+            OptimizedAsyncImage(
+                imageUrl = song.artworkUrl ?: song.getHighQualityArtwork(),
                 contentDescription = "${song.title} - ${song.artist}",
-                contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
-                alpha = 0.95f
+                quality = ImageQuality.THUMBNAIL,
+                contentScale = ContentScale.Crop
             )
         }
         
@@ -694,11 +698,12 @@ private fun VideoCard(
                     .fillMaxWidth()
                     .height(112.dp)
             ) {
-                AsyncImage(
-                    model = song.getHighQualityArtwork(),
+                OptimizedAsyncImage(
+                    imageUrl = song.getHighQualityArtwork(),
                     contentDescription = song.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    quality = ImageQuality.MEDIUM,
+                    contentScale = ContentScale.Crop
                 )
                 
                 // Play button overlay
@@ -771,13 +776,14 @@ private fun FeaturedPlaylistCard(
         elevation = CardDefaults.cardElevation(4.dp)
     ) {
         Column {
-            AsyncImage(
-                model = artworkUrl ?: "",
+            OptimizedAsyncImage(
+                imageUrl = artworkUrl,
                 contentDescription = title,
-                contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(140.dp)
+                    .height(140.dp),
+                quality = ImageQuality.MEDIUM,
+                contentScale = ContentScale.Crop
             )
             
             Column(
@@ -816,11 +822,12 @@ private fun RelatedArtistCard(
             shape = CircleShape,
             elevation = CardDefaults.cardElevation(4.dp)
         ) {
-            AsyncImage(
-                model = artist.artworkUrl,
+            OptimizedAsyncImage(
+                imageUrl = artist.artworkUrl,
                 contentDescription = artist.name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                quality = ImageQuality.MEDIUM,
+                contentScale = ContentScale.Crop
             )
         }
         

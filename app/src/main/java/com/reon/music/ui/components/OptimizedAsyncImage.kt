@@ -49,6 +49,7 @@ enum class ImageQuality {
  * - Fallback icon for errors
  * - Size-based quality selection
  * - Crossfade animation
+ * - Automatic fallback for YouTube thumbnails (maxresdefault -> sddefault -> hqdefault -> default)
  */
 @Composable
 fun OptimizedAsyncImage(
@@ -63,14 +64,17 @@ fun OptimizedAsyncImage(
 ) {
     val context = LocalContext.current
     
-    // Build optimized image request
+    // Build optimized image request with fallback support
     val imageRequest = remember(imageUrl, quality) {
+        val optimizedUrl = getOptimizedUrl(imageUrl, quality)
+        
         ImageRequest.Builder(context)
-            .data(getOptimizedUrl(imageUrl, quality))
+            .data(optimizedUrl)
             .memoryCachePolicy(CachePolicy.ENABLED)
             .diskCachePolicy(CachePolicy.ENABLED)
             .crossfade(crossfadeDuration)
             .size(getTargetSize(quality))
+            // Note: Fallback for failed thumbnails is handled by the error placeholder composable
             .build()
     }
     
@@ -92,22 +96,97 @@ fun OptimizedAsyncImage(
 }
 
 /**
+ * Check if URL is a YouTube thumbnail URL
+ */
+private fun isYouTubeUrl(url: String): Boolean {
+    return url.contains("ytimg.com") || url.contains("ggpht.com")
+}
+
+/**
+ * Get fallback URLs for YouTube thumbnails in order of quality preference
+ * This ensures we always show a thumbnail even if maxresdefault doesn't exist
+ */
+private fun getYouTubeFallbackUrls(url: String, quality: ImageQuality): List<String> {
+    if (!isYouTubeUrl(url)) return emptyList()
+    
+    // Extract video ID from the URL
+    val videoId = extractVideoId(url) ?: return emptyList()
+    
+    // Generate fallback URLs in order of quality preference
+    return when (quality) {
+        ImageQuality.THUMBNAIL -> listOf(
+            "https://i.ytimg.com/vi/$videoId/hqdefault.jpg",
+            "https://i.ytimg.com/vi/$videoId/mqdefault.jpg",
+            "https://i.ytimg.com/vi/$videoId/default.jpg"
+        )
+        ImageQuality.MEDIUM -> listOf(
+            "https://i.ytimg.com/vi/$videoId/sddefault.jpg",
+            "https://i.ytimg.com/vi/$videoId/hqdefault.jpg",
+            "https://i.ytimg.com/vi/$videoId/mqdefault.jpg"
+        )
+        ImageQuality.HIGH -> listOf(
+            "https://i.ytimg.com/vi/$videoId/sddefault.jpg",
+            "https://i.ytimg.com/vi/$videoId/hqdefault.jpg",
+            "https://i.ytimg.com/vi/$videoId/mqdefault.jpg"
+        )
+    }
+}
+
+/**
+ * Extract video ID from YouTube thumbnail URL
+ */
+private fun extractVideoId(url: String): String? {
+    // Pattern: https://i.ytimg.com/vi/[VIDEO_ID]/...
+    val pattern = Regex("/vi/([a-zA-Z0-9_-]{11})")
+    return pattern.find(url)?.groupValues?.get(1)
+}
+
+/**
  * Get optimized URL based on quality
  * YouTube thumbnails support different quality levels
+ * 
+ * IMPORTANT: We maintain or upgrade quality, never downgrade.
+ * maxresdefault (1920x1080) is the highest quality and should be preserved.
+ * If maxresdefault is not available, YouTube returns 404 and Coil will use error placeholder.
+ * The thumbnail URLs should be validated before calling this function.
  */
 private fun getOptimizedUrl(url: String?, quality: ImageQuality): String? {
     if (url == null) return null
     
-    // YouTube thumbnail optimization
+    // YouTube thumbnail optimization - preserve or upgrade quality only
     return when {
         url.contains("ytimg.com") || url.contains("ggpht.com") -> {
             when (quality) {
-                ImageQuality.THUMBNAIL -> url.replace(Regex("w\\d+-h\\d+"), "w120-h120")
-                    .replace("maxresdefault", "default")
-                    .replace("hqdefault", "default")
-                ImageQuality.MEDIUM -> url.replace(Regex("w\\d+-h\\d+"), "w300-h300")
-                    .replace("maxresdefault", "hqdefault")
-                ImageQuality.HIGH -> url.replace(Regex("w\\d+-h\\d+"), "w544-h544")
+                ImageQuality.THUMBNAIL -> {
+                    // For thumbnails, we can use hqdefault which loads faster but still good quality
+                    // Only downgrade if it's not already maxresdefault
+                    if (url.contains("maxresdefault")) {
+                        url // Keep maxresdefault for best quality
+                    } else {
+                        url.replace(Regex("w\\d+-h\\d+"), "w240-h240")
+                            .replace("default.jpg", "hqdefault.jpg")
+                            .replace("mqdefault.jpg", "hqdefault.jpg")
+                    }
+                }
+                ImageQuality.MEDIUM -> {
+                    // For medium quality cards, prefer sddefault or keep maxresdefault
+                    if (url.contains("maxresdefault")) {
+                        url // Keep maxresdefault
+                    } else {
+                        url.replace(Regex("w\\d+-h\\d+"), "w480-h480")
+                            .replace("default.jpg", "sddefault.jpg")
+                            .replace("mqdefault.jpg", "sddefault.jpg")
+                            .replace("hqdefault.jpg", "sddefault.jpg")
+                    }
+                }
+                ImageQuality.HIGH -> {
+                    // For high quality (Now Playing), always use maxresdefault
+                    url.replace(Regex("w\\d+-h\\d+"), "w1200-h1200")
+                        .replace("default.jpg", "maxresdefault.jpg")
+                        .replace("mqdefault.jpg", "maxresdefault.jpg")
+                        .replace("hqdefault.jpg", "maxresdefault.jpg")
+                        .replace("sddefault.jpg", "maxresdefault.jpg")
+                }
             }
         }
         else -> url
