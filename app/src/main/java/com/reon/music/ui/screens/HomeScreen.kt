@@ -123,26 +123,33 @@ private fun infoChip(
 
 @Composable
 private fun MinimalSeeAllButton(onClick: () -> Unit) {
-    TextButton(
+    Surface(
         onClick = onClick,
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-        modifier = Modifier.height(28.dp),
-        colors = ButtonDefaults.textButtonColors(containerColor = Color.Transparent)
+        shape = RoundedCornerShape(20.dp),
+        color = AccentRed.copy(alpha = 0.1f),
+        modifier = Modifier.height(32.dp)
     ) {
-        Text(
-            text = "See All",
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 11.sp
-            ),
-            color = AccentRed
-        )
-        Icon(
-            imageVector = Icons.Default.ChevronRight,
-            contentDescription = null,
-            tint = AccentRed,
-            modifier = Modifier.size(14.dp)
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+        ) {
+            Text(
+                text = "See All",
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp
+                ),
+                color = AccentRed
+            )
+            Spacer(modifier = Modifier.width(2.dp))
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = AccentRed,
+                modifier = Modifier.size(16.dp)
+            )
+        }
     }
 }
 
@@ -288,6 +295,30 @@ fun HomeScreen(
                             downloadedSongIds = downloadedSongIds,
                             downloadProgressMap = downloadProgressMap,
                             onSongClick = onSongClick
+                        )
+                    }
+                }
+                
+                // Top 500 Indian Music Channels - Priority Section
+                if (uiState.priorityChannelSongs.isNotEmpty()) {
+                    item {
+                        Top500ChannelsSection(
+                            title = "Top Indian Music Channels",
+                            songs = uiState.priorityChannelSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("top500-channels") }
+                        )
+                    }
+                }
+                
+                // Verified/Official Channel Songs
+                if (uiState.verifiedChannelSongs.isNotEmpty()) {
+                    item {
+                        ContentSection(
+                            title = "Official Channels",
+                            songs = uiState.verifiedChannelSongs,
+                            onSongClick = onSongClick,
+                            onSeeAllClick = { onSeeAllClick("verified-channels") }
                         )
                     }
                 }
@@ -793,21 +824,19 @@ fun HomeScreen(
                     }
                 }
 
-                // ===== MOODS & GENRES SECTIONS (Image 2) =====
+                // ===== INDIAN REGIONAL LANGUAGES & GENRES SECTION =====
                 item {
-                    MoodsAndMomentSection(
-                        moods = uiState.moods,
-                        onMoodClick = { mood -> 
-                            // TODO: Navigate to mood/genre songs
+                    IndianRegionalLanguagesSection(
+                        onLanguageClick = { language ->
+                            onSeeAllClick(language.lowercase())
                         }
                     )
                 }
-
+                
                 item {
-                    GenreGridSection(
-                        genres = uiState.genres,
+                    GenreGridSectionIndianFirst(
                         onGenreClick = { genre ->
-                            // TODO: Navigate to genre songs
+                            onSeeAllClick(genre.lowercase())
                         }
                     )
                 }
@@ -1659,7 +1688,7 @@ private fun SongCard(
     
     Column(
         modifier = Modifier
-            .width(if (isRectangular) 220.dp else 190.dp)
+            .width(if (isRectangular) 260.dp else 220.dp)
             .clickable(onClick = onClick)
     ) {
         Box(
@@ -2131,6 +2160,10 @@ private fun ArtistCard(
     val displayArt = artist.artworkUrl ?: artist.topSongs.firstOrNull()?.getHighQualityArtwork()
         ?: artist.topSongs.firstOrNull()?.artworkUrl
     
+    val isTop500Artist = remember(artist.name) {
+        com.reon.music.data.network.youtube.IndianMusicChannels.isPriorityChannel(artist.name)
+    }
+    
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.92f else 1f,
@@ -2140,7 +2173,7 @@ private fun ArtistCard(
     
     Column(
         modifier = Modifier
-            .width(120.dp)
+            .width(140.dp)
             .clickable(onClick = onClick)
             .pointerInput(Unit) {
                 awaitPointerEventScope {
@@ -2154,21 +2187,22 @@ private fun ArtistCard(
     ) {
         Box(
             modifier = Modifier
-                .size(120.dp)
+                .size(140.dp)
                 .scale(scale)
                 .shadow(
-                    elevation = 8.dp,
+                    elevation = 10.dp,
                     shape = CircleShape,
-                    ambientColor = Color.Black.copy(0.15f),
-                    spotColor = Color.Black.copy(0.25f)
+                    ambientColor = if (isTop500Artist) AccentRed.copy(0.3f) else Color.Black.copy(0.15f),
+                    spotColor = if (isTop500Artist) AccentRed.copy(0.4f) else Color.Black.copy(0.25f)
                 )
                 .clip(CircleShape)
                 .background(
                     brush = Brush.radialGradient(
-                        colors = listOf(
-                            AccentRed.copy(alpha = 0.2f),
-                            AccentRed.copy(alpha = 0.05f)
-                        ),
+                        colors = if (isTop500Artist) {
+                            listOf(AccentRed.copy(alpha = 0.3f), AccentRed.copy(alpha = 0.1f))
+                        } else {
+                            listOf(AccentRed.copy(alpha = 0.2f), AccentRed.copy(alpha = 0.05f))
+                        },
                         radius = 100f
                     )
                 ),
@@ -2197,6 +2231,25 @@ private fun ArtistCard(
                         )
                     )
             )
+            
+            // Verified badge for Top 500 artists
+            if (isTop500Artist) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(4.dp)
+                        .size(32.dp)
+                        .background(AccentRed, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Verified,
+                        contentDescription = "Top 500",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
         }
         
         Spacer(modifier = Modifier.height(12.dp))
@@ -2254,6 +2307,203 @@ private fun ContentSection(
                     onClick = { onSongClick(song) }
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun Top500ChannelsSection(
+    title: String,
+    songs: List<Song>,
+    onSongClick: (Song) -> Unit,
+    onSeeAllClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 20.dp)
+    ) {
+        // Section Header with special styling for Top 500
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Verified badge icon
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .background(AccentRed, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "500",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp
+                        ),
+                        color = Color.White
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineSmall.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 20.sp
+                    ),
+                    color = TextPrimary
+                )
+            }
+            MinimalSeeAllButton(onClick = onSeeAllClick)
+        }
+        
+        // Channel badges row (showing top channels)
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(songs.distinctBy { it.channelName }.take(5)) { song ->
+                ChannelBadge(channelName = song.channelName)
+            }
+        }
+        
+        // Songs from top channels
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            items(songs.take(10)) { song ->
+                PriorityChannelSongCard(
+                    song = song,
+                    onClick = { onSongClick(song) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChannelBadge(channelName: String) {
+    val isPriorityChannel = remember(channelName) {
+        com.reon.music.data.network.youtube.IndianMusicChannels.isPriorityChannel(channelName)
+    }
+    
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = if (isPriorityChannel) AccentRed.copy(alpha = 0.1f) else ChipUnselectedBg,
+        modifier = Modifier.height(32.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (isPriorityChannel) {
+                Icon(
+                    imageVector = Icons.Default.Verified,
+                    contentDescription = "Verified",
+                    modifier = Modifier.size(14.dp),
+                    tint = AccentRed
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+            }
+            Text(
+                text = channelName,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (isPriorityChannel) AccentRed else TextSecondary,
+                fontWeight = if (isPriorityChannel) FontWeight.Bold else FontWeight.Normal
+            )
+        }
+    }
+}
+
+@Composable
+private fun PriorityChannelSongCard(
+    song: Song,
+    onClick: () -> Unit
+) {
+    val isVerified = remember(song.channelName) {
+        com.reon.music.data.network.youtube.IndianMusicChannels.isPriorityChannel(song.channelName)
+    }
+    
+    Column(
+        modifier = Modifier
+            .width(200.dp)
+            .clickable(onClick = onClick)
+    ) {
+        // Song artwork
+        Box(
+            modifier = Modifier
+                .size(200.dp)
+                .shadow(8.dp, RoundedCornerShape(16.dp))
+                .clip(RoundedCornerShape(16.dp))
+        ) {
+            AsyncImage(
+                model = song.getHighQualityArtwork(),
+                contentDescription = song.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            
+            // Verified badge overlay
+            if (isVerified) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .background(AccentRed, CircleShape)
+                        .padding(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Verified,
+                        contentDescription = "Top 500 Channel",
+                        modifier = Modifier.size(16.dp),
+                        tint = Color.White
+                    )
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(10.dp))
+        
+        Text(
+            text = song.title,
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontWeight = FontWeight.SemiBold
+            ),
+            color = TextPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        
+        Text(
+            text = song.artist,
+            style = MaterialTheme.typography.bodySmall,
+            color = TextSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        
+        // Channel name with verified indicator
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (isVerified) {
+                Icon(
+                    imageVector = Icons.Default.Verified,
+                    contentDescription = null,
+                    modifier = Modifier.size(12.dp),
+                    tint = AccentRed
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+            }
+            Text(
+                text = song.channelName,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (isVerified) AccentRed else TextSecondary,
+                maxLines = 1
+            )
         }
     }
 }
@@ -2353,50 +2603,50 @@ private fun CompactSongCard(
 ) {
     Card(
         modifier = Modifier
-            .width(140.dp)
-            .height(180.dp)
+            .width(180.dp)
+            .height(240.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
         colors = CardDefaults.cardColors(containerColor = SurfaceLight)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(8.dp)
+                .padding(10.dp)
         ) {
             AsyncImage(
                 model = song.getHighQualityArtwork() ?: song.artworkUrl,
                 contentDescription = song.title,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(100.dp)
-                    .clip(RoundedCornerShape(8.dp)),
+                    .height(140.dp)
+                    .clip(RoundedCornerShape(12.dp)),
                 contentScale = ContentScale.Crop
             )
             
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             
             Text(
                 text = song.title,
-                style = MaterialTheme.typography.labelMedium.copy(
+                style = MaterialTheme.typography.bodyMedium.copy(
                     fontWeight = FontWeight.SemiBold
                 ),
                 color = TextPrimary,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                fontSize = 12.sp
+                fontSize = 14.sp
             )
             
             Spacer(modifier = Modifier.height(4.dp))
             
             Text(
                 text = song.artist,
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                fontSize = 10.sp
+                fontSize = 12.sp
             )
         }
     }
@@ -2475,7 +2725,7 @@ private fun PlaylistCard(
 ) {
     Column(
         modifier = Modifier
-            .width(170.dp)
+            .width(200.dp)
             .clickable(onClick = onClick)
     ) {
         AsyncImage(
@@ -2485,7 +2735,8 @@ private fun PlaylistCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(16.dp))
+                .shadow(4.dp, RoundedCornerShape(16.dp))
         )
         
         Spacer(modifier = Modifier.height(8.dp))
@@ -2502,17 +2753,32 @@ private fun PlaylistCard(
 }
 
 @Composable
-private fun MoodsAndMomentSection(
-    moods: List<com.reon.music.ui.viewmodels.Genre>,
-    onMoodClick: (com.reon.music.ui.viewmodels.Genre) -> Unit
+private fun IndianRegionalLanguagesSection(
+    onLanguageClick: (String) -> Unit
 ) {
+    // Indian regional languages with priority order
+    val indianLanguages = listOf(
+        Triple("Telugu", 0xFFFF6B00.toInt(), "telugu"),
+        Triple("ST Banjara", 0xFFD32F2F.toInt(), "banjara"),
+        Triple("Hindi", 0xFF1976D2.toInt(), "hindi"),
+        Triple("Tamil", 0xFF388E3C.toInt(), "tamil"),
+        Triple("Indian", 0xFF7B1FA2.toInt(), "indian"),
+        Triple("Punjabi", 0xFFFBC02D.toInt(), "punjabi"),
+        Triple("Malayalam", 0xFF00796B.toInt(), "malayalam"),
+        Triple("Kannada", 0xFFC62828.toInt(), "kannada"),
+        Triple("Bhojpuri", 0xFFAD1457.toInt(), "bhojpuri"),
+        Triple("Bengali", 0xFF00695C.toInt(), "bengali"),
+        Triple("Marathi", 0xFF4527A0.toInt(), "marathi"),
+        Triple("Gujarati", 0xFF1565C0.toInt(), "gujarati")
+    )
+    
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 16.dp)
     ) {
         Text(
-            text = "LET'S PICK A PLAYLIST FOR YOU",
+            text = "INDIAN REGIONAL LANGUAGES",
             style = MaterialTheme.typography.labelSmall.copy(
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = 1.sp
@@ -2522,7 +2788,7 @@ private fun MoodsAndMomentSection(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Moods & Moment",
+            text = "Explore by Language",
             style = MaterialTheme.typography.headlineSmall.copy(
                 fontWeight = FontWeight.ExtraBold,
                 fontSize = 22.sp
@@ -2532,7 +2798,7 @@ private fun MoodsAndMomentSection(
         )
         Spacer(modifier = Modifier.height(16.dp))
         
-        // Grid of moods
+        // Grid of Indian languages
         FlowRow(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2541,10 +2807,11 @@ private fun MoodsAndMomentSection(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             maxItemsInEachRow = 2
         ) {
-            moods.forEach { mood ->
-                CategoryCard(
-                    category = mood,
-                    onClick = { onMoodClick(mood) },
+            indianLanguages.forEach { (name, color, query) ->
+                LanguageCard(
+                    language = name,
+                    color = color,
+                    onClick = { onLanguageClick(query) },
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -2553,17 +2820,38 @@ private fun MoodsAndMomentSection(
 }
 
 @Composable
-private fun GenreGridSection(
-    genres: List<com.reon.music.ui.viewmodels.Genre>,
-    onGenreClick: (com.reon.music.ui.viewmodels.Genre) -> Unit
+private fun GenreGridSectionIndianFirst(
+    onGenreClick: (String) -> Unit
 ) {
+    // Genres with Indian styles prioritized
+    val indianGenres = listOf(
+        Triple("Bollywood", 0xFFE91E63.toInt(), "bollywood"),
+        Triple("Carnatic Classical", 0xFF9C27B0.toInt(), "carnatic"),
+        Triple("Hindustani", 0xFF673AB7.toInt(), "hindustani"),
+        Triple("Folk", 0xFF795548.toInt(), "folk"),
+        Triple("Devotional", 0xFFFF5722.toInt(), "devotional"),
+        Triple("Ghazal", 0xFF607D8B.toInt(), "ghazal"),
+        Triple("Qawwali", 0xFF8D6E63.toInt(), "qawwali"),
+        Triple("Indie", 0xFF009688.toInt(), "indie")
+    )
+    
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 16.dp)
     ) {
         Text(
-            text = "Genre",
+            text = "INDIAN MUSIC GENRES",
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 1.sp
+            ),
+            modifier = Modifier.padding(horizontal = 20.dp),
+            color = TextSecondary
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Genres",
             style = MaterialTheme.typography.headlineSmall.copy(
                 fontWeight = FontWeight.ExtraBold,
                 fontSize = 22.sp
@@ -2582,10 +2870,11 @@ private fun GenreGridSection(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             maxItemsInEachRow = 2
         ) {
-            genres.forEach { genre ->
-                CategoryCard(
-                    category = genre,
-                    onClick = { onGenreClick(genre) },
+            indianGenres.forEach { (name, color, query) ->
+                LanguageCard(
+                    language = name,
+                    color = color,
+                    onClick = { onGenreClick(query) },
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -2594,19 +2883,21 @@ private fun GenreGridSection(
 }
 
 @Composable
-private fun CategoryCard(
-    category: com.reon.music.ui.viewmodels.Genre,
+private fun LanguageCard(
+    language: String,
+    color: Int,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier
-            .height(64.dp)
+            .height(72.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF1E1E1E) // Dark background like Image 2
-        )
+            containerColor = Color(0xFF1E1E1E) // Dark background
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxSize(),
@@ -2615,22 +2906,44 @@ private fun CategoryCard(
             // Colored left border/bar
             Box(
                 modifier = Modifier
-                    .width(6.dp)
+                    .width(8.dp)
                     .fillMaxHeight()
-                    .background(Color(category.accentColor))
+                    .background(Color(color))
             )
             
             Spacer(modifier = Modifier.width(16.dp))
             
-            Text(
-                text = category.name,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
+            Column {
+                Text(
+                    text = language,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
                 )
-            )
+                Text(
+                    text = "Tap to explore",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(alpha = 0.6f)
+                )
+            }
         }
     }
+}
+
+// Keep for backward compatibility
+@Composable
+private fun CategoryCard(
+    category: com.reon.music.ui.viewmodels.Genre,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LanguageCard(
+        language = category.name,
+        color = category.accentColor,
+        onClick = onClick,
+        modifier = modifier
+    )
 }
 
 private fun getGreeting(): String {

@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.reon.music.core.model.Song
 import kotlinx.coroutines.delay
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Downloading
 
@@ -241,15 +242,37 @@ fun DownloadButton(
                         modifier = Modifier
                             .fillMaxSize()
                             .clip(CircleShape)
-                            .background(Color(0xFFE53935).copy(alpha = 0.15f))
+                            .background(Color(0xFF4CAF50).copy(alpha = 0.15f))
                     )
-                    // Filled download icon
-                    Icon(
-                        imageVector = Icons.Filled.Download,
-                        contentDescription = "Downloaded",
-                        tint = Color(0xFFE53935),
-                        modifier = Modifier.size(22.dp)
-                    )
+                    // Filled download icon with checkmark
+                    Box(
+                        modifier = Modifier.size(22.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // Base download icon (filled)
+                        Icon(
+                            imageVector = Icons.Filled.Download,
+                            contentDescription = "Downloaded",
+                            tint = Color(0xFF4CAF50),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        // Checkmark overlay in bottom right
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .align(Alignment.BottomEnd)
+                                .offset(x = 2.dp, y = 2.dp)
+                                .background(Color(0xFF4CAF50), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(7.dp)
+                            )
+                        }
+                    }
                 }
             }
             isDownloading -> {

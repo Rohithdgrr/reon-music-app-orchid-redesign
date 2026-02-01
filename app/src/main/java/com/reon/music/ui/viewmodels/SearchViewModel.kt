@@ -15,6 +15,7 @@ import com.reon.music.core.model.Artist
 import com.reon.music.core.model.SearchResult
 import com.reon.music.core.model.Song
 import com.reon.music.data.network.youtube.YouTubeMusicClient
+import com.reon.music.data.network.youtube.IndianMusicChannels
 import com.reon.music.data.repository.MusicRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -585,6 +586,7 @@ class SearchViewModel @Inject constructor(
     /**
      * Simplified relevance score for basic sorting
      * Focuses on title and artist matching with basic popularity scoring
+     * Enhanced with Top 500 Indian Music Channels priority ranking
      */
     private fun calculateBasicRelevanceScore(query: String, song: Song): Int {
         var score = 0
@@ -594,6 +596,7 @@ class SearchViewModel @Inject constructor(
         val lowerTitle = song.title?.lowercase() ?: ""
         val lowerArtist = song.artist?.lowercase() ?: ""
         val lowerAlbum = song.album?.lowercase() ?: ""
+        val lowerChannel = song.channelName?.lowercase() ?: ""
         
         // === TITLE MATCHING (Highest Priority) ===
         when {
@@ -614,6 +617,15 @@ class SearchViewModel @Inject constructor(
             lowerAlbum == lowerQuery -> score += 70 // Exact album match
             lowerAlbum.startsWith(lowerQuery) -> score += 50 // Album starts with query
             lowerAlbum.contains(lowerQuery) -> score += 30 // Album contains query
+        }
+        
+        // === TOP 500 INDIAN MUSIC CHANNELS PRIORITY BOOST ===
+        val channelBoost = IndianMusicChannels.getChannelPriorityBoost(song.channelName)
+        score += channelBoost.toInt()
+        
+        // Check if channel is official/verified
+        if (IndianMusicChannels.isPriorityChannel(song.channelName)) {
+            score += 25 // Verified channel bonus
         }
         
         // === BASIC POPULARITY BONUS ===
@@ -794,6 +806,7 @@ class SearchViewModel @Inject constructor(
     
     /**
      * Rank songs using YouTube-style signals (relevance + engagement + recency)
+     * Enhanced with Top 500 Indian Music Channels priority ranking
      */
     private fun reRankWithYouTubeSignals(query: String, songs: List<Song>): List<Song> {
         val nowMillis = System.currentTimeMillis()
@@ -841,10 +854,15 @@ class SearchViewModel @Inject constructor(
                     else -> 0.0
                 }
                 
+                // === TOP 500 INDIAN MUSIC CHANNELS BOOST ===
+                val indianChannelBoost = IndianMusicChannels.getChannelPriorityBoost(song.channelName)
+                val verifiedChannelBoost = if (IndianMusicChannels.isPriorityChannel(song.channelName)) 35.0 else 0.0
+                
                 val channelPriorityScore = computeChannelPriorityScore(song, queryLanguage, queryChannelMeta)
                 val topChannelLanguageBoost = languageTopChannels[normalizeChannelName(song.channelName)] ?: 0.0
                 
-                val score = relevance + engagement + recencyScore + officialBoost + durationScore + qualityScore + channelPriorityScore + topChannelLanguageBoost
+                val score = relevance + engagement + recencyScore + officialBoost + durationScore + qualityScore + 
+                           channelPriorityScore + topChannelLanguageBoost + indianChannelBoost + verifiedChannelBoost
                 song to score
             }
             .sortedByDescending { it.second }
@@ -854,6 +872,7 @@ class SearchViewModel @Inject constructor(
     /**
      * Calculate relevance score for a song based on query match
      * Higher score = more relevant
+     * Enhanced with Top 500 Indian Music Channels priority ranking
      */
     private fun calculateRelevanceScore(query: String, song: Song): Int {
         var score = 0
@@ -915,9 +934,36 @@ class SearchViewModel @Inject constructor(
             }
         }
         
+        // === TOP 500 INDIAN MUSIC CHANNELS PRIORITY BOOST ===
+        // Priority tiers: Top 20 get +100, 21-50 get +80, 51-100 get +60, 101-200 get +40, 201-500 get +20
+        val channelPriorityBoost = IndianMusicChannels.getChannelPriorityBoost(song.channelName)
+        score += channelPriorityBoost.toInt()
+        
+        // === VERIFIED CHANNEL BONUS ===
+        if (IndianMusicChannels.isPriorityChannel(song.channelName)) {
+            score += 30 // Verified/Official Top 500 channel bonus
+        }
+        
+        // === CHANNEL RANK DISPLAY INFO ===
+        val channel = IndianMusicChannels.getChannelByName(song.channelName)
+        if (channel != null) {
+            // Additional boost based on channel tier
+            when {
+                channel.rank <= 20 -> score += 50 // Top tier
+                channel.rank <= 50 -> score += 40
+                channel.rank <= 100 -> score += 30
+                channel.rank <= 200 -> score += 20
+                channel.rank <= 500 -> score += 10
+            }
+        }
+        
         // === POPULARITY BOOST ===
         val viewBonus = (song.viewCount / 1000000).toInt().coerceAtMost(30)
         score += viewBonus
+        
+        // === LIKES BOOST ===
+        val likesBonus = (song.likeCount / 100000).toInt().coerceAtMost(20)
+        score += likesBonus
         
         // === OFFICIAL CHANNEL BONUS ===
         if (lowerChannel.contains("official") || lowerChannel.contains("music")) {
@@ -925,6 +971,14 @@ class SearchViewModel @Inject constructor(
         }
         
         return score
+    }
+    
+    /**
+     * Get channel rank info for display in search results
+     */
+    fun getChannelRankInfo(channelName: String): Pair<Int, Boolean>? {
+        val channel = IndianMusicChannels.getChannelByName(channelName) ?: return null
+        return Pair(channel.rank, true)
     }
     
     /**

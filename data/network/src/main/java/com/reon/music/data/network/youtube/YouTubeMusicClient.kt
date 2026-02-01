@@ -113,6 +113,91 @@ class YouTubeMusicClient @Inject constructor(
     }
     
     /**
+     * Search for songs prioritizing Top 500 Indian Music Channels
+     * Performs multiple searches with priority channel names for better results
+     */
+    suspend fun searchSongsWithPriorityChannels(
+        query: String, 
+        limit: Int = 50
+    ): Result<List<Song>> = safeApiCall {
+        val allSongs = mutableListOf<Song>()
+        
+        // Base search
+        val baseResult = searchSongs(query)
+        if (baseResult is Result.Success) {
+            allSongs.addAll(baseResult.data)
+        }
+        
+        // Search with top priority channels (Top 20)
+        IndianMusicChannels.TOP_100_CHANNELS.take(20).forEach { channel ->
+            if (allSongs.size >= limit) return@safeApiCall allSongs.distinctBy { it.id }
+            
+            try {
+                val channelQuery = "${channel.name} $query"
+                val result = searchSongs(channelQuery)
+                if (result is Result.Success) {
+                    allSongs.addAll(result.data)
+                }
+            } catch (e: Exception) {
+                // Continue with next channel
+            }
+        }
+        
+        // Remove duplicates and return
+        allSongs.distinctBy { it.id }.take(limit)
+    }
+    
+    /**
+     * Search for songs from a specific Top 500 channel
+     */
+    suspend fun searchSongsFromChannel(
+        channelName: String,
+        query: String = "",
+        limit: Int = 30
+    ): Result<List<Song>> = safeApiCall {
+        val searchQuery = if (query.isBlank()) {
+            "$channelName official songs"
+        } else {
+            "$channelName $query"
+        }
+        
+        val result = searchSongs(searchQuery)
+        if (result is Result.Success) {
+            // Filter results to prioritize songs from the specified channel
+            val songs = result.data
+            val channelSongs = songs.filter { song ->
+                song.channelName.contains(channelName, ignoreCase = true) ||
+                song.artist.contains(channelName, ignoreCase = true)
+            }
+            // Return channel songs first, then other results
+            (channelSongs + songs).distinctBy { it.id }.take(limit)
+        } else {
+            emptyList()
+        }
+    }
+    
+    /**
+     * Get Top 500 Indian Music Channels list for reference
+     */
+    fun getTopIndianMusicChannels(limit: Int = 100): List<MusicChannel> {
+        return IndianMusicChannels.TOP_100_CHANNELS.take(limit)
+    }
+    
+    /**
+     * Check if a channel is in the Top 500 Indian Music Channels
+     */
+    fun isTopIndianMusicChannel(channelName: String): Boolean {
+        return IndianMusicChannels.isPriorityChannel(channelName)
+    }
+    
+    /**
+     * Get channel priority score for ranking
+     */
+    fun getChannelPriorityScore(channelName: String): Double {
+        return IndianMusicChannels.getChannelPriorityBoost(channelName)
+    }
+    
+    /**
      * Get video metadata (views, likes, channel info)
      */
     suspend fun getVideoMetadata(videoId: String): Result<VideoMetadata> = safeApiCall {

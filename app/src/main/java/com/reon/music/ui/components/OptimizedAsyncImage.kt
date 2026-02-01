@@ -181,11 +181,16 @@ private fun getOptimizedUrl(url: String?, quality: ImageQuality): String? {
                 }
                 ImageQuality.HIGH -> {
                     // For high quality (Now Playing), always use maxresdefault
-                    url.replace(Regex("w\\d+-h\\d+"), "w1200-h1200")
-                        .replace("default.jpg", "maxresdefault.jpg")
-                        .replace("mqdefault.jpg", "maxresdefault.jpg")
-                        .replace("hqdefault.jpg", "maxresdefault.jpg")
-                        .replace("sddefault.jpg", "maxresdefault.jpg")
+                    // IMPORTANT: If url already contains maxresdefault, preserve it
+                    if (url.contains("maxresdefault")) {
+                        url.replace("http:", "https:")
+                    } else {
+                        url.replace(Regex("w\\d+-h\\d+"), "w1200-h1200")
+                            .replace("default.jpg", "maxresdefault.jpg")
+                            .replace("mqdefault.jpg", "maxresdefault.jpg")
+                            .replace("hqdefault.jpg", "maxresdefault.jpg")
+                            .replace("sddefault.jpg", "maxresdefault.jpg")
+                    }
                 }
             }
         }

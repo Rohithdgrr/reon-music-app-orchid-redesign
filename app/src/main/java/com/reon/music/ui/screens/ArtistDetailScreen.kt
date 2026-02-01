@@ -43,6 +43,7 @@ import com.reon.music.core.model.Playlist
 import com.reon.music.core.model.Song
 import com.reon.music.ui.viewmodels.HomeViewModel
 import com.reon.music.ui.viewmodels.PlayerViewModel
+import com.reon.music.data.network.youtube.IndianMusicChannels
 
 // Corporate Light Theme Colors
 private val BackgroundLight = Color(0xFFF7F8F9)
@@ -60,18 +61,74 @@ fun ArtistDetailScreen(
     onBackClick: () -> Unit = {},
     onSongClick: (Song) -> Unit = {},
     onAlbumClick: (Album) -> Unit = {},
+    onPlaylistClick: (Playlist) -> Unit = {},
     onArtistClick: (Artist) -> Unit = {},
+    onNavigateToArtistPage: (String) -> Unit = {}, // Navigate to full artist page
     homeViewModel: HomeViewModel = hiltViewModel(),
     playerViewModel: PlayerViewModel = hiltViewModel()
 ) {
     val uiState by homeViewModel.uiState.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    
+    // Follow state with persistence
     var isFollowing by remember { mutableStateOf(false) }
+    var followerCount by remember { mutableStateOf(artist.followerCount) }
+    
+    // Load follow state from preferences
+    LaunchedEffect(artist.id) {
+        val prefs = context.getSharedPreferences("artist_follows", android.content.Context.MODE_PRIVATE)
+        isFollowing = prefs.getBoolean("follow_${artist.id}", false)
+        followerCount = prefs.getInt("followers_${artist.id}", artist.followerCount)
+    }
+    
+    // Real artist image from YouTube
+    var artistImageUrl by remember { mutableStateOf(artist.artworkUrl) }
+    var artistBannerUrl by remember { mutableStateOf<String?>(null) }
+    
+    // Fetch real artist images from YouTube
+    LaunchedEffect(artist.name) {
+        try {
+            // Search for artist channel on YouTube
+            val searchResults = homeViewModel.searchSongsForChart("${artist.name} official channel", 5)
+            val channelSong = searchResults.firstOrNull { 
+                it.artist.contains(artist.name, ignoreCase = true) || 
+                it.channelName.contains(artist.name, ignoreCase = true)
+            }
+            
+            // Use channel thumbnail for artist image
+            channelSong?.let { song ->
+                if (artistImageUrl == null) {
+                    artistImageUrl = song.artworkUrl
+                }
+                // Get high quality banner from video thumbnail
+                artistBannerUrl = song.getHighQualityArtwork()
+            }
+        } catch (e: Exception) {
+            // Keep default image
+        }
+    }
     
     // Endless scrolling for artist songs
     var currentPage by remember { mutableStateOf(1) }
     var isLoadingMore by remember { mutableStateOf(false) }
     var allArtistSongs by remember { mutableStateOf<List<Song>>(emptyList()) }
     var hasMore by remember { mutableStateOf(true) }
+    
+    // Artist playlists from YouTube
+    var artistPlaylists by remember { mutableStateOf<List<Playlist>>(emptyList()) }
+    var isLoadingPlaylists by remember { mutableStateOf(false) }
+    
+    // Load artist playlists
+    LaunchedEffect(artist.name) {
+        isLoadingPlaylists = true
+        try {
+            val playlists = homeViewModel.searchPlaylistsForArtist(artist.name)
+            artistPlaylists = playlists
+        } catch (e: Exception) {
+            // Keep empty playlists
+        }
+        isLoadingPlaylists = false
+    }
     
     // Initial songs by artist
     val initialSongs = remember(uiState, artist.name) {
@@ -145,8 +202,23 @@ fun ArtistDetailScreen(
             item {
                 ArtistHeader(
                     artist = artist,
+                    artistImageUrl = artistImageUrl,
+                    artistBannerUrl = artistBannerUrl,
                     isFollowing = isFollowing,
-                    onFollowClick = { isFollowing = !isFollowing },
+                    followerCount = followerCount,
+                    onFollowClick = { 
+                        isFollowing = !isFollowing
+                        // Save follow state to preferences
+                        val prefs = context.getSharedPreferences("artist_follows", android.content.Context.MODE_PRIVATE)
+                        prefs.edit().putBoolean("follow_${artist.id}", isFollowing).apply()
+                        // Update follower count
+                        if (isFollowing) {
+                            followerCount += 1
+                        } else {
+                            followerCount = (followerCount - 1).coerceAtLeast(0)
+                        }
+                        prefs.edit().putInt("followers_${artist.id}", followerCount).apply()
+                    },
                     onBackClick = onBackClick,
                     onShuffleClick = {
                         if (allArtistSongs.isNotEmpty()) {
@@ -158,6 +230,9 @@ fun ArtistDetailScreen(
                             playerViewModel.downloadSongs(allArtistSongs)
                             homeViewModel.markArtistDownloaded(artist, allArtistSongs)
                         }
+                    },
+                    onArtistImageClick = {
+                        onNavigateToArtistPage(artist.id)
                     }
                 )
             }
@@ -239,7 +314,49 @@ fun ArtistDetailScreen(
                 }
             }
             
-            // Videos Section (Placeholder for now)
+            // Artist Playlists Section (YouTube)
+            if (artistPlaylists.isNotEmpty()) {
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    SectionHeader(
+                        title = "${artist.name} Playlists"
+                    )
+                }
+                
+                item {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp)
+                    ) {
+                        items(artistPlaylists) { playlist ->
+                            FeaturedPlaylistCard(
+                                title = playlist.name,
+                                artworkUrl = playlist.artworkUrl,
+                                onClick = { onPlaylistClick(playlist) }
+                            )
+                        }
+                    }
+                }
+            }
+            
+            // Loading playlists indicator
+            if (isLoadingPlaylists) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = AccentBlue
+                        )
+                    }
+                }
+            }
+            
+            // Videos Section
             item {
                 Spacer(modifier = Modifier.height(16.dp))
                 SectionHeader(
@@ -320,20 +437,24 @@ fun ArtistDetailScreen(
 @Composable
 private fun ArtistHeader(
     artist: Artist,
+    artistImageUrl: String?,
+    artistBannerUrl: String?,
     isFollowing: Boolean,
+    followerCount: Int,
     onFollowClick: () -> Unit,
     onBackClick: () -> Unit,
     onShuffleClick: () -> Unit,
-    onDownloadAllClick: () -> Unit
+    onDownloadAllClick: () -> Unit,
+    onArtistImageClick: () -> Unit = {}
 ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(320.dp)
     ) {
-        // Background Image with high quality
+        // Background Banner Image with high quality (from YouTube)
         OptimizedAsyncImage(
-            imageUrl = artist.artworkUrl,
+            imageUrl = artistBannerUrl ?: artistImageUrl,
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
             quality = ImageQuality.HIGH,
@@ -378,14 +499,16 @@ private fun ArtistHeader(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Artist Image (Circular) with high quality
+            // Artist Image (Circular) with high quality - Clickable to view full artist page
             Card(
-                modifier = Modifier.size(100.dp),
+                modifier = Modifier
+                    .size(100.dp)
+                    .clickable { onArtistImageClick() },
                 shape = CircleShape,
                 elevation = CardDefaults.cardElevation(8.dp)
             ) {
                 OptimizedAsyncImage(
-                    imageUrl = artist.artworkUrl,
+                    imageUrl = artistImageUrl ?: artist.artworkUrl,
                     contentDescription = artist.name,
                     modifier = Modifier.fillMaxSize(),
                     quality = ImageQuality.HIGH,
@@ -395,18 +518,36 @@ private fun ArtistHeader(
             
             Spacer(modifier = Modifier.height(12.dp))
             
-            // Artist Name
-            Text(
-                text = artist.name,
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.Bold
-                ),
-                color = Color.White
-            )
+            // Artist Name with Verified Badge
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = artist.name,
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = Color.White,
+                    modifier = Modifier.clickable { onArtistImageClick() }
+                )
+                
+                // Show verified badge if artist is in Top 500 Indian Music Channels
+                if (IndianMusicChannels.isPriorityChannel(artist.name)) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    VerifiedBadge()
+                }
+            }
             
-            // Subscriber/Listener Count
+            // Subscriber/Listener Count (Real data when available)
+            val formattedFollowers = when {
+                followerCount >= 1_000_000 -> "${String.format("%.1f", followerCount / 1_000_000.0)}M"
+                followerCount >= 1_000 -> "${String.format("%.1f", followerCount / 1_000.0)}K"
+                else -> followerCount.toString()
+            }
+            
             Text(
-                text = "${(1..10).random()}.${(1..9).random()}M monthly listeners",
+                text = if (followerCount > 0) "$formattedFollowers followers" else "${(1..10).random()}.${(1..9).random()}M monthly listeners",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.White.copy(alpha = 0.7f)
             )
@@ -428,7 +569,7 @@ private fun ArtistHeader(
                         .weight(1.1f)
                         .height(56.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isFollowing) Color(0xFF333333) else Color(0xFF222222)
+                        containerColor = if (isFollowing) Color(0xFF4CAF50) else Color(0xFF222222)
                     ),
                     shape = RoundedCornerShape(28.dp)
                 ) {
@@ -507,6 +648,70 @@ private fun ArtistHeader(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VerifiedBadge() {
+    Box(
+        modifier = Modifier
+            .background(AccentRed, RoundedCornerShape(12.dp))
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Default.Verified,
+                contentDescription = "Verified",
+                modifier = Modifier.size(14.dp),
+                tint = Color.White
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "Official",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold
+                ),
+                color = Color.White
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChannelRankBadge(channelName: String) {
+    val channel = IndianMusicChannels.getChannelByName(channelName)
+    if (channel != null) {
+        val tierColor = when {
+            channel.rank <= 20 -> Color(0xFFFFD700) // Gold for top 20
+            channel.rank <= 50 -> Color(0xFFC0C0C0) // Silver for 21-50
+            channel.rank <= 100 -> Color(0xFFCD7F32) // Bronze for 51-100
+            else -> AccentBlue // Blue for others
+        }
+        
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = tierColor.copy(alpha = 0.15f)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.EmojiEvents,
+                    contentDescription = "Rank",
+                    modifier = Modifier.size(14.dp),
+                    tint = tierColor
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "#${channel.rank}",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = tierColor
+                )
             }
         }
     }
@@ -620,23 +825,14 @@ private fun ArtistSongItem(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // Explicit badge if needed
-                if (song.title.length % 3 == 0) {
-                    Box(
-                        modifier = Modifier
-                            .background(
-                                TextSecondary.copy(alpha = 0.3f),
-                                RoundedCornerShape(2.dp)
-                            )
-                            .padding(horizontal = 4.dp, vertical = 1.dp)
-                    ) {
-                        Text(
-                            text = "E",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextSecondary,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                // Show verified badge if channel is in Top 500
+                if (IndianMusicChannels.isPriorityChannel(song.channelName)) {
+                    Icon(
+                        imageVector = Icons.Default.Verified,
+                        contentDescription = "Verified Channel",
+                        modifier = Modifier.size(14.dp),
+                        tint = AccentRed
+                    )
                 }
                 
                 Text(
@@ -645,6 +841,28 @@ private fun ArtistSongItem(
                     color = TextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
+                )
+            }
+            
+            // Show channel name with rank if available
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                val channel = IndianMusicChannels.getChannelByName(song.channelName)
+                if (channel != null) {
+                    Text(
+                        text = "#${channel.rank} ",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AccentBlue,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Text(
+                    text = song.channelName,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary.copy(alpha = 0.7f),
+                    maxLines = 1
                 )
             }
         }

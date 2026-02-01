@@ -18,6 +18,7 @@ import com.reon.music.core.preferences.UserPreferences
 import com.reon.music.data.database.dao.HistoryDao
 import com.reon.music.data.database.dao.SongDao
 import com.reon.music.data.repository.MusicRepository
+import com.reon.music.data.network.youtube.IndianMusicChannels
 import com.reon.music.data.database.entities.DownloadState
 import com.reon.music.data.database.entities.SongEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -221,6 +222,11 @@ data class HomeUiState(
     val manisharma: List<Song> = emptyList(),
     val thamanSongs: List<Song> = emptyList(),
     
+    // Top 500 Indian Music Channels - Priority Songs
+    val priorityChannelSongs: List<Song> = emptyList(),
+    val topTierSongs: List<Song> = emptyList(), // Top 20 channels (Tier 1)
+    val verifiedChannelSongs: List<Song> = emptyList(), // Songs from verified Top 500 channels
+    
     // State
     val isLoading: Boolean = true,
     val error: String? = null,
@@ -355,6 +361,10 @@ class HomeViewModel @Inject constructor(
                 loadArtistSpotlights()
                 loadIndianPlaylists()
                 loadRecentlyPlayed()
+                
+                // Load Top 500 Indian Music Channels priority content
+                loadPriorityChannels()
+                loadVerifiedChannelSongs()
 
                 
             } catch (e: Exception) {
@@ -909,6 +919,85 @@ class HomeViewModel @Inject constructor(
         }
     }
     
+    /**
+     * Load songs from Top 500 Indian Music Channels
+     * Fetches songs from priority channels and filters them
+     */
+    private fun loadPriorityChannels() {
+        viewModelScope.launch {
+            try {
+                // Get top priority channels (Top 20 - Tier 1)
+                val topChannels = IndianMusicChannels.TOP_100_CHANNELS.take(20)
+                val allPrioritySongs = mutableListOf<Song>()
+                
+                // Search for songs from top channels
+                topChannels.take(5).forEach { channel ->
+                    try {
+                        repository.searchSongsWithLimit("${channel.name} latest songs", 10).getOrNull()?.let { songs ->
+                            // Filter songs from this specific channel
+                            val channelSongs = songs.filter { 
+                                it.channelName.contains(channel.name, ignoreCase = true) ||
+                                it.artist.contains(channel.name, ignoreCase = true)
+                            }
+                            allPrioritySongs.addAll(channelSongs)
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error loading songs from ${channel.name}", e)
+                    }
+                }
+                
+                // Remove duplicates and update state
+                val uniquePrioritySongs = allPrioritySongs.distinctBy { it.id }
+                _uiState.value = _uiState.value.copy(
+                    priorityChannelSongs = uniquePrioritySongs,
+                    topTierSongs = uniquePrioritySongs.take(20)
+                )
+                
+                Log.d(TAG, "Loaded ${uniquePrioritySongs.size} priority channel songs")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading priority channels", e)
+            }
+        }
+    }
+    
+    /**
+     * Load verified/official channel songs from Top 500 list
+     */
+    private fun loadVerifiedChannelSongs() {
+        viewModelScope.launch {
+            try {
+                // Search for songs from verified Top 500 channels
+                val verifiedSongs = mutableListOf<Song>()
+                
+                // Get top 10 channels and search their content
+                IndianMusicChannels.TOP_100_CHANNELS.take(10).forEach { channel ->
+                    try {
+                        repository.searchSongsWithLimit("${channel.name} official", 8).getOrNull()?.let { songs ->
+                            verifiedSongs.addAll(songs)
+                        }
+                    } catch (e: Exception) {
+                        // Continue with next channel
+                    }
+                }
+                
+                // Filter for verified channels and sort by view count
+                val filteredVerified = verifiedSongs
+                    .filter { song ->
+                        IndianMusicChannels.isPriorityChannel(song.channelName) ||
+                        song.channelName.contains("official", ignoreCase = true)
+                    }
+                    .distinctBy { it.id }
+                    .sortedByDescending { it.viewCount }
+                    .take(30)
+                
+                _uiState.value = _uiState.value.copy(verifiedChannelSongs = filteredVerified)
+                Log.d(TAG, "Loaded ${filteredVerified.size} verified channel songs")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading verified channel songs", e)
+            }
+        }
+    }
+    
     private fun loadArtistSpotlights() {
         viewModelScope.launch {
             try {
@@ -997,6 +1086,44 @@ class HomeViewModel @Inject constructor(
      */
     fun sortSongs(songs: List<Song>, sortOption: com.reon.music.core.model.SongSortOption): List<Song> {
         return repository.sortSongs(songs, sortOption)
+    }
+    
+    /**
+     * Search playlists for a specific artist
+     */
+    suspend fun searchPlaylistsForArtist(artistName: String): List<Playlist> {
+        return try {
+            val queries = listOf(
+                "$artistName playlist",
+                "$artistName best songs",
+                "$artistName hits collection",
+                "$artistName jukebox"
+            )
+            
+            val allPlaylists = mutableListOf<Playlist>()
+            
+            queries.forEach { query ->
+                try {
+                    repository.searchPlaylists(query).getOrNull()?.let { playlists ->
+                        allPlaylists.addAll(playlists)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error searching playlists for query: $query", e)
+                }
+            }
+            
+            // Remove duplicates and limit
+            allPlaylists
+                .distinctBy { it.id }
+                .filter { it.songCount > 0 }
+                .take(10)
+                .also {
+                    Log.d(TAG, "Found ${it.size} playlists for artist: $artistName")
+                }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error searching playlists for artist: $artistName", e)
+            emptyList()
+        }
     }
     
     private fun loadRecentlyPlayed() {

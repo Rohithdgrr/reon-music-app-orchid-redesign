@@ -482,6 +482,43 @@ private fun SongResultItem(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.padding(top = 2.dp)
             ) {
+                // Channel Rank Badge (if in Top 500)
+                val channelRank = com.reon.music.data.network.youtube.IndianMusicChannels.getChannelByName(song.channelName)?.rank
+                if (channelRank != null) {
+                    val rankColor = when {
+                        channelRank <= 20 -> Color(0xFFFFD700) // Gold
+                        channelRank <= 50 -> Color(0xFFC0C0C0) // Silver
+                        channelRank <= 100 -> Color(0xFFCD7F32) // Bronze
+                        else -> AccentRed
+                    }
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                color = rankColor.copy(alpha = 0.15f),
+                                shape = RoundedCornerShape(4.dp)
+                            )
+                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Filled.EmojiEvents,
+                                contentDescription = null,
+                                tint = rankColor,
+                                modifier = Modifier.size(10.dp)
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                text = "#$channelRank",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = rankColor
+                            )
+                        }
+                    }
+                }
+                
                 // Views
                 if (song.viewCount > 0) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -538,6 +575,33 @@ private fun SongResultItem(
                         )
                     }
                 }
+                
+                // Priority Score Badge (based on official channel + views + likes)
+                val priorityScore = calculatePriorityScore(song)
+                if (priorityScore > 0) {
+                    val priorityColor = when {
+                        priorityScore >= 80 -> Color(0xFF4CAF50) // High - Green
+                        priorityScore >= 50 -> Color(0xFFFF9800) // Medium - Orange
+                        else -> Color(0xFF9E9E9E) // Low - Gray
+                    }
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                color = priorityColor.copy(alpha = 0.15f),
+                                shape = RoundedCornerShape(4.dp)
+                            )
+                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = "${priorityScore}",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = priorityColor
+                        )
+                    }
+                }
             }
         }
         
@@ -565,9 +629,56 @@ private fun SongResultItem(
 }
 
 /**
+ * Calculate priority score for search ranking
+ * Based on: Top 500 Indian Music Channels first, then official channels, views, likes
+ * Score range: 0-100+
+ */
+private fun calculatePriorityScore(song: Song): Int {
+    var score = 0
+    
+    // Top 500 Indian Music Channels priority boost (up to 50 points based on rank)
+    val channelBoost = com.reon.music.data.network.youtube.IndianMusicChannels.getChannelPriorityBoost(song.channelName)
+    score += (channelBoost / 2).toInt() // Scale down: 100 -> 50, 80 -> 40, etc.
+    
+    // Verified channel bonus (additional 25 points)
+    if (com.reon.music.data.network.youtube.IndianMusicChannels.isPriorityChannel(song.channelName)) {
+        score += 25
+    }
+    
+    // Official channel bonus (15 points for official keywords not in Top 500)
+    val officialKeywords = listOf("official", "music", "records", "studio", "label", "vevo")
+    if (officialKeywords.any { song.channelName.lowercase().contains(it) }) {
+        score += 15
+    }
+    
+    // Views score (20 points max) - logarithmic scale
+    score += (kotlin.math.log10(song.viewCount.coerceAtLeast(1).toDouble()) * 2).toInt().coerceAtMost(20)
+    
+    // Likes score (15 points max) - logarithmic scale
+    score += (kotlin.math.log10(song.likeCount.coerceAtLeast(1).toDouble()) * 1.5).toInt().coerceAtMost(15)
+    
+    // Quality bonus (10 points)
+    if (song.quality.contains("HD", ignoreCase = true) || song.quality.contains("4K", ignoreCase = true)) {
+        score += 5
+    }
+    if (song.is320kbps) {
+        score += 5
+    }
+    
+    return score.coerceIn(0, 100)
+}
+
+/**
  * Check if channel is an official music channel
+ * Uses Top 500 Indian Music Channels for priority verification
  */
 private fun isOfficialChannel(channelName: String): Boolean {
+    // First check if it's in Top 500 Indian Music Channels
+    if (com.reon.music.data.network.youtube.IndianMusicChannels.isPriorityChannel(channelName)) {
+        return true
+    }
+    
+    // Fallback to keyword matching
     val officialKeywords = listOf(
         "official", "music", "records", "studio", "audio", "label",
         "t-series", "zee", "sony", "aditya", "lahari", "mango"

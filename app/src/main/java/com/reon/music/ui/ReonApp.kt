@@ -48,6 +48,9 @@ import com.reon.music.ui.components.MiniPlayer
 import com.reon.music.ui.components.ReonBottomNavigation
 import com.reon.music.ui.navigation.ReonDestination
 import com.reon.music.ui.screens.ArtistDetailScreen
+import com.reon.music.ui.screens.ArtistsScreen
+import com.reon.music.ui.screens.ArtistDetailScreenRedesigned
+import com.reon.music.ui.screens.ArtistsScreenEnhanced
 import com.reon.music.ui.screens.ChartDetailScreen
 import com.reon.music.ui.screens.DownloadsScreen
 import com.reon.music.ui.screens.HomeScreen
@@ -225,11 +228,18 @@ fun ReonApp(
                         }
                         
                         composable(ReonDestination.Artists.route) {
-                            ChartDetailScreen(
-                                chartTitle = "Artists",
-                                chartType = "artists",
-                                onBackClick = { navController.popBackStack() },
-                                onSongClick = { song ->
+                            ArtistsScreenEnhanced(
+                                onNavigateToHome = {
+                                    navController.navigate(ReonDestination.Home.route) {
+                                        popUpTo(ReonDestination.Home.route) { inclusive = true }
+                                    }
+                                },
+                                onArtistClick = { artist: Artist ->
+                                    navController.navigate(
+                                        ReonDestination.ArtistDetail.createRoute(artist.id, artist.name)
+                                    )
+                                },
+                                onSongClick = { song: Song ->
                                     playerViewModel.playSong(song)
                                 }
                             )
@@ -271,15 +281,19 @@ fun ReonApp(
                                 "UTF-8"
                             )
                             
-                            ArtistDetailScreen(
+                            // Use redesigned artist detail screen
+                            ArtistDetailScreenRedesigned(
                                 artist = Artist(
                                     id = artistId,
                                     name = artistName,
                                     artworkUrl = ""
                                 ),
                                 onBackClick = { navController.popBackStack() },
-                                onSongClick = { song ->
+                                onSongClick = { song: Song ->
                                     playerViewModel.playSong(song)
+                                },
+                                onNavigateToArtistPage = { id: String ->
+                                    // Already on artist page
                                 }
                             )
                         }
